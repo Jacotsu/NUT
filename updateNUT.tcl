@@ -24,89 +24,226 @@ package require sqlite3
 sqlite3 db nut.db
 
 db eval {pragma journal_mode = wal}
+
 db eval {create table if not exists z_tcl_code(name text primary key,
-  code text)}
+	code text)}
+
 db eval {create table if not exists z_tcl_version(serial integer primary key,
   version text, update_cd text)}
-db eval {CREATE TABLE if not exists z_tcl_jobqueue (jobnum integer primary key,
-  jobtype text, jobint integer, jobreal real, jobtext text)}
-db eval {create view if not exists z_tcl_macropct as with vals as
-  (select fd.NDB_No as NDB_No, ENERC_KCAL.Nutr_Val as cals, PROT_KCAL.Nutr_Val
-  as pcals, CHO_KCAL.Nutr_Val as ccals, FAT_KCAL.Nutr_Val as fcals,
-  ifnull(ALC.Nutr_Val, 0.0) * 6.93 as acals, case
-  when ENERC_KCAL.Nutr_Val <= 0.0 then 0.0 else
-  (PROT_KCAL.Nutr_Val + CHO_KCAL.Nutr_Val + FAT_KCAL.Nutr_Val +
-  ifnull(ALC.Nutr_Val, 0.0)) / ENERC_KCAL.Nutr_Val end as factor from food_des
-  fd left join nut_data ENERC_KCAL on fd.NDB_No = ENERC_KCAL.NDB_No and
-  ENERC_KCAL.Nutr_No = 208 left join nut_data PROT_KCAL on fd.NDB_No =
-  PROT_KCAL.NDB_No and PROT_KCAL.Nutr_No = 3000 left join nut_data CHO_KCAL on
-  fd.NDB_No = CHO_KCAL.NDB_No and CHO_KCAL.Nutr_No = 3002 left join nut_data
-  FAT_KCAL on fd.NDB_No = FAT_KCAL.NDB_No and FAT_KCAL.Nutr_No = 3001 left
-  join nut_data ALC on fd.NDB_No = ALC.NDB_No and ALC.Nutr_No = 221) select
-  NDB_No, case when factor = 0.0 then '0 / 0 / 0' else
-  cast(cast(round(100.0 * pcals / cals / factor) as int) as text) || ' / ' ||
-  cast(cast(round(100.0 * ccals / cals / factor) as int) as text) || ' / '  ||
-  cast(cast(round(100.0 * fcals / cals / factor) as int) as text)
-  end as macropct from vals;}
-db eval { create view if not exists z_tcl_n6hufa as with format as
-  (with n6range as (with calc as (with calpct as (with vals as
-  (select fd.NDB_No as NDB_No, max(ifnull(ENERC_KCAL.Nutr_Val, 0.000000001),
-  0.000000001) as ENERC_KCAL, max(ifnull(SHORT6.Nutr_Val, 0.000000001),
-  0.000000001) as SHORT6, max(ifnull(SHORT3.Nutr_Val, 0.000000001),
-  0.000000001) as SHORT3, max(ifnull(LONG6.Nutr_Val, 0.000000001), 0.000000001)
-  as LONG6, max(ifnull(LONG3.Nutr_Val, 0.000000001), 0.000000001) as LONG3,
-  max(ifnull(FASAT.Nutr_Val, 0.000000001), 0.000000001) as FASAT,
-  max(ifnull(FAMS.Nutr_Val, 0.000000001), 0.000000001) as FAMS,
-  max(ifnull(FAPU.Nutr_Val, 0.000000001), 0.000000001) as FAPU, FAPU.Nutr_Val
-  as fapugm from food_des fd left join nut_data ENERC_KCAL on
-  fd.NDB_No = ENERC_KCAL.NDB_No and ENERC_KCAL.Nutr_No = 208
-  left join nut_data SHORT3 on fd.NDB_No = SHORT3.NDB_No and
-  SHORT3.Nutr_No = 3005 left join nut_data LONG3 on fd.NDB_No = LONG3.NDB_No
-  and LONG3.Nutr_No = 3006 left join nut_data SHORT6 on
-  fd.NDB_No = SHORT6.NDB_No and SHORT6.Nutr_No = 3003 left join nut_data LONG6
-  on fd.NDB_No = LONG6.NDB_No and LONG6.Nutr_No = 3004 left join nut_data
-  FASAT on fd.NDB_No = FASAT.NDB_No and FASAT.Nutr_No = 606 left join nut_data
-  FAMS on fd.NDB_No = FAMS.NDB_No and FAMS.Nutr_No = 645 left join nut_data
-  FAPU on fd.NDB_No = FAPU.NDB_No and FAPU.Nutr_No = 646) select NDB_No,
-  900.0 * SHORT6 / ENERC_KCAL as SHORT6, 900.0 * SHORT3 / ENERC_KCAL as
-  SHORT3, 900.0 * LONG6 / ENERC_KCAL as LONG6, 900.0 * LONG3 / ENERC_KCAL as
-  LONG3, 900.0 * (FASAT + FAMS + FAPU - SHORT6 - SHORT3 - LONG6 - LONG3) /
-  ENERC_KCAL as OTHER, fapugm from vals) select NDB_No, 100.0 / (1.0 +
-  (0.7 / LONG6) * (1.0 + (LONG3 / 3.0))) + 100 / (1.0 + (0.0441 / SHORT6) *
-  (1.0 + (SHORT3 / 0.0555) + (LONG3 / 0.005) + (OTHER / 5.0) +
-  (SHORT6 / 0.175))) as n6hufa, fapugm from calpct) select * from calc)
-  select NDB_No, case when n6hufa > 90.0 then 90 when n6hufa < 15.0 then 15
-  else cast(round(n6hufa) as int) end as n6hufa, fapugm from n6range)
-  select NDB_No, case when fapugm is null then null when fapugm = 0.0 then
-  '0 / 0' else cast(n6hufa as text) || ' / ' || cast(100 - n6hufa as text)
-  end as n6balance from format}
-db eval {create view if not exists z_tcl_wlsumm as select case when
-  (select weightn from z_wslope) = 0 then '0 data points so far...'
-when (select weightn from z_wslope) = 1 then '1 data point so far...'
-else
-'Based on the trend of ' || (select cast(cast(weightn as int) as text)
- from z_wslope) || ' data points so far...' || char(13) || char(10) ||
- char(10) ||
-'Predicted lean mass today = ' ||
-(select cast(round(10.0 * (weightyintercept - fatyintercept)) / 10.0 as text)
-from z_wslope, z_fslope) || char(13) || char(10) ||
-'Predicted fat mass today  =  ' ||
-(select cast(round(fatyintercept, 1) as text) from z_fslope) || char(13) ||
-char(10) || char(10) ||
-'If the predictions are correct, you ' ||
-case when (select weightslope - fatslope from z_wslope, z_fslope) >= 0.0 then
-'gained ' else 'lost ' end ||
-(select cast(abs(round((weightslope - fatslope) * span * 1000.0) / 1000.0)
-as text) from z_wslope, z_fslope, z_span) ||
-' lean mass over ' ||
-(select span from z_span) ||
-case when (select span from z_span) = 1 then ' day' else ' days' end ||
-case when (select fatslope from z_fslope) > 0.0 then ' and gained ' else
-' and lost ' end ||
-(select cast(abs(round(fatslope * span * 1000.0) / 1000.0) as text)
-from z_fslope, z_span) || ' fat mass.' || char(13) || char(10)
-end
-as verbiage}
+
+db eval {CREATE TABLE if not exists z_tcl_jobqueue (
+  jobnum integer primary key,
+  jobtype text,
+  jobint integer,
+  jobreal real,
+  jobtext text)
+}
+db eval {create view if not exists z_tcl_macropct as with vals as (
+  select
+    fd.NDB_No as NDB_No,
+    ENERC_KCAL.Nutr_Val as cals,
+    PROT_KCAL.Nutr_Val as pcals,
+    CHO_KCAL.Nutr_Val as ccals,
+    FAT_KCAL.Nutr_Val as fcals,
+    ifnull(ALC.Nutr_Val, 0.0) * 6.93 as acals,
+    case when ENERC_KCAL.Nutr_Val <= 0.0 then 0.0 else (
+      PROT_KCAL.Nutr_Val + CHO_KCAL.Nutr_Val + FAT_KCAL.Nutr_Val +
+				ifnull(ALC.Nutr_Val, 0.0)
+    ) / ENERC_KCAL.Nutr_Val end as factor
+  from
+    food_des fd
+    left join nut_data ENERC_KCAL on fd.NDB_No = ENERC_KCAL.NDB_No
+    and ENERC_KCAL.Nutr_No = 208
+    left join nut_data PROT_KCAL on fd.NDB_No = PROT_KCAL.NDB_No
+    and PROT_KCAL.Nutr_No = 3000
+    left join nut_data CHO_KCAL on fd.NDB_No = CHO_KCAL.NDB_No
+    and CHO_KCAL.Nutr_No = 3002
+    left join nut_data FAT_KCAL on fd.NDB_No = FAT_KCAL.NDB_No
+    and FAT_KCAL.Nutr_No = 3001
+    left join nut_data ALC on fd.NDB_No = ALC.NDB_No
+    and ALC.Nutr_No = 221
+)
+select
+  NDB_No,
+  case when factor = 0.0 then '0 / 0 / 0' else cast(
+    cast(round(100.0 * pcals / cals / factor) as int) as text
+  ) || ' / ' || cast(
+    cast(round(100.0 * ccals / cals / factor) as int) as text
+  ) || ' / ' || cast(
+    cast(round(100.0 * fcals / cals / factor) as int) as text
+  ) end as macropct
+from
+  vals; }
+
+db eval {
+create view if not exists z_tcl_n6hufa as with format as (
+  with n6range as (
+    with calc as (
+      with calpct as (
+        with vals as (
+          select
+            fd.NDB_No as NDB_No,
+            max(
+              ifnull(ENERC_KCAL.Nutr_Val, 0.000000001),
+              0.000000001
+            ) as ENERC_KCAL,
+            max(
+              ifnull(SHORT6.Nutr_Val, 0.000000001),
+              0.000000001
+            ) as SHORT6,
+            max(
+              ifnull(SHORT3.Nutr_Val, 0.000000001),
+              0.000000001
+            ) as SHORT3,
+            max(ifnull(LONG6.Nutr_Val, 0.000000001), 0.000000001) as LONG6,
+            max(ifnull(LONG3.Nutr_Val, 0.000000001), 0.000000001) as LONG3,
+            max(ifnull(FASAT.Nutr_Val, 0.000000001), 0.000000001) as FASAT,
+            max(ifnull(FAMS.Nutr_Val, 0.000000001), 0.000000001) as FAMS,
+            max(ifnull(FAPU.Nutr_Val, 0.000000001), 0.000000001) as FAPU,
+            FAPU.Nutr_Val as fapugm
+          from
+            food_des fd
+            left join nut_data ENERC_KCAL on fd.NDB_No = ENERC_KCAL.NDB_No
+            and ENERC_KCAL.Nutr_No = 208
+            left join nut_data SHORT3 on fd.NDB_No = SHORT3.NDB_No
+            and SHORT3.Nutr_No = 3005
+            left join nut_data LONG3 on fd.NDB_No = LONG3.NDB_No
+            and LONG3.Nutr_No = 3006
+            left join nut_data SHORT6 on fd.NDB_No = SHORT6.NDB_No
+            and SHORT6.Nutr_No = 3003
+            left join nut_data LONG6 on fd.NDB_No = LONG6.NDB_No
+            and LONG6.Nutr_No = 3004
+            left join nut_data FASAT on fd.NDB_No = FASAT.NDB_No
+            and FASAT.Nutr_No = 606
+            left join nut_data FAMS on fd.NDB_No = FAMS.NDB_No
+            and FAMS.Nutr_No = 645
+            left join nut_data FAPU on fd.NDB_No = FAPU.NDB_No
+            and FAPU.Nutr_No = 646
+        )
+        select
+          NDB_No,
+          900.0 * SHORT6 / ENERC_KCAL as SHORT6,
+          900.0 * SHORT3 / ENERC_KCAL as SHORT3,
+          900.0 * LONG6 / ENERC_KCAL as LONG6,
+          900.0 * LONG3 / ENERC_KCAL as LONG3,
+          900.0 * (
+            FASAT + FAMS + FAPU - SHORT6 - SHORT3 - LONG6 - LONG3
+          ) / ENERC_KCAL as OTHER,
+          fapugm
+        from
+          vals
+      )
+      select
+        NDB_No,
+        100.0 / (1.0 + (0.7 / LONG6) * (1.0 + (LONG3 / 3.0))) + 100 / (
+          1.0 + (0.0441 / SHORT6) * (
+            1.0 + (SHORT3 / 0.0555) + (LONG3 / 0.005) + (OTHER / 5.0) +
+						(SHORT6 / 0.175)
+          )
+        ) as n6hufa,
+        fapugm
+      from
+        calpct
+    )
+    select
+      *
+    from
+      calc
+  )
+  select
+    NDB_No,
+    case when n6hufa > 90.0 then 90 when n6hufa < 15.0 then 15 else
+			cast(round(n6hufa) as int) end as n6hufa,
+    fapugm
+  from
+    n6range
+)
+select
+  NDB_No,
+  case when fapugm is null then null when fapugm = 0.0 then '0 / 0' else
+		cast(n6hufa as text) || ' / ' || cast(100 - n6hufa as text) end
+		as n6balance
+from
+  format
+}
+
+db eval {
+create view if not exists z_tcl_wlsumm as
+select
+  case when (
+    select
+      weightn
+    from
+      z_wslope
+  ) = 0 then '0 data points so far...' when (
+    select
+      weightn
+    from
+      z_wslope
+  ) = 1 then '1 data point so far...' else 'Based on the trend of ' || (
+    select
+      cast(cast(weightn as int) as text)
+    from
+      z_wslope
+  ) || ' data points so far...' || char(13) || char(10) || char(10) ||
+			'Predicted lean mass today = ' || (
+    select
+      cast(
+        round(10.0 * (weightyintercept - fatyintercept)) / 10.0 as text
+      )
+    from
+      z_wslope,
+      z_fslope
+  ) || char(13) || char(10) || 'Predicted fat mass today  =  ' || (
+    select
+      cast(round(fatyintercept, 1) as text)
+    from
+      z_fslope
+  ) || char(13) || char(10) || char(10) ||
+		'If the predictions are correct, you ' || case when (
+    select
+      weightslope - fatslope
+    from
+      z_wslope,
+      z_fslope
+  ) >= 0.0 then 'gained ' else 'lost ' end || (
+    select
+      cast(
+        abs(
+          round((weightslope - fatslope) * span * 1000.0) / 1000.0
+        ) as text
+      )
+    from
+      z_wslope,
+      z_fslope,
+      z_span
+  ) || ' lean mass over ' || (
+    select
+      span
+    from
+      z_span
+  ) || case when (
+    select
+      span
+    from
+      z_span
+  ) = 1 then ' day' else ' days' end || case when (
+    select
+      fatslope
+    from
+      z_fslope
+  ) > 0.0 then ' and gained ' else ' and lost ' end || (
+    select
+      cast(
+        abs(round(fatslope * span * 1000.0) / 1000.0) as text
+      )
+    from
+      z_fslope,
+      z_span
+  ) || ' fat mass.' || char(13) || char(10) end as verbiage
+
+}
+
 set Main {
 
 # NUT nutrition software
@@ -128,8 +265,19 @@ set Main {
 
 set DiskDB [file nativename $DiskDB]
 
-db eval {select version as "::version" from z_tcl_version where serial =
-  (select max(serial) from z_tcl_version)} { }
+db eval {
+	select
+		version as "::version"
+	from
+		z_tcl_version
+	where
+		serial = (
+			select
+				max(serial)
+			from
+				z_tcl_version
+		)
+} { }
 
 db eval {select code from z_tcl_code where name = 'get_procs_from_db'} {
  eval $code
@@ -139,9 +287,7 @@ get_procs_from_db
 package require Tk
 package require Thread
 set ::GUI_THREAD [thread::id]
-set ::SQL_THREAD [thread::create " package require sqlite3 ; sqlite3 db
-  $DiskDB; db timeout 10000 ; set ::GUI_THREAD $::GUI_THREAD ;
-  set ::DiskDB $DiskDB ; [info body get_procs_from_db] ; thread::wait"]
+set ::SQL_THREAD [thread::create " package require sqlite3 ; sqlite3 db $DiskDB; db timeout 10000 ; set ::GUI_THREAD $::GUI_THREAD ; set ::DiskDB $DiskDB ; [info body get_procs_from_db] ; thread::wait"]
 
 if {$appSize != 0.0} {
  set ::ALTGUI 1
@@ -1518,7 +1664,8 @@ foreach x {am rm vf ar} {
   -text "Sat & Mono FA"
  .nut.${x}.nbw add .nut.${x}.nbw.screen5 \
   -text "Poly & Trans FA"
- set screen 0                                         set row 0
+ set screen 0
+ set row 0
  set bcol 0
  set valcol 3
  set ucol 5
@@ -1825,7 +1972,8 @@ foreach x {am rm vf ar} {
   grid rowconfigure .nut.${x}.nbw.screen${screen} $i \
   -uniform 1
   }
- set screen 1                                         set row 0
+ set screen 1
+ set row 0
  set bcol 0
  set valcol 3
  set ucol 5
@@ -2070,7 +2218,8 @@ foreach x {am rm vf ar} {
   grid rowconfigure .nut.${x}.nbw.screen${screen} $i \
   -uniform 1
   }
- set screen 2                                         set row 2
+ set screen 2
+ set row 2
  set bcol 0
  set valcol 3
  set ucol 5
@@ -2184,7 +2333,8 @@ foreach x {am rm vf ar} {
   grid rowconfigure .nut.${x}.nbw.screen${screen} $i \
   -uniform 1
   }
- set screen 3                                         set row 1
+ set screen 3
+ set row 1
  set bcol 0
  set valcol 3
  set ucol 5
@@ -2298,7 +2448,8 @@ foreach x {am rm vf ar} {
   grid rowconfigure .nut.${x}.nbw.screen${screen} $i \
   -uniform 1
   }
- set screen 4                                         set row 0
+ set screen 4
+ set row 0
  set bcol 3
  set valcol 6
  set ucol 8
@@ -2377,7 +2528,8 @@ foreach x {am rm vf ar} {
   grid rowconfigure .nut.${x}.nbw.screen${screen} $i \
   -uniform 1
   }
- set screen 5                                         set row 3
+ set screen 5
+ set row 3
  set bcol 0
  set valcol 3
  set ucol 5
@@ -2828,7 +2980,8 @@ set Amount2gram 0.0
 set ::PCFchoices {{No Auto Portion Control} {Protein} {Non-Fiber Carb} {Total Fat} {Vitamin A} {Thiamin} {Riboflavin} {Niacin} {Panto. Acid} {Vitamin B6} {Folate} {Vitamin B12} {Choline} {Vitamin C} {Vitamin D} {Vitamin E} {Vitamin K1} {Calcium} {Copper} {Iron} {Magnesium} {Manganese} {Phosphorus} {Potassium} {Selenium} {Sodium} {Zinc} {Glycine} {Retinol} {Fiber}}
 set ::rmMenu .nut.rm.frmenu
 
-ttk::notebook .nutplace .nut \
+ttk::notebook .nut
+place .nut \
   -relx 0.0 \
   -rely 0.0 \
   -relheight 1.0 \
@@ -2845,7 +2998,8 @@ frame .nut.po \
   -background "#5454FF"
 frame .nut.ts \
   -background "#FFFF00"
-frame .nut.qn.nut add .nut.am \
+frame .nut.qn
+.nut add .nut.am \
   -text "Analyze Meals"
 .nut add .nut.rm \
   -text "Record Meals & Recipes"
@@ -2859,7 +3013,8 @@ frame .nut.qn.nut add .nut.am \
   -text "The Story"
 .nut add .nut.qn \
   -text "Quit NUT"
-.nut hide .nut.ar.nut hide .nut.ts
+.nut hide .nut.ar
+.nut hide .nut.ts
 
 pack [ttk::label .nut.qn.label \
   -text "\nNUT has ended."]
@@ -3927,7 +4082,8 @@ ttk::combobox .nut.po.pane.optframe.fish_s \
   -values $::balvals \
   -state readonly \
   -style po.TCombobox
-trace add variable ::FAPU1po write [list ChangePersonalOptions FAPU1]place .nut.po.pane.optframe.fish_s \
+trace add variable ::FAPU1po write [list ChangePersonalOptions FAPU1]
+place .nut.po.pane.optframe.fish_s \
   -relx 0.265 \
   -rely 0.59 \
   -relheight 0.04444444 \
@@ -3940,7 +4096,8 @@ menubutton .nut.po.pane.optframe.dv_mb \
   -direction right \
   -menu .nut.po.pane.optframe.dv_mb.m
 menu .nut.po.pane.optframe.dv_mb.m \
-  -tearoff 0foreach nut {{Vitamin A} Thiamin Riboflavin Niacin {Panto. Acid} {Vitamin B6} Folate {Vitamin B12} {Choline} {Vitamin C} {Vitamin D} {Vitamin E} {Vitamin K1} Calcium Copper Iron Magnesium Manganese Phosphorus Potassium Selenium Sodium Zinc Glycine Retinol} {
+  -tearoff 0
+foreach nut {{Vitamin A} Thiamin Riboflavin Niacin {Panto. Acid} {Vitamin B6} Folate {Vitamin B12} {Choline} {Vitamin C} {Vitamin D} {Vitamin E} {Vitamin K1} Calcium Copper Iron Magnesium Manganese Phosphorus Potassium Selenium Sodium Zinc Glycine Retinol} {
  .nut.po.pane.optframe.dv_mb.m add command \
   -label $nut \
   -command [list changedv_vitmin $nut]
@@ -4032,7 +4189,8 @@ place .nut.ts.frgraph \
 
 canvas .nut.ts.frgraph.canvas \
   -relief flat \
-  -background "#FFFF00"place .nut.ts.frgraph.canvas \
+  -background "#FFFF00"
+place .nut.ts.frgraph.canvas \
   -relx 0.0 \
   -rely 0.0 \
   -relheight 1.0 \
@@ -4174,7 +4332,8 @@ foreach x {am rm vf ar} {
   button .nut.${x}.nbw.screen${screen}.b${nut} \
   -textvariable ::${nut}b \
   -command "NewStory $nut $screen" \
-  -background "#FFFF00"  if {$x == "ar"} {
+  -background "#FFFF00"
+  if {$x == "ar"} {
    ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
   -textvariable ::${nut}${x}dv \
   -justify right
@@ -4210,7 +4369,8 @@ foreach x {am rm vf ar} {
   button .nut.${x}.nbw.screen${screen}.b${nut} \
   -textvariable ::${nut}b \
   -command "NewStory $nut $screen" \
-  -background "#FFFF00"  if {$x == "ar"} {
+  -background "#FFFF00"
+  if {$x == "ar"} {
    ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
   -textvariable ::${nut}${x}dv \
   -justify right
@@ -4247,7 +4407,8 @@ foreach x {am rm vf ar} {
   button .nut.${x}.nbw.screen${screen}.b${nut} \
   -textvariable ::${nut}b \
   -command "NewStory $nut $screen" \
-  -background "#FFFF00"  if {$x == "ar"} {
+  -background "#FFFF00"
+  if {$x == "ar"} {
    ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
   -textvariable ::${nut}${x}dv \
   -justify right
@@ -4283,7 +4444,8 @@ foreach x {am rm vf ar} {
   button .nut.${x}.nbw.screen${screen}.b${nut} \
   -textvariable ::${nut}b \
   -command "NewStory $nut $screen" \
-  -background "#FFFF00"  if {$x == "ar"} {
+  -background "#FFFF00"
+  if {$x == "ar"} {
    ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
   -textvariable ::${nut}${x}dv \
   -justify right
@@ -4318,7 +4480,8 @@ foreach x {am rm vf ar} {
   button .nut.${x}.nbw.screen${screen}.b${nut} \
   -textvariable ::${nut}b \
   -command "NewStory $nut $screen" \
-  -background "#FFFF00"  if {$x == "ar"} {
+  -background "#FFFF00"
+  if {$x == "ar"} {
    ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
   -textvariable ::${nut}${x}1 \
   -justify right
@@ -4371,7 +4534,8 @@ foreach x {am rm vf ar} {
   button .nut.${x}.nbw.screen${screen}.b${nut} \
   -textvariable ::${nut}b \
   -command "NewStory $nut $screen" \
-  -background "#FFFF00"  if {$x == "ar"} {
+  -background "#FFFF00"
+  if {$x == "ar"} {
    ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
   -textvariable ::${nut}${x}dv \
   -justify right
@@ -4428,7 +4592,8 @@ foreach x {am rm vf ar} {
   button .nut.${x}.nbw.screen${screen}.b${nut} \
   -textvariable ::${nut}b \
   -command "NewStory $nut $screen" \
-  -background "#FFFF00"  if {$x == "ar"} {
+  -background "#FFFF00"
+  if {$x == "ar"} {
    ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
   -textvariable ::${nut}${x} \
   -justify right
@@ -4484,7 +4649,8 @@ foreach x {am rm vf ar} {
   button .nut.${x}.nbw.screen${screen}.b${nut} \
   -textvariable ::${nut}b \
   -command "NewStory $nut $screen" \
-  -background "#FFFF00"  if {$x == "ar"} {
+  -background "#FFFF00"
+  if {$x == "ar"} {
    ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
   -textvariable ::${nut}${x} \
   -justify right
@@ -4520,7 +4686,8 @@ foreach x {am rm vf ar} {
   button .nut.${x}.nbw.screen${screen}.b${nut} \
   -textvariable ::${nut}b \
   -command "NewStory $nut $screen" \
-  -background "#FFFF00"  if {$x == "ar"} {
+  -background "#FFFF00"
+  if {$x == "ar"} {
    ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
   -textvariable ::${nut}${x} \
   -justify right
@@ -4557,7 +4724,8 @@ foreach x {am rm vf ar} {
   button .nut.${x}.nbw.screen${screen}.b${nut} \
   -textvariable ::${nut}b \
   -command "NewStory $nut $screen" \
-  -background "#FFFF00"  if {$x == "ar"} {
+  -background "#FFFF00"
+  if {$x == "ar"} {
    ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
   -textvariable ::${nut}${x} \
   -justify right
@@ -4593,7 +4761,8 @@ foreach x {am rm vf ar} {
   button .nut.${x}.nbw.screen${screen}.b${nut} \
   -textvariable ::${nut}b \
   -command "NewStory $nut $screen" \
-  -background "#FFFF00"  if {$x == "ar"} {
+  -background "#FFFF00"
+  if {$x == "ar"} {
    ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
   -textvariable ::${nut}${x} \
   -justify right
@@ -4628,7 +4797,8 @@ foreach x {am rm vf ar} {
   button .nut.${x}.nbw.screen${screen}.b${nut} \
   -textvariable ::${nut}b \
   -command "NewStory $nut $screen" \
-  -background "#FFFF00"  if {$x == "ar"} {
+  -background "#FFFF00"
+  if {$x == "ar"} {
    ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
   -textvariable ::${nut}${x} \
   -justify right
@@ -4665,7 +4835,8 @@ foreach x {am rm vf ar} {
   button .nut.${x}.nbw.screen${screen}.b${nut} \
   -textvariable ::${nut}b \
   -command "NewStory $nut $screen" \
-  -background "#FFFF00"  if {$x == "ar"} {
+  -background "#FFFF00"
+  if {$x == "ar"} {
    ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
   -textvariable ::${nut}${x} \
   -justify right
@@ -4723,7 +4894,8 @@ foreach x {am rm vf ar} {
   button .nut.${x}.nbw.screen${screen}.b${nut} \
   -textvariable ::${nut}b \
   -command "NewStory $nut $screen" \
-  -background "#FFFF00"  if {$x == "ar"} {
+  -background "#FFFF00"
+  if {$x == "ar"} {
    ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
   -textvariable ::${nut}${x} \
   -justify right
@@ -4759,7 +4931,8 @@ foreach x {am rm vf ar} {
   button .nut.${x}.nbw.screen${screen}.b${nut} \
   -textvariable ::${nut}b \
   -command "NewStory $nut $screen" \
-  -background "#FFFF00"  if {$x == "ar"} {
+  -background "#FFFF00"
+  if {$x == "ar"} {
    ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
   -textvariable ::${nut}${x} \
   -justify right
@@ -4795,7 +4968,8 @@ foreach x {am rm vf ar} {
   button .nut.${x}.nbw.screen${screen}.b${nut} \
   -textvariable ::${nut}b \
   -command "NewStory $nut $screen" \
-  -background "#FFFF00"  if {$x == "ar"} {
+  -background "#FFFF00"
+  if {$x == "ar"} {
    ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
   -textvariable ::${nut}${x} \
   -justify right
@@ -4832,7 +5006,8 @@ foreach x {am rm vf ar} {
   button .nut.${x}.nbw.screen${screen}.b${nut} \
   -textvariable ::${nut}b \
   -command "NewStory $nut $screen" \
-  -background "#FFFF00"  if {$x == "ar"} {
+  -background "#FFFF00"
+  if {$x == "ar"} {
    ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
   -textvariable ::${nut}${x} \
   -justify right
@@ -4868,7 +5043,8 @@ foreach x {am rm vf ar} {
   button .nut.${x}.nbw.screen${screen}.b${nut} \
   -textvariable ::${nut}b \
   -command "NewStory $nut $screen" \
-  -background "#FFFF00"  if {$x == "ar"} {
+  -background "#FFFF00"
+  if {$x == "ar"} {
    ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
   -textvariable ::${nut}${x} \
   -justify right
@@ -4904,7 +5080,8 @@ foreach x {am rm vf ar} {
   button .nut.${x}.nbw.screen${screen}.b${nut} \
   -textvariable ::${nut}b \
   -command "NewStory $nut $screen" \
-  -background "#FFFF00"  if {$x == "ar"} {
+  -background "#FFFF00"
+  if {$x == "ar"} {
    ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
   -textvariable ::${nut}${x} \
   -justify right
@@ -4941,7 +5118,8 @@ foreach x {am rm vf ar} {
   button .nut.${x}.nbw.screen${screen}.b${nut} \
   -textvariable ::${nut}b \
   -command "NewStory $nut $screen" \
-  -background "#FFFF00"  if {$x == "ar"} {
+  -background "#FFFF00"
+  if {$x == "ar"} {
    ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
   -textvariable ::${nut}${x} \
   -justify right
@@ -4977,7 +5155,8 @@ foreach x {am rm vf ar} {
   button .nut.${x}.nbw.screen${screen}.b${nut} \
   -textvariable ::${nut}b \
   -command "NewStory $nut $screen" \
-  -background "#FFFF00"  if {$x == "ar"} {
+  -background "#FFFF00"
+  if {$x == "ar"} {
    ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
   -textvariable ::${nut}${x} \
   -justify right
@@ -5014,7 +5193,8 @@ foreach x {am rm vf ar} {
   button .nut.${x}.nbw.screen${screen}.b${nut} \
   -textvariable ::${nut}b \
   -command "NewStory $nut $screen" \
-  -background "#FFFF00"  if {$x == "ar"} {
+  -background "#FFFF00"
+  if {$x == "ar"} {
    ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
   -textvariable ::${nut}${x} \
   -justify right
@@ -5050,7 +5230,8 @@ foreach x {am rm vf ar} {
   button .nut.${x}.nbw.screen${screen}.b${nut} \
   -textvariable ::${nut}b \
   -command "NewStory $nut $screen" \
-  -background "#FFFF00"  if {$x == "ar"} {
+  -background "#FFFF00"
+  if {$x == "ar"} {
    ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
   -textvariable ::${nut}${x} \
   -justify right
@@ -5086,7 +5267,8 @@ foreach x {am rm vf ar} {
   button .nut.${x}.nbw.screen${screen}.b${nut} \
   -textvariable ::${nut}b \
   -command "NewStory $nut $screen" \
-  -background "#FFFF00"  if {$x == "ar"} {
+  -background "#FFFF00"
+  if {$x == "ar"} {
    ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
   -textvariable ::${nut}${x} \
   -justify right
@@ -5130,7 +5312,8 @@ if {$need_load == 1} {
  wm title .loadframe $::version
  wm withdraw .
 # modified from the artistic analog clock by Wolf-Dieter Busch at http://wiki.tcl.tk/1011
- set ::clockscale [expr {$::magnify * 0.42}] set cheight 350
+ set ::clockscale [expr {$::magnify * 0.42}]
+ set cheight 350
  set cwidth  650
 grid [canvas .loadframe.c \
   -width [expr {$::magnify * $cwidth}] \
@@ -5862,8 +6045,16 @@ if {[catch {dbmem restore main $DiskDB}]} {
 
 # Duplicate the schema of appdata1.xyz into the in-memory db database
 
- db eval {SELECT sql FROM sqlite_master WHERE sql NOT NULL and type = 'table' and name not like '%sqlite_%'} {
-  dbmem eval $sql
+ db eval { } {
+	SELECT
+		sql
+	FROM
+		sqlite_master
+	WHERE
+		sql NOT NULL
+		and type = 'table'
+		and name not like '%sqlite_%'
+		dbmem eval $sql
   }
 
 # Copy data content from appdata1.xyz into memory
@@ -6272,7 +6463,9 @@ end;
 drop trigger if exists pref_weight_Amount;
 create temp trigger pref_weight_Amount instead of update of Amount on pref_Gm_Wgt
 when NEW.Amount > 0.0 begin
-update weight set Gm_Wgt = origGm_Wgt * NEW.Amount / Amountwhere NDB_No = NEW.NDB_No andSeq = (select min(Seq) from weight where NDB_No = NEW.NDB_No);
+update weight set Gm_Wgt = origGm_Wgt * NEW.Amount / Amount
+where NDB_No = NEW.NDB_No and
+Seq = (select min(Seq) from weight where NDB_No = NEW.NDB_No);
 update currentmeal set Gm_Wgt = null where NDB_No = NEW.NDB_No;
 end;
  /*
@@ -6299,7 +6492,8 @@ update mealfoods set Nutr_No = null where Nutr_No = (select Nutr_No from
 nutr_def where NutrDesc = NEW.NutrDesc);
 insert or replace into mealfoods values ((select currentmeal from options),
 NEW.NDB_No, case when NEW.Gm_Wgt is null then (select Gm_Wgt from pref_Gm_Wgt
-where NDB_No = NEW.NDB_No) else NEW.Gm_Wgt end, case when NEW.NutrDesc is nullthen null when (select count(*) from nutr_def where NutrDesc = NEW.NutrDesc
+where NDB_No = NEW.NDB_No) else NEW.Gm_Wgt end, case when NEW.NutrDesc is null
+then null when (select count(*) from nutr_def where NutrDesc = NEW.NutrDesc
 and dv_default > 0.0) = 1 then (select Nutr_No from nutr_def where NutrDesc
 = NEW.NutrDesc) when (select count(*) from nutr_def where Nutr_No =
 NEW.NutrDesc and dv_default > 0.0) = 1 then NEW.NutrDesc else null end);
@@ -6335,7 +6529,8 @@ end;
 drop trigger if exists currentmeal_upd_pcf;
 create temp trigger currentmeal_upd_pcf instead of update of NutrDesc on
 currentmeal begin
-update mealfoods set Nutr_No = nullwhere Nutr_No = (select Nutr_No from nutr_def where NutrDesc = NEW.NutrDesc);
+update mealfoods set Nutr_No = null
+where Nutr_No = (select Nutr_No from nutr_def where NutrDesc = NEW.NutrDesc);
 update mealfoods set Nutr_No = (select Nutr_No from nutr_def where NutrDesc =
 NEW.NutrDesc) where NDB_No = NEW.NDB_No and
 meal_id = (select currentmeal from options);
@@ -6346,7 +6541,8 @@ end;
 */
 
 drop view if exists theusual;
-create temp view theusual as select meal_name, NDB_No, Gm_Wgt, NutrDesc fromz_tu natural join pref_Gm_Wgt left join nutr_def using (Nutr_No);
+create temp view theusual as select meal_name, NDB_No, Gm_Wgt, NutrDesc from
+z_tu natural join pref_Gm_Wgt left join nutr_def using (Nutr_No);
 
 /*
   We have the view, now we need the triggers.
@@ -6495,17 +6691,31 @@ CREATE temp VIEW max_chick as select NDB_No, Shrt_Desc, round(13.0 / Nutr_Val * 
 
 drop view if exists daily_macros;
 create temp view daily_macros as
-select day, round(sum(calories)) as calories,cast(round(100.0 * sum(procals) / sum(calories)) as int) || '/' ||
+select day, round(sum(calories)) as calories,
+cast(round(100.0 * sum(procals) / sum(calories)) as int) || '/' ||
 cast(round(100.0 * sum(chocals) / sum(calories)) as int) || '/' ||
 cast(round(100.0 * sum(fatcals) / sum(calories)) as int) as macropct,
 round(sum(protein)) as protein,
 round(sum(nfc)) as nfc, round(sum(fat)) as fat,
-bodycompfrom(select meal_id / 100 as day, NDB_No,sum(Gm_Wgt / 100.0 * cals.Nutr_Val) as calories,sum(Gm_Wgt / 100.0 * pro.Nutr_Val) as protein,sum(Gm_Wgt / 100.0 * crb.Nutr_Val) as nfc,sum(Gm_Wgt / 100.0 * totfat.Nutr_Val) as fat,
+bodycomp
+from(
+select meal_id / 100 as day, NDB_No,
+sum(Gm_Wgt / 100.0 * cals.Nutr_Val) as calories,
+sum(Gm_Wgt / 100.0 * pro.Nutr_Val) as protein,
+sum(Gm_Wgt / 100.0 * crb.Nutr_Val) as nfc,
+sum(Gm_Wgt / 100.0 * totfat.Nutr_Val) as fat,
 sum(Gm_Wgt / 100.0 * pcals.Nutr_Val) as procals,
 sum(Gm_Wgt / 100.0 * ccals.Nutr_Val) as chocals,
 sum(Gm_Wgt / 100.0 * fcals.Nutr_Val) as fatcals,
 bodycomp
-from mealfoods join nut_data cals using (NDB_No)join nut_data pro using (NDB_No)join nut_data crb using (NDB_No)join nut_data totfat using (NDB_No)join nut_data pcals using (NDB_No)join nut_data ccals using (NDB_No)join nut_data fcals using (NDB_No)left join (select * from wlview group by wldate) on day = wldate
+from mealfoods join nut_data cals using (NDB_No)
+join nut_data pro using (NDB_No)
+join nut_data crb using (NDB_No)
+join nut_data totfat using (NDB_No)
+join nut_data pcals using (NDB_No)
+join nut_data ccals using (NDB_No)
+join nut_data fcals using (NDB_No)
+left join (select * from wlview group by wldate) on day = wldate
 where cals.Nutr_No = 208 and
 pro.Nutr_No = 203 and
 crb.Nutr_No = 2000 and
@@ -10706,7 +10916,8 @@ foreach font [font names] {
  }
 set i [font measure TkDefaultFont \
   -displayof . "  TransMonoenoic  "]
-set ::column18 [expr {int(round($i / 3.0))}]                     set ::column15 [expr {int(round(2.0 * $i / 5.0))}]
+set ::column18 [expr {int(round($i / 3.0))}]
+set ::column15 [expr {int(round(2.0 * $i / 5.0))}]
 option add *Dialog.msg.wrapLength [expr {400 * $::magnify}]
 option add *Dialog.dtl.wrapLength [expr {400 * $::magnify}]
 
