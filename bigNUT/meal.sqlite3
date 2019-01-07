@@ -1,0 +1,5 @@
+/*
+  This is the screen I look at when editing or viewing the current meal.
+*/
+
+select * from shopview; select plan_name || ':  ' || cm_string || '  $' || cast(cast(100.0 * cost as int) / 100 as text) || '.' || substr(cast(100.0 * cost as int) % 100 + 100,2,2) from eating_plan, cm_string, food_cost_cm; select * from currentmeal; select * from am_analysis_header;

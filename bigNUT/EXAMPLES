@@ -1,0 +1,477 @@
+-- GENERAL
+-- See the names for all the tables and views
+.tables
+
+-- See the schema for the table shopping
+.schema shopping
+
+-- See the schema for the view am_analysis
+.schema am_analysis
+
+-- OPTIONS
+-- Set the number of meals to analyze to 3
+update options set defanal_am = 3;
+
+-- Set the meals per day to 1 (you always need to record all the meals the
+-- program is set for; otherwise it throws off the calculations--so record
+-- a glass of water or something for each missing meal--although there is no
+-- harm in totally stopping your recording for a while while you collect
+-- your thoughts.)  When meals per day changes, meals from the old meals
+-- per day are archived, and archived meals at the new meals per day are
+-- restored.
+update options set meals_per_day = 1;
+
+-- Set the weight display to ounces avoirdupois when using the currentmeal view
+update options set grams = 0;
+
+-- Set the weight display to grams when using the currentmeal view
+update options set grams = 1;
+
+-- Set the current meal to March 16, 2017 meal #3
+update options set currentmeal = 2017031603;
+
+-- NUTRIENTS
+-- See all the defined nutrients
+select * from nutr_def;
+
+-- Set the Daily Value (nutrient standard) for Non-Fiber Carb to 250 grams
+update nutr_def set nutopt = 250.0 where NutrDesc = 'Non-Fiber Carb';
+
+-- Set the Daily Value for Total Fat to the default
+update nutr_def set nutopt = 0.0 where NutrDesc = 'Total Fat';
+
+-- Set the Daily Value for Protein to equal whatever is in your meals
+update nutr_def set nutopt = -1.0 where NutrDesc = 'Protein';
+
+-- Find where the Magnesium is coming from in your meals
+select * from nut_in_meals where NutrDesc = 'Magnesium';
+
+-- Find where the Magnesium is coming from in your meals in percentages of DV
+select * from nutdv_in_meals where NutrDesc = 'Magnesium';
+
+-- Find the percentages of protein/carb/fat in your meals
+select macropct from am_analysis_header;
+
+-- Find the Omega-6/3 balance of your meals
+select n6balance from am_analysis_header;
+
+-- List the defined food groups
+select * from fd_group;
+
+-- List the "Sweets"
+select NDB_No, Long_Desc from food_des where FdGrp_Cd = 1900;
+
+-- Find the 15 vegetables with the most Magnesium in 100 grams
+select Long_Desc from fd_group natural join food_des natural join nut_data
+where FdGrp_Desc like '%veg%' and Nutr_No = 304 order by Nutr_Val desc limit 15;
+
+-- Find the 15 vegetables with the most Magnesium that aren't dried
+select Long_Desc from fd_group natural join food_des natural join nut_data
+natural join nutr_def where FdGrp_Desc like '%veg%' and Long_Desc not like
+'%dried%' and NutrDesc = 'Magnesium' order by Nutr_Val desc limit 15;
+
+-- 
+-- We interrupt our examples because Senorita SQL has dropped by.  Senorita,
+-- what would you like to show us?
+
+-- Senorita SQL:  Let's imagine we have something we want to know and we don't
+-- have the faintest idea how to do it; so we do little pieces of it and later
+-- fit the pieces together and see if it works.
+
+-- Imagine this:  you have been changing protein and calories over the last few
+-- days and you remember some of how you felt on various days, but are unsure
+-- just what you were doing.  Say the last three weeks.  Can we get the Calories
+-- numbers for days in the last three weeks?  We know all our meal information
+-- is based in the table "mealfoods" so let's just list mealfoods out for the
+-- meals we care about.  I am going to use a limit clause initially so that I
+-- don't have to do a lot of scrolling to get an idea what is being presented,
+-- but if I left off the limit clause, I would get the whole thing.
+
+bigNUT> select * from mealfoods where meal_id >= 2017030101 limit 10;
+2017030101|1009|20.7769953051641
+2017030101|2047|1.0
+2017030101|11457|28.349523
+2017030101|11529|42.5242845
+2017030101|12563|11.4830311483027
+2017030101|15088|31.1844753
+2017030101|19165|5.4
+2017030101|99000|240.9709455
+2017030101|99010|17.0
+2017030101|99014|9.89645784739827
+
+-- Good start!  Do we want nutrients per meal or per day or what?  Don't we
+-- want nutrients per day?  Here's how we change it to get days:
+
+bigNUT> select meal_id / 100 as day, NDB_No, Gm_Wgt from mealfoods
+   ...> where meal_id >= 2017030101 limit 10;
+20170301|1009|20.7769953051641
+20170301|2047|1.0
+20170301|11457|28.349523
+20170301|11529|42.5242845
+20170301|12563|11.4830311483027
+20170301|15088|31.1844753
+20170301|19165|5.4
+20170301|99000|240.9709455
+20170301|99010|17.0
+20170301|99014|9.89645784739827
+
+-- We had to actually name the columns instead of the asterisk and make a new
+-- column called day.
+
+-- Now, for each combination of day and food, let's add the weights together
+-- to get the total weight of each food per day:
+
+bigNUT> select meal_id / 100 as day, NDB_No, sum(Gm_Wgt) from mealfoods 
+   ...> where meal_id >= 2017030101 group by day, NDB_No limit 10;
+20170301|1009|63.1549295774641
+20170301|2047|3.0
+20170301|11098|85.048569
+20170301|11457|85.048569
+20170301|11529|127.5728535
+20170301|12563|29.0097629009752
+20170301|15088|93.5534259
+20170301|19041|17.0097138
+20170301|19165|16.2
+20170301|20037|319.13830518051
+
+-- We had to use the sum function and the "group by" clause to show what to add
+-- together, namely each day's individual foods.
+
+-- So, we have the day, the food, and its total gram weight.  Remember, we are
+-- actually concerned with Calories and Protein.  How do attach the Calories
+-- to these records?  Calories per 100 grams of food are in the nut_data table,
+-- and so you don't have to look it up, I'll mention Calories are nutrient
+-- number 208 (Nutr_No = 208).  So, to chain it together we do a join using
+-- the food identifier, the NDB_No, and ask for only the calories records:
+
+bigNUT> select meal_id / 100 as day, NDB_No, sum(Gm_Wgt), cals.Nutr_Val 
+   ...> from mealfoods join nut_data cals using (NDB_No) 
+   ...> where meal_id >= 2017030101 and cals.Nutr_No = 208 
+   ...> group by day, NDB_No limit 10;
+20170301|1009|63.1549295774641|404.0
+20170301|2047|3.0|0.0
+20170301|11098|85.048569|43.0
+20170301|11457|85.048569|23.0
+20170301|11529|127.5728535|18.0
+20170301|12563|29.0097629009752|598.0
+20170301|15088|93.5534259|208.0
+20170301|19041|17.0097138|544.0
+20170301|19165|16.2|228.0
+20170301|20037|319.13830518051|123.0
+
+-- We provided an alias for the nut_data called "cals" so we know which nutrient
+-- value is which because we are going to now add Protein the same way:
+
+bigNUT> select meal_id / 100 as day, NDB_No, sum(Gm_Wgt), cals.Nutr_Val, 
+   ...> pro.Nutr_Val from mealfoods join nut_data cals using (NDB_No) 
+   ...> join nut_data pro using (NDB_No) 
+   ...> where meal_id >= 2017030101 and cals.Nutr_No = 208 
+   ...> and pro.Nutr_No = 203 group by day, NDB_No limit 10;
+20170301|1009|63.1549295774641|404.0|22.87
+20170301|2047|3.0|0.0|0.0
+20170301|11098|85.048569|43.0|3.38
+20170301|11457|85.048569|23.0|2.86
+20170301|11529|127.5728535|18.0|0.88
+20170301|12563|29.0097629009752|598.0|20.96
+20170301|15088|93.5534259|208.0|24.62
+20170301|19041|17.0097138|544.0|61.3
+20170301|19165|16.2|228.0|19.6
+20170301|20037|319.13830518051|123.0|2.74
+
+-- nut_data records are per 100 grams, but we rarely eat exactly 100 grams so
+-- we have to scale the nut_data to what we actually ate using the gram weight:
+
+bigNUT> select meal_id / 100 as day, NDB_No, 
+   ...> sum(Gm_Wgt / 100.0 * cals.Nutr_Val) as calories, 
+   ...> sum(Gm_Wgt / 100.0 * pro.Nutr_Val) as protein from mealfoods 
+   ...> join nut_data cals using (NDB_No) join nut_data pro using (NDB_No) 
+   ...> where meal_id >= 2017030101 and cals.Nutr_No = 208 
+   ...> and pro.Nutr_No = 203 group by day, NDB_No limit 10;
+20170301|1009|255.145915492955|14.443532394366
+20170301|2047|0.0|0.0
+20170301|11098|36.57088467|2.8746416322
+20170301|11457|19.56117087|2.4323890734
+20170301|11529|22.96311363|1.1226411108
+20170301|12563|173.478382147832|6.0804463040444
+20170301|15088|194.591125872|23.03285345658
+20170301|19041|92.532843072|10.4269545594
+20170301|19165|36.936|3.1752
+20170301|20037|392.540115372027|8.74438956194598
+
+-- We don't care about foods at this point, just the day and the sums of the
+-- calories and protein.  So we treat this output as a whole table by putting
+-- it in parentheses and then we select from it and sum it and group it just
+-- like we did before!
+
+bigNUT> select day, round(sum(calories)), round(sum(protein)) from 
+   ...> (select meal_id / 100 as day, NDB_No, 
+   ...> sum(Gm_Wgt / 100.0 * cals.Nutr_Val) as calories, 
+   ...> sum(Gm_Wgt / 100.0 * pro.Nutr_Val) as protein 
+   ...> from mealfoods join nut_data cals using (NDB_No) 
+   ...> join nut_data pro using (NDB_No) 
+   ...> where meal_id >= 2017030101 and cals.Nutr_No = 208 
+   ...> and pro.Nutr_No = 203 group by day, NDB_No)
+   ...> group by day;
+20170301|2379.0|125.0
+20170302|2388.0|125.0
+20170303|2470.0|125.0
+20170304|2453.0|125.0
+20170305|2669.0|125.0
+20170306|2465.0|125.0
+20170307|2415.0|125.0
+20170308|2401.0|125.0
+20170309|2489.0|125.0
+20170310|2528.0|125.0
+20170311|2580.0|120.0
+20170312|2701.0|113.0
+20170313|2398.0|115.0
+20170314|2400.0|120.0
+20170315|2400.0|120.0
+20170316|2402.0|120.0
+20170317|2399.0|120.0
+20170318|2401.0|122.0
+20170319|2401.0|125.0
+20170320|2340.0|125.0
+20170321|2311.0|125.0
+
+-- Thank you, Senorita!  That was a complicated example, though.  Maybe we 
+-- should get back to some simpler examples...
+
+-- FOODS and SERVING SIZES
+-- Find the fast food tacos
+select NDB_No, Long_Desc from food_des where Long_Desc like '%fast food%taco%';
+ 
+-- See the "preferred weight" of a soft chicken taco
+select Gm_Wgt, Amount, Msre_Desc from pref_Gm_Wgt where NDB_No = 21487;
+
+-- Change the preferred weight to show 220 grams of soft chicken tacos
+update pref_Gm_Wgt set Gm_Wgt = 220.0 where NDB_No = 21487;
+select Gm_Wgt, Amount, Msre_Desc from pref_Gm_Wgt where NDB_No = 21487;
+
+-- List the USDA-defined serving units for doughnuts, NDB_No = 18255
+select * from weight where NDB_No = 18255;
+
+-- Show the preferred serving for NDB_No = 18255
+select * from pref_Gm_Wgt where NDB_No = 18255;
+
+-- The second column of a weight record, Seq, controls which serving unit is
+-- preferred.  Set Seq = 0 to make "jumbo" (Seq = 5) the preferred serving unit.
+-- (The previous Seq = 0, if there is one, will be moved out of the
+-- way by a "trigger".)
+update weight set Seq = 0 where NDB_No = 18255 and Seq = 5;
+select * from pref_Gm_Wgt where NDB_No = 18255;
+
+-- See all the nutrients in soft chicken tacos at the preferred weight
+select * from view_foods where NDB_No = 21487;
+
+-- See selected nutrients in doughnuts at the preferred weight
+select * from view_foods where NDB_No = 18255 and 
+NutrDesc in ('Calories', 'Protein', 'Non-Fiber Carb', 'Total Fat');
+
+-- RECORD MEALS
+-- Set the current meal to April 1, 2017 meal #1
+update options set currentmeal = 2017040101;
+
+-- Insert a food into the current meal at the preferred weight with no portion
+-- control.
+insert into currentmeal values (99051, null, null);
+
+-- Insert a food into the current meal with portion control for Panto. Acid.
+insert into currentmeal values (99051, null, 'Panto. Acid');
+
+-- Insert 90 grams of sardines into the current meal
+insert into currentmeal values (15088, 90, null);
+
+-- Update weight of sardines in the current meal to 2.5 ounces
+uodate currentmeal set Gm_Wgt = 2.5 * 28.35 where NDB_No = 15088;
+
+-- Update Amount of sardines in the current meal to 4 sardines
+update pref_Gm_Wgt set Amount = 4 where NDB_No = 15088;
+
+-- Delete a food from the current meal
+delete from currentmeal where NDB_No = 99051;
+
+-- CUSTOMARY MEALS AKA theusual
+-- Insert customary meal 'Breakfast' into currentmeal
+insert into currentmeal select NDB_No, Gm_Wgt, NutrDesc from theusual 
+where meal_name = 'Breakfast';
+
+-- Save currentmeal as customary meal called 'Keto Chicken'
+insert into theusual values ('Keto Chicken', null, null, null);
+
+-- Delete a customary meal named 'FrankenFood'
+delete from theusual where meal_name = 'FrankenFood';
+
+-- MEAL ANALYSIS
+-- See an analysis where the Calories are coming from in your meals
+select * from nut_in_meals where NutrDesc = 'Calories';
+
+-- See the previous in terms of percent of Daily Value
+select * from nutdv_in_meals where NutrDesc = 'Calories';
+
+-- See your average daily food consumption during the analysis period
+select * from daily_food;
+
+-- Show the nutrient name and percent of the Daily Value for the nutrients
+-- for which you have not achieved the DV during the analysis period
+select NutrDesc, dvpct_offset + 100 from am_analysis natural join am_dv natural join nutr_def where dvpct_offset < 0.0;
+
+-- Show your average intake of the amino acid Glycine
+select Nutr_Val from am_analysis natural join nutr_def 
+where NutrDesc = 'Glycine';
+
+-- WEIGHT LOG
+-- View the weight log
+select * from wlog;
+
+-- Insert today's weight and bodyfat percentage measurements into the 
+-- weight log.
+insert into wlog values (144.1, 14.1, null, null);
+
+-- View an expanded version of the weight log that presents the date of
+-- measurement, the weight, the bodyfat percentage, the total lean mass,
+-- the total fat mass, a body composition index where higher is better,
+-- and the cleardate for the entry (if it has been cleared).
+select * from wlview;
+
+-- View a summary of the uncleared part of the weight log
+select * from wlsummary;
+
+-- Clear the weight log (only when not using the Calorie Auto-Set feature)
+insert into wlsummary select 'clear';
+
+-- Enable the Calorie Auto-Set feature which, based on daily measurements,
+-- attempts to achieve a calorie level which allows both lean mass gain and
+-- fat mass loss, and then clears the weight log and starts another cycle.
+update options set autocal = 2;
+
+--
+-- Senorita SQL has returned to offer a benediction on our examples.
+-- Senorita, what would be the ultimate example?
+
+-- Senorita SQL:  Let's ask the question "What is the most nutritious food in
+-- the database?"  It's a complicated question, but we can start just by listing
+-- all the foods:
+
+bigNUT> select NDB_No, Long_Desc from food_des limit 10;
+1001|Butter, salted
+1002|Butter, whipped, with salt
+1003|Butter oil, anhydrous
+1004|Cheese, blue
+1005|Cheese, brick
+1006|Cheese, brie
+1007|Cheese, camembert
+1008|Cheese, caraway
+1009|Cheese, cheddar
+1010|Cheese, cheshire
+
+-- As before, we will use a limit clause so we can get an idea of the output
+-- without a lot of scrolling.  Let's define "most nutritious" first.
+-- Wouldn't it be a food that meets as many of the daily values as possible
+-- in a single food?  Let's use the "dv_default" field of the table nutr_def
+-- as a standard, but exclude the macronutrients, protein, fat, and carbs:
+
+bigNUT> select NDB_No, Long_Desc, Nutr_No, NutrDesc, dv_default
+   ...> from food_des join nutr_def
+   ...> where dv_default > 0.0
+   ...> and NutrDesc not in ('Calories', 'Protein', 'Total Fat',
+   ...> 'Total Carb', 'Non-Fiber Carb', 'Fiber', 'Sat Fat', 'Mono Fat',
+   ...> 'Poly Fat', 'Omega-6', 'LA', 'AA', 'Omega-3', 'ALA', 'EPA',
+   ...> 'DHA', 'Cholesterol')
+   ...> limit 10;
+1001|Butter, salted|301|Calcium|1000.0
+1002|Butter, whipped, with salt|301|Calcium|1000.0
+1003|Butter oil, anhydrous|301|Calcium|1000.0
+1004|Cheese, blue|301|Calcium|1000.0
+1005|Cheese, brick|301|Calcium|1000.0
+1006|Cheese, brie|301|Calcium|1000.0
+1007|Cheese, camembert|301|Calcium|1000.0
+1008|Cheese, caraway|301|Calcium|1000.0
+1009|Cheese, cheddar|301|Calcium|1000.0
+1010|Cheese, cheshire|301|Calcium|1000.0
+
+-- A good start, but let's repeat the previous ordered by food so we see
+-- if we are getting more nutrients than just Calcium:
+
+bigNUT> select NDB_No, Long_Desc, Nutr_No, NutrDesc, dv_default
+   ...> from food_des join nutr_def
+   ...> where dv_default > 0.0
+   ...> and NutrDesc not in ('Calories', 'Protein', 'Total Fat',
+   ...> 'Total Carb', 'Non-Fiber Carb', 'Fiber', 'Sat Fat', 'Mono Fat',
+   ...> 'Poly Fat', 'Omega-6', 'LA', 'AA', 'Omega-3', 'ALA', 'EPA',
+   ...> 'DHA', 'Cholesterol')
+   ...> order by NDB_No limit 10; 
+1001|Butter, salted|301|Calcium|1000.0
+1001|Butter, salted|303|Iron|18.0
+1001|Butter, salted|304|Magnesium|400.0
+1001|Butter, salted|305|Phosphorus|1000.0
+1001|Butter, salted|306|Potassium|3500.0
+1001|Butter, salted|307|Sodium|2400.0
+1001|Butter, salted|309|Zinc|15.0
+1001|Butter, salted|312|Copper|2.0
+1001|Butter, salted|315|Manganese|2.0
+1001|Butter, salted|317|Selenium|70.0
+
+-- Remember how we add the nutrient values from nut_data?
+
+bigNUT> select NDB_No, Long_Desc, Nutr_No, NutrDesc,
+   ...> dv_default, Nutr_Val
+   ...> from food_des join nutr_def natural join nut_data
+   ...> where dv_default > 0.0
+   ...> and NutrDesc not in ('Calories', 'Protein', 'Total Fat',
+   ...> 'Total Carb', 'Non-Fiber Carb', 'Fiber', 'Sat Fat', 'Mono Fat',
+   ...> 'Poly Fat', 'Omega-6', 'LA', 'AA', 'Omega-3', 'ALA', 'EPA',
+   ...> 'DHA', 'Cholesterol')
+   ...> order by NDB_No limit 10;
+1001|Butter, salted|301|Calcium|1000.0|24.0
+1001|Butter, salted|303|Iron|18.0|0.02
+1001|Butter, salted|304|Magnesium|400.0|2.0
+1001|Butter, salted|305|Phosphorus|1000.0|24.0
+1001|Butter, salted|306|Potassium|3500.0|24.0
+1001|Butter, salted|307|Sodium|2400.0|643.0
+1001|Butter, salted|309|Zinc|15.0|0.09
+1001|Butter, salted|312|Copper|2.0|0.0
+1001|Butter, salted|315|Manganese|2.0|0.0
+1001|Butter, salted|317|Selenium|70.0|1.0
+
+-- Well, this time the join was easier!  We used a natural join which means
+-- there is only one record in nut_data which will correspond to the NDB_No
+-- and Nutr_No of the original record, so attach it!
+
+-- Now let's create a new column, a nutrient index which is the Nutr_Val
+-- divided by the dv_default.  In other words, how many DVs are there in
+-- 100 grams of this food?
+
+bigNUT> select NDB_No, Long_Desc, Nutr_No, NutrDesc,
+   ...> Nutr_Val / dv_default as nutindex
+   ...> from food_des join nutr_def natural join nut_data
+   ...> where dv_default > 0.0
+   ...> and NutrDesc not in ('Calories', 'Protein', 'Total Fat',
+   ...> 'Total Carb', 'Non-Fiber Carb', 'Fiber', 'Sat Fat', 'Mono Fat',
+   ...> 'Poly Fat', 'Omega-6', 'LA', 'AA', 'Omega-3', 'ALA', 'EPA',
+   ...> 'DHA', 'Cholesterol')
+   ...> order by NDB_No limit 10;
+1001|Butter, salted|301|Calcium|0.024
+1001|Butter, salted|303|Iron|0.00111111111111111
+1001|Butter, salted|304|Magnesium|0.005
+1001|Butter, salted|305|Phosphorus|0.024
+1001|Butter, salted|306|Potassium|0.00685714285714286
+1001|Butter, salted|307|Sodium|0.267916666666667
+1001|Butter, salted|309|Zinc|0.006
+1001|Butter, salted|312|Copper|0.0
+1001|Butter, salted|315|Manganese|0.0
+1001|Butter, salted|317|Selenium|0.0142857142857143
+
+-- Now let's sum the nutrient indices by food and see what comes out on top!
+
+bigNUT> select NDB_No, Long_Desc, sum(Nutr_Val / dv_default) as nutindex
+   ...> from food_des join nutr_def natural join nut_data
+   ...> where dv_default > 0.0 
+   ...> and NutrDesc not in ('Calories', 'Protein', 'Total Fat',
+   ...> 'Total Carb', 'Non-Fiber Carb', 'Fiber', 'Sat Fat', 'Mono Fat',
+   ...> 'Poly Fat', 'Omega-6', 'LA', 'AA', 'Omega-3', 'ALA', 'EPA',
+   ...> 'DHA', 'Cholesterol')
+   ...> group by NDB_No order by nutindex desc limit 1;
+23424|Beef, New Zealand, imported, variety meats and by-products liver, cooked, boiled|210.575222197513
+
+-- Thank you, Senorita.  See you next time!

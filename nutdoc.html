@@ -1,0 +1,555 @@
+Content-type: text/html
+
+<HTML><HEAD><TITLE>Manpage of nut</TITLE>
+</HEAD><BODY>
+<H1>nut</H1>
+Section:  (1)<BR>Updated: 2016.10.30<BR><A HREF="#index">Index</A>
+<A HREF="http://localhost/cgi-bin/man/man2html">Return to Main Contents</A><HR>
+
+<A NAME="lbAB">&nbsp;</A>
+<H2>NAME</H2>
+
+<B>nut </B>
+
+- analyze meals with the USDA Nutrient Database
+<A NAME="lbAC">&nbsp;</A>
+<H2>SYNOPSIS</H2>
+
+<B>nut</B>
+
+<A NAME="lbAD">&nbsp;</A>
+<H2>DESCRIPTION</H2>
+
+<P>
+
+<P>
+<B>NUT</B>
+
+<P>
+allows you to record what you eat and analyze your meals for nutrient
+composition.  
+Nutrient levels are expressed
+as a percentage of the DV or Daily Value,
+the familiar standard of food labeling in the United States.
+The essential fatty acids, Omega-6 and Omega-3, are not currently mentioned in
+these standards, and a reference value has been supplied.
+<P>
+
+<B>NUT</B>
+
+uses Tcl/Tk to create an SQLite database that holds its own code,
+the 
+USDA Nutrient Database for Standard Reference,
+and your personal data for meals, recipes, and weight logs.
+<P>
+
+<B>INSTALLATION and LOAD of USDA Database:  </B>
+
+<P>
+If your desktop system does not have Tcl/Tk available, download and install the free
+(community) version of ActiveTcl from 
+<A HREF="http://www.activestate.com/.">http://www.activestate.com/.</A>
+<P>
+<P>
+
+<P>
+Download the full ascii version of the USDA Nutrient Database,
+available from 
+<A HREF="https://data.nal.usda.gov/dataset/composition-foods-raw-processed-prepared-usda-national-nutrient-database-standard-referen-11">this US government link</A>
+or from
+<A HREF="http://nut.sourceforge.net,">http://nut.sourceforge.net,</A>
+and unzip it in some directory.
+<P>
+<P>
+
+<P>
+Run &quot;updateNUT.tcl&quot;, an executable included in the
+<B>NUT</B>
+
+distribution, in the same directory where you put the USDA database.
+This script will load your new 
+<B>NUT</B>
+
+database with the 
+<B>NUT</B>
+
+code.
+After this step, run &quot;nut.tcl&quot; to start
+<B>NUT.</B>
+
+Initially,
+<B>NUT</B>
+
+will see the USDA tables and load them as well as
+any legacy files from previous versions
+of
+<B>NUT.</B>
+
+After these steps, both &quot;updateNUT.tcl&quot; and the USDA files are not 
+required and can be deleted.  
+<P>
+
+&quot;nut.tcl&quot; can start the program with
+a different location for
+the 
+<B>NUT </B>
+
+database and a different location for legacy files.
+These changes are easily made by editing &quot;nut.tcl&quot;.  
+<P>
+
+In addition, a value can be changed in &quot;nut.tcl&quot; to make the program usable
+on unix screens with a high resolution.  It is best to not change the appSize
+variable on Windows or Mac installations.
+<B>NUT</B>
+
+will check how many pixels you have and create a font/window combination
+that is always legible.  Change the &quot;appSize&quot; variable in &quot;nut.tcl&quot;
+to between 0.7 (small) and 1.3 (almost fullscreen) to magnify the default Tk
+font and window sizes appropriately.
+<P>
+
+<B>OVERVIEW of PROGRAM</B>
+
+<P>
+<P>
+
+<P>
+A typical session with
+<B>NUT</B>
+
+begins with a glance at &quot;Analyze Meals&quot; to see the daily 
+averages from the
+last few meals.  
+Normally, one analyzes more than one day but less than two weeks to
+get a fairly recent overview of nutritional quality and adherence to plan.
+<P>
+
+&quot;Record Meals &amp; Recipes&quot; is where meals are planned or else simply recorded if
+unplanned.  
+A slider can  either be moved directly or else clicked 
+on the 
+left or right to move backward or forward to get to the
+current meal.
+A simple &quot;Food Search&quot; entry brings up the foods in the
+database and if one is selected, it is immediately added to the meal.
+A major feature of NUT is to be able to associate meal foods
+with automatic portion control for various nutrients so you can more easily plan meals 
+that are both nutritionally complete and in accord with 
+your personal regimen.
+This function also allows you to save a &quot;meal&quot; as a recipe to be added to
+the USDA database, or to designate a meal as a Customary Meal for easier data
+entry later.
+<P>
+
+&quot;View Foods&quot; shows comprehensive nutrient listings for each food,
+in serving sizes as described by the USDA nutrient database.  Any of these
+serving sizes can be scaled and easily added to a meal, and
+<B>NUT</B>
+
+remembers your preferred serving sizes.
+<P>
+
+&quot;Personal Options&quot; allows the nutrient standards to be changed.  These
+personal standards are customized and the rest of the program follows
+these standards.  
+It is unlikely that the straight &quot;Daily Value&quot;, a high-carb, low-fat diet
+with an absolute minimum of protein, will be optimal for you, so you can try different program settings, experiment to see how you feel when eating different ways, and thus  gradually find the style of eating that
+is your personal optimum.
+<P>
+In addition, there is a facility to record weight and
+bodyfat percentages daily and see a linear extrapolation of the trend so
+that you do not have to wait weeks to know how a new strategy is
+working.  
+<B>NUT</B> 
+will also automatically move calories up and down by gradual increments in order to keep lean mass up and
+fat mass down with the Calorie Auto-Set feature.
+<P>
+
+Whenever you press a nutrient button you go to a screen that describes
+&quot;The Story&quot; for that nutrient.  This includes  various lists of foods 
+sorted to help you find the nutrients you need.  
+<P>
+
+<P>
+<B>ANALYZE MEALS</B>
+
+<P>
+
+Meal analysis is always a daily rate of intake and not a sum.  For instance,
+if you eat 2000 calories a day and analyze a week of meals, the analysis
+reports 2000 calories, not 14,000.  Likewise, if you eat three meals a day and
+2000 calories a day and analyze a single meal of 667 calories, 
+the analysis reports 100% of calories, not
+33% of calories.
+Think of 
+<B>NUT</B>
+
+meal analysis
+as a speedometer, not an odometer.
+<P>
+
+The range of meals shown on the screen controls many other functions in the
+program as it not only sets the range for showing  food lists, but
+also the exact Daily Values used in portion control.  Therefore, if you
+want automatic portion control to be as accurate as possible, analyzing 
+just one meal while you are planning meals is best,  although it is 
+not required most of the time--just when you are changing strategies, such as from high-carb to low-carb.
+<P>
+
+The spin button controlling how many consecutive meals to analyze can be selected and cleared with a backspace to speed up making large changes.
+A very large value will resolve to all the meals
+in the database, but do remember, if automatic portion control is in effect, there will be a lot of processing to get all of the program functions into sync because portion control always needs to reanalyze all meals until it is sure the requirements are properly met.
+<P>
+
+<P>
+
+<B>RECORD MEALS &amp; RECIPES</B>
+
+<P>
+
+For the program analysis to come out right you must record
+all the meals the program is set for.
+For instance, if 
+<B>NUT</B>
+
+is set for three meals a day, and
+you eat more than three, combine them into three; if you eat less than three, 
+record some minimal item such as an ounce of water for each missing meal.
+In this way, even if you take breaks from recording,
+<B>NUT</B>
+
+will report fairly accurate daily averages and just concatenate over the
+breaks; but otherwise
+<B>NUT</B>
+
+will wrongly weight the meals as a wrong percentage of a day.
+<P>
+
+When the program first starts, there is a button to &quot;Delete all Meals and
+Set Meals per Day&quot;.  Although meals are deleted from view, they are
+actually archived, so that if you return to the current number of meals per
+day, the meals will return to the active database.  If meal planning is not your
+forte, or if your meal schedules are highly irregular, set
+<B>NUT </B>
+
+to 1 meal per day and record a daily running total of all foods eaten.
+<P>
+<P>
+
+To actually record a meal, first determine if the slider in the upper left
+corner of the screen shows the correct meal; if not, click on the left or right
+of the slider to nudge it one meal at a time in the right direction until
+the correct meal is showing.  Then click on the &quot;Food Search&quot; entry area to
+open up the search screen.  Type a part of a food name and all the foods that
+match will be shown below as you type.  Select one with a click and it will
+be added to the meal.
+<P>
+
+You can specify quantities in either gram or ounce weights by adjusting the
+spin button, or by clicking on the food to open up &quot;View Foods&quot; so you can
+choose a serving size based on cups or some other volume measurement,
+but you can also let
+<B>NUT</B>
+
+set the quantity with &quot;Auto Portion Control&quot;.  To achieve portion control
+based on calories, it is necessary to choose each of a protein, fat, and
+non-fiber carb food (unless some of these macronutrients are set to
+&quot;Adjust to my meals&quot;).  But in addition, if you have noticed that  
+you rarely achieve the &quot;Daily Value&quot; for some of the vitamins and minerals,
+they can also be chosen as &quot;Auto Portion Control&quot; nutrients.  For instance, 
+you
+could use Panto. Acid Auto Portion Control on something like mushrooms or avocado to
+make sure you get some of this vitamin.  In this manner, with a combination
+of portion-controlled foods and non-portion-controlled foods, you can plan a meal
+that exactly meets your nutrition goals while hopefully being something you
+really want to eat.
+When the Auto Portion Control algorithm is running, the &quot;Food Search&quot; entry
+area turns into an indeterminate progress bar and the food quantities flip
+around as they find the best possible solution. 
+<P>
+
+The more &quot;Auto Portion Control&quot; selections you make, the more complicated
+the process of finding the answer becomes, some combinations become
+impossible,  and some combinations might send the algorithm off the deep end,
+in that it never completes.
+Perhaps later
+versions of
+<B>NUT</B>
+
+will have a better way to predict what is going to happen.
+If a Tcl error message dialog appears, just click &quot;OK&quot;, because the error
+is a transient consequence of an unexpected set of foods that cannot be
+portion controlled to the selected specification.
+These problems will be rare occurrences as 
+<B>NUT</B>
+
+is able to recognize many combinations of foods and portion-control 
+settings that are not compatible.
+<P>
+
+When you have a good meal planned and think you may want to repeat it, use
+the Customary Meals feature to save the meal.  Later, when you want something
+similar, add the customary meal to the new meal you are planning.  If you
+add the same meal more than once, you don't double the foods, but you can
+refresh the Automatic Portion Control easily by adding the meal again.
+Likewise, you can save the meal multiple times without duplicating the meal
+foods.  Customary Meals can always be adapted to whatever you are going to
+have, by adding and deleting foods as required, and by changing quantities.
+<P>
+
+Record a recipe in exactly the same way as a meal, but press the &quot;Save  as
+a Recipe&quot; button to add your recipe as a new food to the USDA database.  Then,
+fill in the blanks with the recipe name, the number of servings, any volume measurement you want to use to measure a serving, such as cups, teaspoons or pieces, etc., and if you
+know the weight of a serving after preparation, the recipe will be adjusted
+for water gained or lost in preparation.  Furthermore, you will be presented
+with the complete nutrient screens so you can adjust the nutrient values.  This allows you to create a &quot;recipe&quot; that is actually just a processed food or food supplement, where the real ingredients are similar to the processed food or
+maybe just some water,
+but you are changing the nutrient information to match the label on
+a product.
+On these recipe nutrient screens, the &quot;Daily Value&quot; 
+percentages are the standard 2000
+calorie values, not any modifications you may have made from
+&quot;Personal Options&quot;, so that they will match the nutrition labels; however,
+nutrient values can always be entered in grams.   When you &quot;Save&quot; this new recipe, it becomes just like any other food in the database.
+<P>
+
+A non-obvious use for recipes is to add a new serving size to an
+existing food to make portion control easier.  Take one of my favorites, a
+roasted chicken wing.  The meat weighs 34 grams in an average wing
+but there is 40% refuse, meaning
+that the wing weighed on the bone comes to almost 57 grams (34 / 0.6).  So, you can make
+a recipe that is just a duplicate of the food with a slightly different name,
+but with a serving unit of &quot;grams weighed with refuse&quot; and the number of serving
+units in one serving is 56.67.  
+Then, at mealtime, if you need strict portion control, you go
+to &quot;View Foods&quot; and set a number of servings corresponding to the weight of
+the wings on the bone and add it to the meal, and only the weight of the meat
+shows up in the meal.
+But let me add that if you understand the previous and have a little facility
+with SQL, using bigNUT (see below) to add a record to the weight table is a
+better solution.
+<P>
+
+<B>VIEW FOODS</B>
+
+<P>
+
+Here's where you can check out the whole nutritional record for a food based
+on whatever serving size you want to see represented.  Notice that many
+processed foods have very brief summaries of nutrients with many &quot;[No Data]&quot;
+entries.  When added to meals, &quot;[No Data]&quot; is treated as a zero, and since
+nutrient values for specific foods vary considerably, analyses are always
+approximate and not nearly as precise as 
+<B>NUT</B>
+
+seems to suggest.  
+<P>
+
+Additional information on this screen includes refuse percentages and 
+descriptions that can
+help in visualizing how much food is required, and serving sizes can be
+computed by calorie level as well as by weight.
+<P>
+
+<B>PERSONAL OPTIONS</B>
+
+<P>
+
+In the simplest case, you are just typing the number of grams of some nutrient
+that you want to ingest daily, or else clicking an option that
+will automatically set the value for you.  Because the spinbuttons move so
+slowly, for a big change you usually will select the old value with the mouse, backspace it out,
+and type the new value you want.   All of NUT is hooked together internally,
+so if your changes impact automatic portion control, there will be lots of
+activity to get the meal and its analyses all in sync and save everything to
+the database.
+<P>
+
+&quot;Adjust to my meals&quot; is the setting if you don't care what the value for a
+nutrient should be, or if you do care, but you manage the 
+value by different means.
+For instance, if you are eating low-carb, and you always plan meals to have
+minimal carbohydrate, &quot;Adjust to my meals&quot; means you don't have to hit a
+particular carb target and yet everything will mesh properly as if you had
+set a carb target that was exactly equal to what is in your meals.
+<P>
+
+Either &quot;Total Fat&quot; or &quot;Non-Fiber Carb&quot; can be set to &quot;Balance of Calories&quot; and
+sometimes this option will automatically appear if required in order to meet
+the Calorie requirement.
+<P>
+
+The  options  for  polyunsaturated fat and the &quot;Omega-6/3 Balance&quot; target
+select reference values (there are no &quot;Daily Values&quot; for  these)  based
+on Dr. William Lands' empirical equation for the percentages of Omega-6
+and Omega-3 fatty acids in tissue phospholipids based on diet.  What this
+means is that the actual gram weights of Omega-6 vs. Omega-3 are not a very
+good indicator of what your body does with the fatty acids because the
+individual fatty acids have different &quot;strengths&quot; as they compete for
+conversion to the forms that make up the cell membrane and get chosen at
+random to provide a signal that is either strong or weak in its effect
+on inflammation, blood clotting, etc.  Further information about this
+biochemistry is on the 
+<B>NUT</B>
+site at 
+<A HREF="http://nut.sourceforge.net/">http://nut.sourceforge.net/</A>.
+<P>
+
+(Following is a description of the rightmost column on the screen that concerns
+the weight log.  At some lower screen resolutions, this column is partially occluded.  However, if you move the mouse
+over the imaginary line between the program settings and the weight log columns,
+there will appear a double arrow that you can click and drag to the left to
+bring the weight log column into full view.)
+<P>
+
+<B>NUT</B>
+
+records daily weight and bodyfat percentage measurements
+and uses linear regression to filter out the random noise and show the actual
+trend.  Are you gaining mostly fat mass or losing mostly lean mass?  This
+feature can tell you if you have a bathroom scale that
+can read bodyfat percentage.  
+The weight measurement is free of units, so pounds, kilos, or even stone will
+work.  Although
+<B>NUT</B>
+
+reports its findings with high precision, realize that the numbers are not
+absolutely true, but you are concerned with the trends the numbers represent, so that you can modify your nutrition
+strategy.
+For example, if total weight is fairly constant but lean mass is going down and
+fat mass is going up, would a little more protein 
+or less carbohydrate solve the problem? or would it make it worse?
+<P>
+
+To use the feature, weigh yourself once a day at some appointed time and
+enter the weight and bodyfat numbers; then click on &quot;Accept New Measurements&quot;.
+<B>NUT</B>
+
+will only accept one set of measurements per day, but there is no harm in missing a
+day because the feature runs every day whether you add a measurement or not.
+Think of each new set of measurements as a small correction to the equation to get
+a truer picture where you are going, and that's how you tell if it is working,
+because its predictions eventually do seem to be about right.  
+Weight loss gurus often advise against daily weighing because they are afraid
+you will freak out on days weight goes up.  But 
+<B>NUT</B>
+
+uses linear regression to remove the noise of daily measurement error and
+produce a clear signal which way the weight is trending, and the more daily
+samples, the stronger the signal.  This way you can find out more quickly that a
+particular strategy just isn't working.  Also, you can become more aware of
+weight loss strategies that work by reducing lean mass instead of fat mass.
+<P>
+
+Calorie &quot;Auto-Set&quot; means that you will eat according to the calorie level that
+<B>NUT</B>
+
+shows and also record your weight and bodyfat percentage daily.
+<B>NUT</B>
+
+can then determine how best to move the calorie level to achieve gains in
+lean mass and loss of fat mass. A cycle begins when there are two weight/bodyfat data points recorded.  
+<B>NUT</B>
+
+will move calories by a maximum of 20 calories a day. 
+If both lean mass and fat mass are trending down, 
+<B>NUT </B>
+
+raises calories and starts a new cycle; if both lean mass and fat mass are trending up,
+<B>NUT</B>
+
+lowers calories and starts a new cycle.  When fat mass is trending up and lean mass is trending
+down, 
+<B>NUT </B>
+
+starts a new cycle without changing calories.
+When a
+cycle begins with the favorable trend of increasing lean mass and
+decreasing fat mass, it is allowed to continue.
+<P>
+
+If you are not using the Calorie Auto-Set
+feature, you can clear the weight log whenever you like; the usual reason would
+be that you have started a new strategy and therefore want to see the new
+trend.   For instance, I tend to make five to seven days of measurements, check the numbers, move calories up or down as required, and then clear the weight log when I am trying to find the right calorie level for my latest experiment. The last weight log entry is always retained after clearing the weight log to enable a quicker start to the next cycle of logging.
+<P>
+
+<P>
+
+<B>THE STORY</B>
+
+<P>
+
+When you click on a yellow nutrient button, you are taken to a tab that
+expounds the nutrient's story.  The screen features a list of
+foods sorted from most to least of the nutrient of interest, and a simple graph of intake during the current analysis period that you set in &quot;Analyze Meals&quot;.
+<P>
+
+The food lists can be queried in multiple ways.  The basic queries are by
+weight, by calories, by an approximate serving, and by weight of food in the
+analyzed daily meals, but the results can be modified to only look at a 
+single food group.
+If you get a white screen after the &quot;wristwatch&quot; cursor changes back to
+normal, that means there are
+no foods that meet the criteria.  For instance, if I look at &quot;Foods Ranked
+per Daily Recorded Meals&quot; and the food group &quot;Breakfast Cereals&quot; but I have
+eaten no breakfast cereal, I will get a white screen.
+<P>
+
+If a food from the list looks interesting, click on it so it will open up in &quot;View Foods&quot;.
+<P>
+
+<B>USING THE SQLITE DATABASE APART FROM NUT</B>
+
+<P>
+
+Check your distribution for the &quot;bigNUT&quot; directory which contains the
+documentation concerning how to use the database without a graphical user
+interface, which allows custom queries that are not coded in the GUI.
+<P>
+
+<P>
+
+<A NAME="lbAE">&nbsp;</A>
+<H2>FILES</H2>
+
+<PRE>
+nut.db        All personal data, the USDA Nutrient Database, and Tcl scripts
+updateNUT.tcl Tcl script to create or update the NUT code in the database
+nut.tcl       Tcl script to start the NUTsqlite program
+</PRE>
+
+<A NAME="lbAF">&nbsp;</A>
+<H2>AUTHOR</H2>
+
+<P>
+
+<PRE>
+Jim Jozwiak (<A HREF="mailto:jozwiak@gmail.com">jozwiak@gmail.com</A>)
+<A HREF="http://nut.sourceforge.net/">http://nut.sourceforge.net/</A>
+</PRE><A NAME="lbAG">&nbsp;</A>
+<H2>COPYING</H2>
+
+<P>
+
+Copyright (C) 1996-2018 by Jim Jozwiak.
+<P>
+
+<HR>
+<A NAME="index">&nbsp;</A><H2>Index</H2>
+<DL>
+<DT><A HREF="#lbAB">NAME</A><DD>
+<DT><A HREF="#lbAC">SYNOPSIS</A><DD>
+<DT><A HREF="#lbAD">DESCRIPTION</A><DD>
+<DT><A HREF="#lbAE">FILES</A><DD>
+<DT><A HREF="#lbAF">AUTHOR</A><DD>
+<DT><A HREF="#lbAG">COPYING</A><DD>
+</DL>
+<HR>
+This document was created by
+<A HREF="http://localhost/cgi-bin/man/man2html">man2html</A>,
+using the manual pages.<BR>
+Time: 00:19:18 GMT, May 28, 2018
+</BODY>
+</HTML>

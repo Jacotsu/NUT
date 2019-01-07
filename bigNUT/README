@@ -1,0 +1,57 @@
+bigNUT is the stand-alone SQLite version of NUT that can also be used as a
+backend to future versions of NUT or other programs.  In order to make headway
+on the project, I realized I needed to think of it as just another version of
+NUT that I could use if I liked it.  As a result, you can use it without a
+GUI or application program, although it is more effort to use it solely by
+typing SQL commands and interpreting the output.
+
+This will probably not interest most users, but if you understand what
+NUT is doing and you are interested in SQL, trying to use the bigNUT 
+stand-alone version may be an entertaining way to teach yourself SQL.  
+If you are a developer interested in a nutrition database, trying to use 
+this database can be a painless way to learn the NUT API without doing any 
+coding or attempting to fathom a lot of abstraction, and you can prune away 
+the fluff to get a useful pre-written backend for your application.  In
+addition, there is the available functionality to do things such as
+sequencing meals and/or personal option changes automatically and these 
+features are unlikely to be offered in any other nutrition program.  
+
+Here's how you can do it.  You need to have sqlite3 and you need to have the 
+USDA ascii tables unzipped in your directory.  You need to edit the
+lite2big.tcl script to point to the NUTsqlite db (nut.sqlite) if you want to
+transfer your NUTsqlite-1.x personal data to the new database; otherwise you
+omit the final lite2big.tcl step from the following command sequence:
+
+sqlite3 -init load.sqlite3 nut.db
+.quit
+sqlite3 -init logic.sqlite3 nut.db
+.quit
+./lite2big.tcl
+
+When running bigNUT as a stand-alone program, you only need the load.sqlite3 
+and logic.sqlite3 init steps when you are initializing or upgrading to a new 
+USDA database.  Neither loading nor refreshing the logic erases or changes 
+any personal data.  You also don't use these two init files when an 
+application such as NUTsqlite-2.x creates the nut.db database for you.
+In this last case, bigNUT is in a subordinate directory from the database,
+so to start bigNUT you would "sqlite3 -init bigNUT/user.sqlite3 nut.db".
+Alternately, if you want to work from the bigNUT directory, you would specify
+the database in the higher directory:  "sqlite3 -init user.sqlite ../nut.db".
+
+To use the stand-alone database all other times, type:
+
+sqlite3 -init user.sqlite3 nut.db
+
+Only the initial PRAGMA in user.sqlite3 that sets recursive triggers and the
+code for automatic portion control and the weight log are absolutely 
+necessary at each invocation of the database, but user.sqlite3 also has my 
+personal views and triggers that I have found helpful.  You can add, delete, 
+or change most of user.sqlite3 to customize it as you wish.  Also, there are
+additional *.sqlite3 files that I produced to simplify operation. Read the 
+comments and SQL in all the init files to understand what is going on, and 
+look at the EXAMPLES file to see SQL statements that perform the most common 
+NUT functions.
+
+Jim Jozwiak
+http://nut.sourceforge.net
+jozwiak@gmail.com

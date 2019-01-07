@@ -1,0 +1,290 @@
+2018-08-31 NUTsqlite-2.0.6 released.
+
+2018-08-31 Glycine dv_default moved down to 5 gm.  Also, bigNUT and GUI do not
+           agree on what's right in weightlog mini-app for 'cutting'.  Decided
+           to go with GUI, which means whenever both fat mass and lean mass
+           gains are positive, lower calories by 20.
+
+2018-08-07 NUTsqlite-2.0.5 released.
+
+2018-08-07 Glycine and Retinol are nutrients that I personally want to control
+           so I added them to the list of Daily Value nutrients in the GUI but
+           neglected to supply a dv default, so there is an error message if
+           you try to use them from the GUI.
+
+2018-06-22 NUTsqlite-2.0.4 released.
+
+2018-06-22 Found a bug in RecipeDone.  100 gram weight record was wrong.
+
+2018-06-17 NUTsqlite-2.0.3 released.
+
+2018-06-17 Load of USDA database is leaving a carriage return and tilde at the
+           end of each food group.  Fixed in proc load_fd_group.  Also updated
+           GUI to show correct percentages of carbs and fat in new Daily Values.
+
+2018-06-10 NUTsqlite-2.0.2 released.
+
+2018-06-10 Windows 10 user "Darwin" found some code in proc FoodChoicevf which
+           which doesn't work right on his operating system.  It's a thread
+           problem in conjunction with the tcl/sqlite interface.
+
+2018-06-07 NUTsqlite-2.0.1 released.
+
+2018-06-07 Procedure which clears the weight log was not updated to match
+           bigNUT, so I fixed ClearWeightLog.
+
+2018-05-30 NUTsqlite-2.0 released.
+
+2018-05-30 It looks and acts pretty much the same, but it's a new program made
+           up of snippets of the old program stitched together in a new way.
+           bigNUT is the back-end, the GUI is threaded, and the performance is
+           superb.  All computations and logic are now done by SQLite rather
+           than Tcl.  bigNUT uses triggers to keep all the data for the display
+           up-to-date, so that Tcl only translates user commands into SQL and
+           then retrieves all relevant data to refresh the GUI as necessary.
+
+2017-06-26 NUTsqlite-1.9.9.6 released.
+
+2017-06-20 Multiple changes:  special commented-out code to make it easier to
+           modify GUI to show non-fiber carb DV percentages instead of the gram
+           weight; change to calorie auto-set algorithm to hopefully make it
+           work better to quickly home in on the right calorie level; added
+           Retinol & Glycine as Daily Value nutrients but only for PCF purposes
+           (you have to use sqlite3 directly to change the DV because there's
+           no place in the GUI to deal with it or even show the percentages,
+           and you put the value you want in the dv_default field, not the
+           nutopt field which should be 0.0).
+
+2017-05-12 NUTsqlite-1.9.9.5 released.
+
+2017-05-12 Updated email address everywhere.
+
+2017-05-05 Added bigNUT, the wonderful new SQL-only version of NUT.
+
+2017-02-22 NUTsqlite-1.9.9.4 released.
+
+2017-02-21 GUI not right for case when Calories are set to "adjust to my meals"
+           so I changed procs InitializePersonalOptions and 
+           ChangePersonalOptions to allow right fat and non-fiber carb choices.
+
+2016-11-30 In proc theusualAdd, order by Shrt_Desc instead of Long_Desc so meal
+           list menu looks more like it knows what it is doing.
+
+2016-10-22 NUTsqlite-1.9.9.3 released.
+
+2016-09-26 Changed AcceptNewMeasurements to return calorie auto-set feature to
+           way it was originally, because it worked better to preserve lean
+           mass.  However, now an auto-set cycle ends with a reset of calories
+           to the average during the cycle in order to damp down big
+           oscillations.
+
+2016-08-16 NUTsqlite-1.9.9.2 released.
+
+2016-08-16 Line 2128 in proc PCF has the constant that controls the accuracy of
+           automatic portion control; however, if it is too accurate the
+           algorithm starts to loop often, which seems to be the case now, so I
+           loosened it from 0.1 to 0.2.
+
+2016-05-30 NUTsqlite-1.9.9.1 released.
+
+2016-05-16 On calorie auto-set when both fat mass and lean mass are going up,
+           and lean mass is going up faster than fat mass, treat this as a
+           favorable trend.  Change to proc AcceptNewMeasurements.
+
+2016-05-12 NUTsqlite-1.9.9.0 released.
+
+2016-05-12 Fixed coding mistake in proc update_am that only manifested if user
+           changed meals per day with no meals in the database.
+
+2016-05-08 NUTsqlite-1.9.8 released.
+
+2016-05-07 Mac user showed me illegible screens because Mac OS does not honor
+           themed widgets.  Made Mac and Windows gui (appSize = 0.0) monochrome.
+
+2016-03-18 NUTsqlite-1.9.7 released.
+
+2016-03-02 Changed calorie auto-set feature to immediately end cycle if fat
+           mass is going up or both lean and fat are going down.  This gets
+           rid of long cycles with a big dive at the beginning and then an
+           extended effort to get lean mass back up.  These long cycles when
+           they occur are just too stressful and don't accomplish anything.
+
+2015-09-30 NUTsqlite-1.9.6 released.  Verified it works with sr28.
+
+2015-09-12 Some of the confusion installing on a Mac appears to be that their
+           unzip of multiple files puts the files in yet another separate
+           directory.  I changed the README to explicitly say this, and I added
+           a line in nut.tcl that allows the user to cd to some directory
+           before anything happens.  The Mac Tcl launcher doesn't pick a good
+           working directory, and this can easily solve that problem.
+
+2015-08-02 NUTsqlite-1.9.5 released.
+
+2015-08-02 Changed font on analog clock in alternate GUI load screen.  It
+           scales better even if it is slightly less classy.
+
+2015-08-01 I've changed my mind on how calorie auto-set should work.  It now
+           will not allow fat mass to go up.  I finally found the backup of
+           my old historical weight logs, and this is how I got the best
+           results except when I was eating very high carb.  These changes are
+           in proc AcceptNewMeasurements.
+
+2015-07-15 NUTsqlite-1.9.4 released.
+
+2015-07-14 The original GUI works well on Windows and Mac, so it is retained if
+           the appSize variable in nut.tcl is 0.0; however, on Linux when there
+           is no resolution-independent window manager, it does not scale well.
+           Therefore, I wrote an alternate GUI that is invoked when appSize is
+           greater than 0.0.  Some of the widgets work differently due to the
+           needs of the different geometry manager employed, but the size and
+           appearance are now more consistent over the whole range of screen
+           resolutions and "appSize" settings.
+
+2015-07-10 In proc format_meal_id there is a call to the Tcl math func "int"
+           that erroneously blows up if you pass it the string "08" which it
+           thinks is a malformed octal number, so I had to put in a workaround.
+
+2015-06-13 NUTsqlite-1.9.3 released.
+
+2015-06-13 Changed proc AcceptNewMeasurements.  wlpolarity not being changed
+           due to coding error.  Upshot would be that user continually loses
+           weight unto frailty although bodyfat percentage improves markedly.
+           This bug was only seen when using the calorie auto-set feature.  
+
+2015-02-06 Changed proc n6hufa.  It was counting trans fats twice.  Left trans
+           in the argument list to avoid making users have to reload the 
+           database to recreate the views.  This error is insignificant because
+           it can only slightly change essential fatty acid daily values.
+
+2015-01-08 NUTsqlite-1.9.2 released.
+
+2015-01-08 In proc SetDefanalLater, the attempt to change to a watch cursor and
+           update the screen isn't working right because it may change the value
+           reported by the spin button in Analyze Meals after it has been
+           verified, so that there is an error pop-up.  Performance is better
+           since I wrote this part, so I just removed the whole sequence as it
+           takes only a second or so even with 1200 meals, although there is
+           some unexplained flickering if there is auto portion control in 
+           effect.  Also, commented out the prepared statement cache set to 100
+           because it may be that it is slowing down the program if it runs for
+           several days; however, don't know for sure because it always takes
+           several days to test.
+
+2014-12-18 NUTsqlite-1.9.1 released.
+
+2014-12-18 Fixed proc auto_cal to make OMEGA6, AA, and LA daily values have >
+           0.0 daily values in cases where food has none and we get a error
+           pop-up basically complaining about division by zero.
+
+2014-11-07 NUTsqlite-1.9.0 released.
+
+2014-11-07 Just for laughs, I upgraded all my Tcl stuff with the ActiveTcl
+           distribution.  There were a few changes in the appearance of the gui
+           which I fixed in such a manner that earlier versions of Tcl shouldn't
+           notice:  a literal green on food search became an illegible darkGreen
+           so I specified it using rgb notation, and some zeros at the top of
+           view foods became negative zeros so I explicitly set them to zero
+           before the spinbuttons create themselves.  Also, the "Load Nutrient
+           Values" progress bar needed to be retimed.
+
+2014-10-30 NUTsqlite-1.8 released.
+
+2014-10-30 Another problem with recipes:  traces on variables to allow
+           modifications of nutrient values not properly turned on in
+           RecipeSaveAs or turned off in RecipeCancel, leading to endless
+           processing after a second recipe is attempted.  Fixed, hopefully.
+           The recipe feature was the last thing I wrote when I was trying to
+           finish the program and I think I was tired.
+
+2014-10-28 Moved SQL prepared statement cache up to the max 100.  There doesn't
+           seem to be any cost to this, and this is what I would do if I were
+           coding in C.  Also, made the RecipeSaveAs SQL a single transaction.
+
+2014-10-27 Added window icon.  It doesn't make a lot of sense since this icon is
+           the graph from the legacy version that I didn't implement in this
+           version.
+
+2014-10-12 NUTsqlite-1.7 released.
+
+2014-10-12 Pressing a food button on "Record Meals" is not necessarily producing
+           the same quantity when the food opens up in "View Foods".  Fixed
+           proc rm2vf.
+
+2014-10-05 Made all the {nut}dv variables round the same way as the {nut}am
+           variables to remove inconsistencies in auto portion control, i.e.
+           ::FATdv keeps firing because it it is not exactly equal to ::FATam.
+
+2014-10-03 Removed redundant dv_change call in proc ChangePersonalOptions.
+           Write to {nut}opt variable will take care of it because of traces on
+           all the {nut}opt variables.
+
+2014-10-03 NUTsqlite-1.6 released.
+
+2014-10-03 Removed redundant SQL processing from proc update_am in case where
+           user types giant number that resolves to all the meals in the db.
+
+2014-10-03 A Windows and Mac user had to set appSize to 0.0.  So I guess I will
+           distribute it set to 0.0 and make the Linux people be the ones who
+           have to edit nut.tcl to change it.
+
+2014-09-30 NUTsqlite-1.5 released.
+
+2014-09-30 Added goofy acknowledgement message after updateNUT.tcl processing.
+
+2014-09-30 Fixed the meal choice scale and food search widgets from changing
+           their positions when going from meal to analysis in record meals.
+
+2014-09-29 View pcf changed to temp.  Although NUT wasn't designed to work to
+           with multiple instances sharing the same db, they shouldn't actively
+           interfere if it can be helped, and pcf view won't be shared if it's
+           temp.
+
+2014-09-29 Heh heh, RecipeDone still doesn't work right.  Made random changes in
+           hopes it will start to work.  My usual superficial testing confirms
+           it may work, but maybe not.
+
+2014-09-27 Added code to work with older Tcl/Tk/SQLite installations circa 2009
+           that don't have SQLite restore and backup commands.
+
+2014-09-26 NUTsqlite-1.4 released.
+
+2014-09-26 Speeded up automatic portion control by making it a single SQL
+           transaction.
+
+2014-09-26 Speeded up proc SetDefanal slightly by cancelling previous calls on
+           event loop and making shorter the time allowed for user spinbuttoning
+           until SQL processing kicks in.
+
+2014-09-25 Fixed setPCF to correctly show no portion control when it is
+           obviously impossible.
+
+2014-09-24 NUTsqlite-1.3 released.
+ 
+2014-09-24 In some cases when carb or fat is set in personal options to "adjust
+           to my meals" there is an error dialog when the nutrient is selected
+           for automatic portion control.  Fixed in proc setPCF.
+
+2014-09-18 NUTsqlite-1.2 released.
+
+2014-09-18 Recipe scaling for water gained or lost in preparation is wrong.
+           Nothing is happening.  RecipeDone changed.  Removed "-strict" from
+           checking for doubles and fixed weight assignment that had wrong
+           syntax.
+
+2014-09-18 Recipe NDB_No starting too low in vicinity of USDA NDB_Nos.  Should
+           start at 99000.  RecipeSaveAs changed.
+
+2014-09-17 NUTsqlite-1.1 released.
+
+2014-09-15 Forgot that calorie change from Calorie Auto-Set will not provoke
+           auto portion control processing because calories not a PCF nutrient.
+           Added auto_cal calls if calories change in AcceptNewMeasurements.
+
+2014-09-10 AcceptNewMeasurements not working right because sql is not updating
+           global variables from the proc.  No idea why not.  Added redundant
+           call to RefreshWeightLog to update vars and it worked.  No idea why.
+
+2014-09-10 Fixed spelling errors in nutdoc.html.  Made updateNUT.tcl delete
+           from tcl_code before loading new code.
+
+2014-09-07 NUTsqlite-1.0 released.

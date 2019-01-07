@@ -1,0 +1,36 @@
+/*
+  Custom script to add next meal automatically.  Invoke it thus:
+	.read sequence.sqlite3
+  This is something NUTsqlite can't do, complicated meal ordering with
+  automatic changes to personal options!
+*/
+
+begin;
+
+with newcm (meal_id) as (
+ with cm1 (base, meal) as (
+  with cm (base, meal) as (
+   select currentmeal / 100, currentmeal % 100 from options
+   )
+  select case when meal = 3 then date(substr(base, 1, 4) || '-' || substr(base, 5, 2) || '-' || substr(base, 7, 2), '+1 day') else substr(base, 1, 4) || '-' || substr(base, 5, 2) || '-' || substr(base, 7, 2) end, case when meal = 3 then 1 else meal + 1 end from cm
+  )
+ select cast( substr(base, 1, 4) || substr(base, 6, 2) || substr(base, 9, 2) as int) * 100 + meal from cm1
+ )
+update options set currentmeal = (select meal_id from newcm);
+update options set defanal_am = 1;
+
+drop view if exists z_mn;
+create temp view z_mn as
+ with meal (m) as (
+  select currentmeal % 100 from options
+  )
+ select case when m = 1 then 'R Breakfast' when m = 2 then 'KC Dinner' else 'R Supper' end as mn, m from meal;
+
+insert into currentmeal select NDB_No, Gm_Wgt, NutrDesc from theusual where meal_name = (select mn from z_mn);
+
+update nutr_def set nutopt = 0.0 where NutrDesc = 'Total Fat';
+-- update nutr_def set nutopt = case when (select m from z_mn) in (1, 3) then 125.0 else 140.0 end where NutrDesc = 'Protein';
+
+	with temp (meal2nfc) as (select sum(Nutr_Val * Gm_Wgt / 100.0) from mealfoods join nut_data nd using (NDB_No) where nd.Nutr_No = 2000 and meal_id = (select max(meal_id) from mealfoods where meal_id % 100 = 2)) update nutr_def set nutopt = case when (select m from z_mn) in (1, 3) then (180.0 - (select meal2nfc from temp)) * 1.5 else -1 end where NutrDesc = 'Non-Fiber Carb';
+
+commit;

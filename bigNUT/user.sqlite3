@@ -1,0 +1,499 @@
+/*
+  User initiated stuff goes here.  The following PRAGMA is essential at each
+  invocation, but most of the stuff in this file isn't strictly necessary.  If it is
+  necessary, with the exception of automatic portion control and weight log, it should go into 
+  logic.sqlite3.  Just about everything in this init file is and should be "temp" so
+  it goes away for you if you close the database connection, but it doesn't go away for the
+  other connections that came in with the same user init.  The only exceptions are the
+  shopping list and cost table which need to be persistent and therefore real tables.
+*/
+
+PRAGMA recursive_triggers = 1;
+
+begin;
+
+/*
+  HEERE BEGYNNETH AUTOMATIC PORTION CONTROL (PCF)
+*/
+
+/*
+  If a mealfoods replace causes the delete trigger to start, we get a
+  recursive nightmare.  So we need a before insert trigger.
+*/
+
+drop trigger if exists before_mealfoods_insert_pcf;
+create temp trigger before_mealfoods_insert_pcf before insert on mealfoods
+when (select block_mealfoods_insert_trigger from z_trig_ctl) = 0
+begin
+update z_trig_ctl set block_mealfoods_delete_trigger = 1;
+end;
+
+/*
+  A mealfoods insert trigger
+*/
+
+drop trigger if exists mealfoods_insert_pcf;
+create temp trigger mealfoods_insert_pcf after insert on mealfoods
+when NEW.meal_id = (select currentmeal from options)
+and (select block_mealfoods_insert_trigger from z_trig_ctl) = 0
+begin
+update z_trig_ctl set rm_analysis = 1;
+update z_trig_ctl set am_analysis = 1;
+update z_trig_ctl set am_dv = 1;
+update z_trig_ctl set PCF_processing = 1;
+end;
+
+/*
+  A mealfoods update trigger
+*/
+
+drop trigger if exists mealfoods_update_pcf;
+create temp trigger mealfoods_update_pcf after update on mealfoods
+when OLD.meal_id = (select currentmeal from options)
+begin
+update z_trig_ctl set rm_analysis = 1;
+update z_trig_ctl set am_analysis = 1;
+update z_trig_ctl set am_dv = 1;
+update z_trig_ctl set PCF_processing = 1;
+end;
+
+/*
+  A mealfoods delete trigger.  One of the bizarre consequences of these
+  inscrutable recursive triggers is that if you want to delete everything
+  in the current meal, you can't delete from the table mealfoods unless you
+  first set the Nutr_No column to null for all rows.  Frankly, I don't yet
+  understand why this is so; however an unconditional delete of everything
+  from the view currentmeal does seem to work properly without having to
+  null out the NutrDesc column.
+*/
+
+drop trigger if exists mealfoods_delete_pcf;
+create temp trigger mealfoods_delete_pcf after delete on mealfoods
+when OLD.meal_id = (select currentmeal from options)
+and (select block_mealfoods_delete_trigger from z_trig_ctl) = 0
+begin
+update z_trig_ctl set am_analysis_header = 1;
+update z_trig_ctl set rm_analysis = 1;
+update z_trig_ctl set am_analysis = 1;
+update z_trig_ctl set am_dv = 1;
+update z_trig_ctl set PCF_processing = 1;
+end;
+
+/*
+  Another thing that can start automatic portion control is changing the
+  nutopt in nutr_def which will change the Daily Values.  And then the same
+  thing for FAPU1 in options.
+*/
+
+drop trigger if exists update_nutopt_pcf;
+create temp trigger update_nutopt_pcf after update of nutopt on nutr_def
+begin
+update z_trig_ctl set rm_analysis = 1;
+update z_trig_ctl set am_analysis = 1;
+update z_trig_ctl set am_dv = 1;
+update z_trig_ctl set PCF_processing = 1;
+end;
+
+drop trigger if exists update_FAPU1_pcf;
+create temp trigger update_FAPU1_pcf after update of FAPU1 on options
+begin
+update z_trig_ctl set rm_analysis = 1;
+update z_trig_ctl set am_analysis = 1;
+update z_trig_ctl set am_dv = 1;
+update z_trig_ctl set PCF_processing = 1;
+end;
+
+/*
+  HEERE ENDETH AUTOMATIC PORTION CONTROL (PCF)
+*/
+
+/*
+  We often want to grab the preferred weight for a food so we create a special
+  view that dishes it up!  This view delivers the preferred Gm_Wgt and the
+  newly computed Amount of the serving unit.  The preferred weight is never
+  zero or negative, so if the Gm_Wgt might not be > 0.0 you need special logic.
+*/
+
+drop view if exists pref_Gm_Wgt;
+create temp view pref_Gm_Wgt as select NDB_No, Seq, Gm_Wgt / origGm_Wgt * Amount as Amount, Msre_Desc, Gm_Wgt, origSeq, origGm_Wgt, Amount as origAmount from weight natural join (select NDB_No, min(Seq) as Seq from weight group by NDB_No);
+
+/*
+  Here's an "INSTEAD OF" trigger to allow updating the Gm_Wgt of the
+  preferred weight record.
+*/
+
+drop trigger if exists pref_weight_Gm_Wgt;
+create temp trigger pref_weight_Gm_Wgt instead of update of Gm_Wgt on pref_Gm_Wgt
+when NEW.Gm_Wgt > 0.0 begin
+update weight set Gm_Wgt = NEW.Gm_Wgt where NDB_No = NEW.NDB_No and Seq =
+(select min(Seq) from weight where NDB_No = NEW.NDB_No);
+end;
+  
+/*
+  This is a variant of the previous trigger to change the preferred Gm_Wgt
+  of a food by specifying the Amount of the serving unit, the Msre_Desc.
+  In addition, it proffers an update to the Gm_Wgt of the food in the
+  current meal, just in case that is the reason for the update.
+*/
+
+drop trigger if exists pref_weight_Amount;
+create temp trigger pref_weight_Amount instead of update of Amount on pref_Gm_Wgt
+when NEW.Amount > 0.0 begin
+update weight set Gm_Wgt = origGm_Wgt * NEW.Amount / Amount 
+where NDB_No = NEW.NDB_No and 
+Seq = (select min(Seq) from weight where NDB_No = NEW.NDB_No);
+update currentmeal set Gm_Wgt = null where NDB_No = NEW.NDB_No;
+end;
+  
+/*
+  Using the preferred weight, we can View Foods in various ways.
+*/
+
+drop view if exists view_foods;
+create temp view view_foods as select NutrDesc, NDB_No, substr(Shrt_Desc,1,45), round(Nutr_Val * Gm_Wgt / 100.0,1) as Nutr_Val, Units, cast(cast(round(Nutr_Val * Gm_Wgt / dv) as int) as text) || '% DV' as dv from nutr_def natural join nut_data left join am_dv using (Nutr_No) natural join food_des natural join pref_Gm_Wgt;
+
+/*
+  We create a convenience view of the current meal, aka mealfoods.
+*/
+
+drop view if exists currentmeal;
+CREATE temp VIEW currentmeal as select mf.NDB_No as NDB_No, case when (select grams from options) then cast (cast (round(mf.Gm_Wgt) as int) as text) || ' g' else cast(round(mf.Gm_Wgt / 28.35 * 8.0) / 8.0 as text) || ' oz' end || ' (' || cast(round(case when mf.Gm_Wgt <= 0.0 or mf.Gm_Wgt != pGW.Gm_Wgt then mf.Gm_Wgt / origGm_Wgt * origAmount else Amount end * 8.0) / 8.0 as text) || ' ' || Msre_Desc || ') ' || Shrt_Desc || ' ' as Gm_Wgt, NutrDesc from mealfoods mf natural join food_des left join pref_Gm_Wgt pGW using (NDB_No) left join nutr_def using (Nutr_No) where meal_id = (select currentmeal from options) order by Shrt_Desc;
+
+/*
+  OK, now the INSTEAD OF trigger to simplify somewhat the insertion of a 
+  meal food:
+*/
+
+drop trigger if exists currentmeal_insert;
+create temp trigger currentmeal_insert instead of insert on currentmeal begin
+update mealfoods set Nutr_No = null where Nutr_No = (select Nutr_No from
+nutr_def where NutrDesc = NEW.NutrDesc);
+insert or replace into mealfoods values ((select currentmeal from options),
+NEW.NDB_No, case when NEW.Gm_Wgt is null then (select Gm_Wgt from pref_Gm_Wgt
+where NDB_No = NEW.NDB_No) else NEW.Gm_Wgt end, case when NEW.NutrDesc is null 
+then null when (select count(*) from nutr_def where NutrDesc = NEW.NutrDesc
+and dv_default > 0.0) = 1 then (select Nutr_No from nutr_def where NutrDesc
+= NEW.NutrDesc) when (select count(*) from nutr_def where Nutr_No =
+NEW.NutrDesc and dv_default > 0.0) = 1 then NEW.NutrDesc else null end);
+end;
+
+/*
+  It's simpler to delete a mealfood with currentmeal than to just delete
+  it from mealfoods because you don't have to specify the meal_id.
+*/
+
+drop trigger if exists currentmeal_delete;
+create temp trigger currentmeal_delete instead of delete on currentmeal begin
+delete from mealfoods where meal_id = (select currentmeal from options)
+and NDB_No = OLD.NDB_No;
+end;
+
+/*
+  We often want to update a Gm_Wgt in the current meal.
+*/
+
+drop trigger if exists currentmeal_upd_Gm_Wgt;
+create temp trigger currentmeal_upd_Gm_Wgt instead of update of Gm_Wgt on
+currentmeal begin
+update mealfoods set Gm_Wgt = case when NEW.Gm_Wgt is null then (select Gm_Wgt from pref_Gm_Wgt where NDB_No = NEW.NDB_No) else NEW.Gm_Wgt end where NDB_No = NEW.NDB_No and
+meal_id = (select currentmeal from options);
+end;
+
+/*
+  And finally, we often want to modify automatic portion control on the
+  current meal.
+*/
+
+drop trigger if exists currentmeal_upd_pcf;
+create temp trigger currentmeal_upd_pcf instead of update of NutrDesc on
+currentmeal begin
+update mealfoods set Nutr_No = null 
+where Nutr_No = (select Nutr_No from nutr_def where NutrDesc = NEW.NutrDesc);
+update mealfoods set Nutr_No = (select Nutr_No from nutr_def where NutrDesc =
+NEW.NutrDesc) where NDB_No = NEW.NDB_No and
+meal_id = (select currentmeal from options);
+end;
+
+/*
+  Here's a convenience view of customary meals, aka theusual
+*/
+
+drop view if exists theusual;
+create temp view theusual as select meal_name, NDB_No, Gm_Wgt, NutrDesc from 
+z_tu natural join pref_Gm_Wgt left join nutr_def using (Nutr_No);
+
+/*
+  We have the view, now we need the triggers.
+
+  First, we handle inserts from the current meal.
+*/
+
+drop trigger if exists theusual_insert;
+create temp trigger theusual_insert instead of insert on theusual
+when NEW.meal_name is not null and NEW.NDB_No is null and NEW.Gm_Wgt is null
+and NEW.NutrDesc is null
+begin
+delete from z_tu where meal_name = NEW.meal_name;
+insert or ignore into z_tu select NEW.meal_name, mf.NDB_No, mf.Nutr_No from mealfoods mf left join nutr_def where meal_id = (select currentmeal from options);
+end;
+
+/*
+  Now we allow customary meals to be deleted.
+*/
+
+drop trigger if exists theusual_delete;
+create temp trigger theusual_delete instead of delete on theusual
+when OLD.meal_name is not null
+begin
+delete from z_tu where meal_name = OLD.meal_name;
+end;
+
+/*
+  Sorry I didn't write triggers to handle each theusual eventuality,
+  but you can always work directly on z_tu for your intricate updating needs.
+*/
+
+/*
+  We create convenience views to report which foods in the meal analysis are
+  contributing to a nutrient intake.  Use it like this (for example):
+	select * from nut_in_meals where NutrDesc = 'Protein';
+	select * from nutdv_in_meals where NutrDesc = 'Zinc';
+	select * from nutdv_in_meals where ndb_no = 'xxxxx' order by cast(val as int);
+
+  nutdv_in_meals returns nothing if nutrient has no DV
+
+  Then 2 views of average daily food consumption over the analysis period.
+
+  Then a really interesting view.  We find, for each nutrient, the food that
+  contributed the highest amount of the nutrient, and sort the output by food
+  so you can really see which foods make a big contribution to your nutrition
+  in this amazing view "nut_big_contrib".  And if you don't want to see every
+  fatty acid, etc., just the daily value nutrients, the "nutdv_big_contrib"
+  view will do it.
+
+*/
+
+drop view if exists nut_in_meals;
+create temp view nut_in_meals as select NutrDesc, round(sum(Gm_Wgt * Nutr_Val / 100.0 / (select mealcount from am_analysis_header) * (select meals_per_day from options)),1) as Nutr_Val, Units, mf.ndb_no, Shrt_Desc from mealfoods mf join food_des using (NDB_No) join nutr_def nd join nut_data data on mf.NDB_No = data.NDB_No and nd.Nutr_No = data.Nutr_No where meal_id >= (select firstmeal from am_analysis_header) group by mf.NDB_No, NutrDesc order by Nutr_Val desc; 
+
+drop view if exists nutdv_in_meals;
+create temp view nutdv_in_meals as select NutrDesc, cast(cast(round(sum(Gm_Wgt * Nutr_Val / dv / (select mealcount from am_analysis_header) * (select meals_per_day from options))) as int) as text) || '%' as val, mf.ndb_no, Shrt_Desc from mealfoods mf join food_des using (NDB_No) join nutr_def nd join nut_data data on mf.NDB_No = data.NDB_No and nd.Nutr_No = data.Nutr_No join am_dv on nd.Nutr_No = am_dv.Nutr_No where meal_id >= (select firstmeal from am_analysis_header) group by mf.NDB_No, NutrDesc order by cast(val as int) desc; 
+
+drop view if exists daily_food;
+create temp view daily_food as select cast(round((sum(mf.Gm_Wgt) / mealcount * meals_per_day) / origGm_Wgt * origAmount * 8.0) / 8.0 as text) || ' ' || Msre_Desc || ' ' || Shrt_Desc as food from mealfoods mf natural join food_des join pref_Gm_Wgt using (NDB_No) join am_analysis_header where meal_id between firstmeal and lastmeal group by NDB_No order by Shrt_Desc;
+
+drop view if exists daily_food1; create temp view daily_food1 as select cast(round(sum(8.0 * gm_wgt / 28.35 / mealcount * meals_per_day)) / 8.0 as text) || ' oz ' || Long_desc from mealfoods natural join food_des join am_analysis_header where meal_id between firstmeal and lastmeal group by ndb_no order by long_desc;
+
+drop view if exists nut_big_contrib;
+create temp view nut_big_contrib as select shrt_desc, nutrdesc, max(nutr_val), units from (select * from nut_in_meals order by nutrdesc asc, nutr_val desc) group by nutrdesc order by shrt_desc;
+
+drop view if exists nutdv_big_contrib;
+create temp view nutdv_big_contrib as select nut_big_contrib.* from nut_big_contrib natural join nutr_def where dv_default > 0.0 order by shrt_desc;
+
+/*
+   Now, the same as previous but for the database as a whole, both for 100 gm
+   and 100 calorie portions.  So, for example, most glycine in sweets would
+   be:
+	select * from nut_in_100g where NutrDesc = 'Glycine' and FdGrp_Cd =
+        1900;
+*/
+
+drop view if exists nut_in_100g;
+create temp view nut_in_100g as select NutrDesc, FdGrp_Cd, f.NDB_No, Long_Desc, Nutr_Val from food_des f join nutr_def n join nut_data d on f.NDB_No = d.NDB_No and n.Nutr_No = d.Nutr_No order by Nutr_Val asc;
+
+drop view if exists nut_in_100cal;
+create temp view nut_in_100cal as select NutrDesc, FdGrp_Cd, f.NDB_No, Long_Desc, 100.0 * d.Nutr_Val / c.Nutr_Val as Nutr_Val from food_des f join nutr_def n join nut_data d on f.NDB_No = d.NDB_No and n.Nutr_No = d.Nutr_No join nut_data c on f.NDB_No = c.NDB_No and c.Nutr_No = 208 order by Nutr_Val asc;
+
+/*
+  The actual autocal triggers that run the weight log application have to be
+  invoked by the user because they would really run amok during bulk updates.
+
+  The autocal feature is kicked off by an insert to z_wl, the actual weight
+  log table.  There are many combinations of responses, each implemented by
+  a different trigger.
+
+  First, the proceed or do nothing trigger.
+*/
+
+/*
+drop trigger if exists autocal_proceed;
+create temp trigger autocal_proceed after insert on z_wl
+when (select autocal = 2 and weightn > 1 and (weightslope - fatslope) >= 0.0 and fatslope <= 0.0 from z_wslope, z_fslope, z_span, options)
+begin
+select null;
+end;
+*/
+
+/*
+  Just joking!  It doesn't do anything so we don't need it!  But as we change
+  the conditions, the action changes.
+
+  For instance, lean mass is going down or fat mass is going up, so we give up
+  on this cycle and clear the weightlog to move to the next cycle.
+  We always add a new entry to get a head start on the next cycle, but in this
+  case we save the last y-intercepts as the new start.  We also make an
+  adjustment to calories:  up 20 calories if both lean mass and fat mass are
+  going down, or down 20 calories if they were both going up.
+
+  If fat was going up and and lean was going down we make no adjustment because,
+  well, we just don't know!
+*/
+
+drop table if exists wlsave;
+create temp table wlsave (weight real, fat real, wldate integer, span integer, today integer);
+
+drop trigger if exists autocal_cutting;
+create temp trigger autocal_cutting after insert on z_wl
+when (select autocal = 2 and weightn > 1 and fatslope > 0.0 and (weightslope - fatslope) > 0.0 from z_wslope, z_fslope, options)
+begin
+delete from wlsave;
+insert into wlsave select weightyintercept, fatyintercept, wldate, span, today from z_wslope, z_fslope, z_span, (select min(wldate) as wldate from z_wl where
+cleardate is null), (select strftime('%Y%m%d', 'now', 'localtime') as today);
+update z_wl set cleardate = (select today from wlsave) where cleardate is null;
+insert into z_wl select weight, round(100.0 * fat / weight,1), today, null from wlsave;
+update nutr_def set nutopt = nutopt - 20.0 where Nutr_No = 208;
+end;
+
+drop trigger if exists autocal_bulking;
+create temp trigger autocal_bulking after insert on z_wl
+when (select autocal = 2 and weightn > 1 and fatslope < 0.0 and (weightslope - fatslope) < 0.0 from z_wslope, z_fslope, options)
+begin
+delete from wlsave;
+insert into wlsave select weightyintercept, fatyintercept, wldate, span, today from z_wslope, z_fslope, z_span, (select min(wldate) as wldate from z_wl where
+cleardate is null), (select strftime('%Y%m%d', 'now', 'localtime') as today);
+update z_wl set cleardate = (select today from wlsave) where cleardate is null;
+insert into z_wl select weight, round(100.0 * fat / weight,1), today, null from wlsave;
+update nutr_def set nutopt = nutopt + 20.0 where Nutr_No = 208;
+end;
+
+drop trigger if exists autocal_cycle_end;
+create temp trigger autocal_cycle_end after insert on z_wl
+when (select autocal = 2 and weightn > 1 and fatslope > 0.0 and (weightslope - fatslope) < 0.0 from z_wslope, z_fslope, options)
+begin
+delete from wlsave;
+insert into wlsave select weightyintercept, fatyintercept, wldate, span, today from z_wslope, z_fslope, z_span, (select min(wldate) as wldate from z_wl where
+cleardate is null), (select strftime('%Y%m%d', 'now', 'localtime') as today);
+update z_wl set cleardate = (select today from wlsave) where cleardate is null;
+insert into z_wl select weight, round(100.0 * fat / weight,1), today, null from wlsave;
+end;
+
+/*
+  We create a shopping list where the "n" column automatically gives a serial
+  number for easy deletion of obtained items, or we can delete by store.
+  Insert into the table this way:
+	INSERT into shopping values (null, 'potatoes', 'tj');
+*/
+
+CREATE TABLE if not exists shopping (n integer primary key, item text, store text);
+drop view if exists shopview;
+CREATE temp VIEW shopview as select 'Shopping List ' || group_concat(n || ': ' || item || ' (' || store || ')', ' ') from (select * from shopping order by store, item);
+
+/*
+  A persistent table for food cost.  There are at least three different situations:
+  1) food serving weight is just a percentage of the package and therefore its cost;
+     for instance if 454 grams (1 pound) of almonds costs $6.00 then gm_size = 454,
+     cost = 6.0
+  2) food serving weight is only distantly related to the cost; for instance, coffee
+     costs 10.00 a pound (454 grams) but 7 grams of coffee makes 30 grams of espresso,
+     so gm_size = (454.0 / 7.0) * 30.0, cost = 10.0
+  3) food weight as bought has a lot of refuse; for instance, chicken is 3.50 a pound
+     but has 30% refuse, so gm_size = 454 * 0.7, cost = 3.50.
+*/
+
+create table if not exists cost (ndb_no int primary key, gm_size real, cost real);
+
+/*
+  Views of the daily food cost:  listing by food per day and grand total per day 
+  over the whole analysis period; plus total for currentmeal.
+*/
+
+drop view if exists food_cost;
+create temp view food_cost as select ndb_no, round(sum(gm_wgt / gm_size * cost * meals_per_day / mealcount),2) as cost, long_desc from mealfoods natural join food_des natural join cost join am_analysis_header where meal_id between firstmeal and lastmeal group by ndb_no order by cost desc;
+drop view if exists food_cost_cm;
+create temp view food_cost_cm as select round(sum(gm_wgt / gm_size * cost),2) as cost from mealfoods natural join cost join options where meal_id = currentmeal;
+drop view if exists food_cost_total;
+create temp view food_cost_total as select sum(cost) as cost from food_cost;
+
+/*
+  A purely personal view.  max_chick is about portion control for various parts
+  of a raw cut-up chicken based on protein and fat values that will fit into the meal.  
+*/
+
+drop view if exists max_chick;
+CREATE temp VIEW max_chick as with data (ndb_no, shrt_desc, pamount, famount, msre_desc) as (select f.NDB_No, Shrt_Desc, round((select dv / 3.0 - 15.0 from am_dv where nutr_no = 203) / p.Nutr_Val * 100 / origGm_Wgt * Amount * 8) / 8.0, round((select dv / 3.0 - 17.39 from am_dv where nutr_no = 204) / fat.Nutr_Val * 100 / origGm_Wgt * Amount * 8) / 8.0, Msre_Desc from food_des f join nut_data p on f.ndb_no = p.ndb_no and p.nutr_no = 203 join nut_data fat on f.ndb_no = fat.ndb_no and fat.nutr_no = 204 natural join weight where f.NDB_No in (select ndb_no from food_des where ndb_no > 99000 and Shrt_Desc like '%chick%mic%' union select 5088) and Seq = (select min(Seq) from weight where weight.NDB_No = f.NDB_No)) select ndb_no, shrt_desc, case when pamount <= famount then pamount else famount end, msre_desc from data;
+
+/*
+  View showing daily macros and body composition index
+*/
+
+drop view if exists daily_macros;
+create temp view daily_macros as
+select day, round(sum(calories)) as calories, 
+cast(round(100.0 * sum(procals) / sum(calories)) as int) || '/' ||
+cast(round(100.0 * sum(chocals) / sum(calories)) as int) || '/' ||
+cast(round(100.0 * sum(fatcals) / sum(calories)) as int) as macropct,
+round(sum(protein)) as protein,
+round(sum(nfc)) as nfc, round(sum(fat)) as fat,
+bodycomp 
+from 
+(select meal_id / 100 as day, NDB_No, 
+sum(Gm_Wgt / 100.0 * cals.Nutr_Val) as calories, 
+sum(Gm_Wgt / 100.0 * pro.Nutr_Val) as protein, 
+sum(Gm_Wgt / 100.0 * crb.Nutr_Val) as nfc, 
+sum(Gm_Wgt / 100.0 * totfat.Nutr_Val) as fat,
+sum(Gm_Wgt / 100.0 * pcals.Nutr_Val) as procals,
+sum(Gm_Wgt / 100.0 * ccals.Nutr_Val) as chocals,
+sum(Gm_Wgt / 100.0 * fcals.Nutr_Val) as fatcals,
+bodycomp
+from mealfoods join nut_data cals using (NDB_No) 
+join nut_data pro using (NDB_No) 
+join nut_data crb using (NDB_No) 
+join nut_data totfat using (NDB_No) 
+join nut_data pcals using (NDB_No) 
+join nut_data ccals using (NDB_No) 
+join nut_data fcals using (NDB_No) 
+left join (select * from wlview group by wldate) on day = wldate
+where cals.Nutr_No = 208 and
+pro.Nutr_No = 203 and
+crb.Nutr_No = 2000 and
+totfat.Nutr_No = 204 and
+pcals.Nutr_No = 3000 and
+ccals.Nutr_No = 3002 and
+fcals.Nutr_No = 3001
+group by day, NDB_No) group by day;
+
+/*
+  This is the select that I use to look at the nutrient values for the current meal.
+*/
+
+drop view if exists ranalysis;
+create temp view ranalysis as select NutrDesc, round(Nutr_Val, 1) || ' ' || Units, cast(cast(round(100.0 + dvpct_offset) as int) as text) || '%' from rm_analysis natural join rm_dv natural join nutr_def order by dvpct_offset desc;
+
+/*
+  This is the select that I use to look at the nutrient values for the
+  whole analysis period.
+*/
+
+drop view if exists analysis;
+create temp view analysis as select NutrDesc, round(Nutr_Val, 1) || ' ' || Units, cast(cast(round(100.0 + dvpct_offset) as int) as text) || '%' from am_analysis natural join am_dv natural join nutr_def order by dvpct_offset desc;
+
+/*
+  A totally unneccesary bit of fluff:  a persistent table to hold a name for the
+  current eating plan.
+*/
+
+create table if not exists eating_plan (plan_name text);
+
+/*
+  This view spells out a more easily readable string for the current meal as defined
+  in the options table.
+*/
+
+drop view if exists cm_string;
+create temp view cm_string as with cdate (cdate, meal) as (select substr(currentmeal,1,4) || '-' || substr(currentmeal,5,2) || '-' || substr(currentmeal,7,2), cast(substr(currentmeal,9,2) as int) from options) select case when w = 0 then 'Sun' when w = 1 then 'Mon' when w = 2 then 'Tue' when w = 3 then 'Wed' when w = 4 then 'Thu' when w = 5 then 'Fri' when w = 6 then 'Sat' end || ' ' || case when m = 1 then 'Jan' when m = 2 then 'Feb' when m = 3 then 'Mar' when m = 4 then 'Apr' when m = 5 then 'May' when m = 6 then 'Jun' when m = 7 then 'Jul' when m = 8 then 'Aug' when m = 9 then 'Sep' when m = 10 then 'Oct' when m = 11 then 'Nov' else 'Dec' end || ' ' || d || ', ' || y || ' #' || meal as cm_string from (select cast(strftime('%w',cdate) as int) as w, cast(strftime('%m',cdate) as int) as m, cast(strftime('%d',cdate) as int) as d, strftime('%Y',cdate) as y, meal from cdate);
+
+commit;
+
+PRAGMA user_version = 38;
+.separator '|'
+.prompt 'bigNUT> '

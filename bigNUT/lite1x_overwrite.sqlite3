@@ -1,0 +1,28 @@
+/*
+  If you want to overwrite the NUTsqlite database with the germane data from
+  bigNUT, first change the following line to point to your nut.sqlite db:
+*/
+
+attach '../nut/nut.sqlite' as lite;
+
+/* 
+  Now, run this init file like this:  sqlite3 -init lite.sqlite3 nut.db
+
+  If you are already looking at a bigNUT prompt you could also do it this way:
+  bigNUT> .read lite.sqlite3
+*/
+
+begin;
+delete from lite.wlog;
+insert into lite.wlog select weight, bodyfat, wldate, cleardate from z_wl;
+delete from lite.mealfoods;
+insert into lite.mealfoods select meal_id / 100, meal_id % 100, NDB_No, Gm_Wgt / 100.0 from mealfoods;
+delete from lite.theusual;
+insert into lite.theusual select meal_name, NDB_No, case when Nutr_No is null then 'No Auto Portion Control' else NutrDesc end from z_tu left join nutr_def using (Nutr_No);
+update lite.options set defanal_am = (select defanal_am from options);
+update lite.nutr_def set nutopt = (select nutopt from nutr_def where NutrDesc = 'Protein') where NutrDesc = 'Protein';
+update lite.nutr_def set nutopt = (select nutopt from nutr_def where NutrDesc = 'Total Fat') where NutrDesc = 'Total Fat';
+update lite.nutr_def set nutopt = (select nutopt from nutr_def where NutrDesc = 'Non-Fiber Carb') where NutrDesc = 'Non-Fiber Carb';
+update lite.nutr_def set nutopt = (select nutopt from nutr_def where NutrDesc = 'Calories') where NutrDesc = 'Calories';
+commit;
+detach lite;

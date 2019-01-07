@@ -1,0 +1,6 @@
+/*
+  This file implements a gimmick whereby however much gelatin is required to meet the
+  glycine dv has its protein added to the protein dv
+*/
+
+update nutr_def set nutopt = 90.0 + (select nutr_val from nut_in_meals where ndb_no = 19177 and nutrdesc = 'Protein') where nutrdesc = 'Protein';

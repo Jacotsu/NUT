@@ -1,0 +1,12 @@
+/*
+  The sequence series presents a series of customary meals and/or personal
+  options changes to simplify menu planning.  When one looks at the latest
+  meal and decides another sequence would have been better, changesequence
+  backtracks and chooses another sequence of meals and options.
+*/
+
+delete from currentmeal;
+update options set currentmeal = (select max(meal_id) from mealfoods);
+.sys rm sequence.sqlite3
+.sys ln -s 8sequence.sqlite3 sequence.sqlite3
+.read sequence.sqlite3

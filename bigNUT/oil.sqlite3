@@ -1,0 +1,8 @@
+/*
+ redestribute oil/fat foods in keto meal
+*/
+
+insert into currentmeal values (4047, null, null);
+insert into currentmeal values (4584, null, null);
+insert into currentmeal select ndb_no, case when ndb_no = 4584 then 0.9 else 0.0 end * gm_wgt * third / fat, null from (with first as (select m.ndb_no, gm_wgt, gm_wgt * nutr_val / 100.0 as fat from mealfoods m join nut_data n on m.ndb_no = n.ndb_no and n.nutr_no = 204 where meal_id = (select currentmeal from options) and m.ndb_no in (1145, 4047, 4584)) select *, (select sum(fat) / 3.0 from first) as third from first) where ndb_no in (4047, 4584);
+delete from mealfoods where gm_wgt = 0.0 and ndb_no in (4047, 4584) and meal_id = (select currentmeal from options);

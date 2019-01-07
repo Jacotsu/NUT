@@ -1,0 +1,34 @@
+/*
+  Custom script to add next meal automatically.  Invoke it thus:
+	.read sequence.sqlite3
+  This is something NUTsqlite can't do, complicated meal ordering with
+  automatic changes to personal options!
+*/
+
+begin;
+
+update mealfoods set nutr_no = null;
+update options set defanal_am = (select case when defanal_am >= 45 then 45 when o.currentmeal = lastmeal then defanal_am + 1 else defanal_am end from options o, am_analysis_header);
+
+with newcm (meal_id) as (
+ with cm1 (base, meal) as (
+  with cm (base, meal) as (
+   select currentmeal / 100, currentmeal % 100 from options
+   )
+  select case when meal = 3 then date(substr(base, 1, 4) || '-' || substr(base, 5, 2) || '-' || substr(base, 7, 2), '+1 day') else substr(base, 1, 4) || '-' || substr(base, 5, 2) || '-' || substr(base, 7, 2) end, case when meal = 3 then 1 else meal + 1 end from cm
+  )
+ select cast( substr(base, 1, 4) || substr(base, 6, 2) || substr(base, 9, 2) as int) * 100 + meal from cm1
+ )
+update options set currentmeal = (select meal_id from newcm);
+
+drop view if exists z_mn;
+create temp view z_mn as
+ with meal (m, mod2) as (
+  select options.currentmeal % 100, maxmeal % 2 from options, am_analysis_header
+  )
+ select case when mod2 = 0 then case when m = 1 then 'Z Breakfast' when m = 2 then 'Z Dinner' else 'Z Supper' end else case when m = 1 then 'Z Breakfast' when m = 2 then 'Z Dinner' else 'Z Supper' end end as mn, m from meal;
+
+insert into currentmeal select NDB_No, Gm_Wgt, NutrDesc from theusual where meal_name = (select mn from z_mn);
+drop view z_mn;
+
+commit;
