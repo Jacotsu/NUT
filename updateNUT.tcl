@@ -319,11 +319,53 @@ set ::magnify 1.0
 set i [font measure TkDefaultFont -displayof . "  TransMonoenoic  "]
 set ::column18 [expr {int(round($i / 3.0))}]
 set ::column15 [expr {int(round(2.0 * $i / 5.0))}]
+
+set ::SetDefanalPreviousValue 0
+set ::LastSetDefanal 0
+
+set ::MealfoodSequence 0
+set ::MealfoodStatus {}
+set ::MealfoodPCF {}
+set ::MealfoodPCFfactor {}
+
+set ::lastrmq 0
+set ::lastamrm 0
+set ::lastac 0
+set ::lastbubble 0
+set ::BubbleMachineStatus 0
+
+set ::realmealchange 0
+
+set ::newtheusual ""
+
+set gramsvf 0
+set ouncesvf 0.0
+set caloriesvf 0
+set Amountvf 0.0
+set ounce2gram 0.0
+set cal2gram 0
+set Amount2gram 0.0
+
+set ::ENERC_KCALpo 0
+
+set ::balvals {}
+
+set ::PCFchoices {{No Auto Portion Control} {Protein} {Non-Fiber Carb} {Total Fat} {Vitamin A} {Thiamin} {Riboflavin} {Niacin} {Panto. Acid} {Vitamin B6} {Folate} {Vitamin B12} {Choline} {Vitamin C} {Vitamin D} {Vitamin E} {Vitamin K1} {Calcium} {Copper} {Iron} {Magnesium} {Manganese} {Phosphorus} {Potassium} {Selenium} {Sodium} {Zinc} {Glycine} {Retinol} {Fiber}}
+set ::rmMenu .nut.rm.frmenu
+
+set screen 0
+set row 0
+set bcol 0
+set valcol 3
+set ucol 5
+
+
 option add *Dialog.msg.wrapLength [expr {400 * $::magnify}]
 option add *Dialog.dtl.wrapLength [expr {400 * $::magnify}]
 
 trace add variable ::FIRSTMEALam write SetMealRange_am
 trace add variable ::LASTMEALam write SetMealRange_am
+
 ttk::style configure nutbutton.TButton
 ttk::style configure recipe.TButton
 ttk::style configure meal.TButton
@@ -383,6 +425,7 @@ ttk::style configure lf.Horizontal.TProgressbar
 ttk::style configure meal.Horizontal.TProgressbar
 ttk::style configure meal.TMenubutton
 ttk::style configure ar.TButton
+
 if {$::magnify > 0.0} {
   ttk::style configure nut.Treeview
   -font TkFixedFont
@@ -401,8 +444,9 @@ ttk::frame .nut.vf -padding [expr {$::magnify * 2}] -style "vf.TFrame"
 ttk::frame .nut.po -padding [expr {$::magnify * 2}] -style "po.TFrame"
 ttk::frame .nut.ts -padding [expr {$::magnify * 2}] -style "ts.TFrame"
 ttk::frame .nut.qn -padding [expr {$::magnify * 2}]
-grid [ttk::label .nut.am.herelabel
-  -text "Here are \"Daily Value\" average percentages for your previous "
+
+grid [ttk::label .nut.am.herelabel\
+  -text "Here are \"Daily Value\" average percentages for your previous "\
   -style am.TLabel] -row 2 -column 1 -columnspan 9 -sticky e
 grid [tk::spinbox .nut.am.mealsb \
   -width 5 \
@@ -426,21 +470,7 @@ grid [ttk::label .nut.am.rangelabel \
   -column 0 \
   -columnspan 15
 
-set ::SetDefanalPreviousValue 0
-set ::LastSetDefanal 0
 
-set ::MealfoodSequence 0
-set ::MealfoodStatus {}
-set ::MealfoodPCF {}
-set ::MealfoodPCFfactor {}
-
-set ::lastrmq 0
-set ::lastamrm 0
-set ::lastac 0
-set ::lastbubble 0
-set ::BubbleMachineStatus 0
-
-set ::realmealchange 0
 grid [scale .nut.rm.scale \
   -background "#FF9428" \
   -width [expr {$::magnify * 11}] \
@@ -523,7 +553,6 @@ grid [ttk::button .nut.rm.newtheusualbutton \
   -column 9 \
   -columnspan 2 \
   -sticky w
-set ::newtheusual ""
 grid remove .nut.rm.newtheusuallabel
 grid remove .nut.rm.newtheusualentry
 grid remove .nut.rm.newtheusualbutton
@@ -651,6 +680,7 @@ grid propagate .nut.rm.frlistbox 0
 bind .nut.rm.frlistbox.listbox <<ListboxSelect>> FoodChoicerm
 trace add variable ::like_this_rm write FindFoodrm
 bind .nut.rm.fsentry <FocusIn> FoodSearchrm
+
 grid remove .nut.rm.frlistbox
 grid [ttk::label .nut.vf.label \
   -textvariable Long_Desc \
@@ -661,13 +691,6 @@ grid [ttk::label .nut.vf.label \
   -columnspan 9 \
   -rowspan 3
 
-set gramsvf 0
-set ouncesvf 0.0
-set caloriesvf 0
-set Amountvf 0.0
-set ounce2gram 0.0
-set cal2gram 0
-set Amount2gram 0.0
 
 grid [tk::spinbox .nut.vf.sb0 \
   -width 5 \
@@ -1040,7 +1063,7 @@ grid [tk::spinbox .nut.po.pane.optframe.cal_s \
   -column 1 \
   -padx [expr {$::magnify * 5}] \
   -pady [expr {$::magnify * 10}]
-set ::ENERC_KCALpo 0
+
 grid [ttk::checkbutton .nut.po.pane.optframe.cal_cb1 \
   -text "Adjust to my meals" \
   -variable ::ENERC_KCALpo \
@@ -1344,7 +1367,7 @@ grid [ttk::label .nut.po.pane.optframe.fish_l \
   -padx [expr {$::magnify * 5}] \
   -pady [expr {$::magnify * 10}] \
   -sticky e
-set ::balvals {}
+
 for {set i 15} {$i < 91} {incr i} {
  lappend ::balvals "$i / [expr {100 - $i}]"
  }
@@ -1510,6 +1533,7 @@ tuneinvf
 
 trace add variable like_this_vf write FindFoodvf
 bind .nut.vf.fsentry <FocusIn> FoodSearchvf
+
 pack [ttk::label .nut.qn.label \
   -text "\nNUT has ended."]
 .nut add .nut.am \
@@ -1533,7 +1557,9 @@ pack [ttk::label .nut.qn.label \
 .nut hide .nut.ts
 .nut add .nut.qn \
   -text "Quit NUT"
+
 bind .nut <<NotebookTabChanged>> NutTabChange
+
 grid [ttk::frame .nut.vf.frlistbox \
   -style vf.TFrame \
   -width [expr {15 * $::column15}] ] \
@@ -1615,8 +1641,6 @@ grid columnconfig .nut.rm.frmenu 0 \
   -weight 1 \
   -minsize 0
 
-set ::PCFchoices {{No Auto Portion Control} {Protein} {Non-Fiber Carb} {Total Fat} {Vitamin A} {Thiamin} {Riboflavin} {Niacin} {Panto. Acid} {Vitamin B6} {Folate} {Vitamin B12} {Choline} {Vitamin C} {Vitamin D} {Vitamin E} {Vitamin K1} {Calcium} {Copper} {Iron} {Magnesium} {Manganese} {Phosphorus} {Potassium} {Selenium} {Sodium} {Zinc} {Glycine} {Retinol} {Fiber}}
-set ::rmMenu .nut.rm.frmenu
 grid remove .nut.rm.frmenu
 
 foreach x {am rm vf ar} {
@@ -1664,12 +1688,8 @@ foreach x {am rm vf ar} {
   -text "Sat & Mono FA"
  .nut.${x}.nbw add .nut.${x}.nbw.screen5 \
   -text "Poly & Trans FA"
- set screen 0
- set row 0
- set bcol 0
- set valcol 3
- set ucol 5
- foreach nut {ENERC_KCAL} {
+
+  foreach nut {ENERC_KCAL} {
   if {$x != "ar"} {grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} \
   -textvariable ::caloriebutton \
   -command "NewStory $nut $screen" \
@@ -2789,6 +2809,44 @@ foreach font [font names] {
 option add *Dialog.msg.wrapLength [expr {400 * $::magnify}]
 option add *Dialog.dtl.wrapLength [expr {400 * $::magnify}]
 
+set background(am) "#00FFFF"
+set background(rm) "#FF7F00"
+set background(vf) "#00FF00"
+set background(ar) "#7FBF00"
+
+set ::SetDefanalPreviousValue 0
+set ::LastSetDefanal 0
+set ::MealfoodSequence 0
+set ::MealfoodStatus {}
+set ::MealfoodPCF {}
+set ::MealfoodPCFfactor {}
+set ::lastrmq 0
+set ::lastamrm 0
+set ::lastac 0
+set ::lastbubble 0
+set ::BubbleMachineStatus 0
+set ::realmealchange 0
+set ::newtheusual ""
+set gramsvf 0
+set ouncesvf 0.0
+set caloriesvf 0
+set Amountvf 0.0
+set ounce2gram 0.0
+set cal2gram 0
+set Amount2gram 0.0
+set ::PCFchoices {{No Auto Portion Control} {Protein} {Non-Fiber Carb} {Total Fat} {Vitamin A} {Thiamin} {Riboflavin} {Niacin} {Panto. Acid} {Vitamin B6} {Folate} {Vitamin B12} {Choline} {Vitamin C} {Vitamin D} {Vitamin E} {Vitamin K1} {Calcium} {Copper} {Iron} {Magnesium} {Manganese} {Phosphorus} {Potassium} {Selenium} {Sodium} {Zinc} {Glycine} {Retinol} {Fiber}}
+set ::rmMenu .nut.rm.frmenu
+
+set ::newtheusual ""
+
+set ratio_widget_height_to_spacer 9.6
+set Refusevf "0%"
+set ::ENERC_KCALpo 0
+set ::balvals {}
+set screen 0
+set rely 0.252109375
+
+
 wm geometry . [expr {int($appSize / 1.3 * $vrootwGR)}]x[expr {int($appSize / 1.3 * $vroothGR)}]
 wm title . $::version
 catch {set im [image create photo \
@@ -2949,36 +3007,10 @@ ttk::style map ts.TCombobox \
   -selectforeground { readonly "#000000" }
 ttk::style map vf.TCombobox \
   -fieldbackground { readonly "#00FF00" }
-set background(am) "#00FFFF"
-set background(rm) "#FF7F00"
-set background(vf) "#00FF00"
-set background(ar) "#7FBF00"
 
 trace add variable ::FIRSTMEALam write SetMealRange_am
 trace add variable ::LASTMEALam write SetMealRange_am
 
-set ::SetDefanalPreviousValue 0
-set ::LastSetDefanal 0
-set ::MealfoodSequence 0
-set ::MealfoodStatus {}
-set ::MealfoodPCF {}
-set ::MealfoodPCFfactor {}
-set ::lastrmq 0
-set ::lastamrm 0
-set ::lastac 0
-set ::lastbubble 0
-set ::BubbleMachineStatus 0
-set ::realmealchange 0
-set ::newtheusual ""
-set gramsvf 0
-set ouncesvf 0.0
-set caloriesvf 0
-set Amountvf 0.0
-set ounce2gram 0.0
-set cal2gram 0
-set Amount2gram 0.0
-set ::PCFchoices {{No Auto Portion Control} {Protein} {Non-Fiber Carb} {Total Fat} {Vitamin A} {Thiamin} {Riboflavin} {Niacin} {Panto. Acid} {Vitamin B6} {Folate} {Vitamin B12} {Choline} {Vitamin C} {Vitamin D} {Vitamin E} {Vitamin K1} {Calcium} {Copper} {Iron} {Magnesium} {Manganese} {Phosphorus} {Potassium} {Selenium} {Sodium} {Zinc} {Glycine} {Retinol} {Fiber}}
-set ::rmMenu .nut.rm.frmenu
 
 ttk::notebook .nut
 place .nut \
@@ -3138,7 +3170,6 @@ ttk::label .nut.rm.newtheusuallabel \
 
 ttk::entry .nut.rm.newtheusualentry \
   -textvariable ::newtheusual
-set ::newtheusual ""
 #place .nut.rm.newtheusualentry \
   -relx 0.31 \
   -rely 0.12 \
@@ -3324,7 +3355,6 @@ place .nut.vf.label \
   -relheight 0.12759259 \
   -relwidth 0.33
 
-set ratio_widget_height_to_spacer 9.6
 tk::spinbox .nut.vf.sb0 \
   -width 5 \
   -justify right \
@@ -3410,7 +3440,7 @@ ttk::label .nut.vf.sbl2 \
 ttk::label .nut.vf.refusevalue \
   -textvariable Refusevf \
   -style vfleft.TLabel
-set Refusevf "0%"
+
 place .nut.vf.sbl0 \
   -relx 0.133 \
   -rely 0.0046296296 \
@@ -3761,7 +3791,6 @@ place .nut.po.pane.optframe.cal_s \
   -rely 0.03 \
   -relheight 0.04444444 \
   -relwidth 0.14
-set ::ENERC_KCALpo 0
 ttk::checkbutton .nut.po.pane.optframe.cal_cb1 \
   -text "Adjust to my meals" \
   -variable ::ENERC_KCALpo \
@@ -4071,7 +4100,6 @@ place .nut.po.pane.optframe.fish_l \
   -rely 0.59 \
   -relheight 0.04444444 \
   -relwidth 0.25
-set ::balvals {}
 for {set i 15} {$i < 91} {incr i} {
  lappend ::balvals "$i / [expr {100 - $i}]"
  }
@@ -4265,7 +4293,6 @@ foreach x {am rm vf ar} {
   -relheight 0.75 \
   -relwidth 1.0
 
- set screen 0
  foreach nut {ENERC_KCAL} {
   if {$x != "ar"} {
    button .nut.${x}.nbw.screen${screen}.b${nut} \
@@ -4326,7 +4353,6 @@ foreach x {am rm vf ar} {
   -relheight 0.06 \
   -relwidth 0.165
   }
- set rely 0.252109375
 #set rely 0.205
  foreach nut {FAT FASAT FAMS FAPU OMEGA6 LA AA OMEGA3 ALA EPA DHA CHOLE} {
   button .nut.${x}.nbw.screen${screen}.b${nut} \

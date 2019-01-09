@@ -25,6 +25,14 @@ namespace eval ttk::theme::HighContrast {
         -window         "#eff0f1"
         -focuscolor     "#3daee9"
         -checklight     "#94d0eb"
+
+				analyzeMealsBg  "#00FFFF"
+				recordMealsBg   "#FF7F00"
+				analyzeRecordBg "#7FBF00"
+				viewFoodsBg			"#00FF00"
+				persOptionsBg		"#5454FF"
+				theStoryBg			"#FFFF00"
+
     }
 
     #proc LoadImages {imgdir} {
@@ -305,167 +313,178 @@ namespace eval ttk::theme::HighContrast {
         ttk::style configure TRadiobutton -padding 4
         ttk::style configure TSeparator -background $colors(-bg)
 
+				ttk::style configure .nut.am \
+					-background $colors(analyzeMealsBg)
+				ttk::style configure .nut.rm \
+					-background $colors(recordMealsBg)
+				ttk::style configure .nut.ar \
+					-background $colors(analyzeRecordBg)
+				ttk::style configure .nut.vf \
+					-background $colors(viewFoodsBg)
+				ttk::style configure .nut.po \
+					-background$colors(persOptionsBg)
+				ttk::style configure .nut.ts \
+					-background $colors(theStoryBg)
+
+
+
 				ttk::style configure am.TFrame \
-					-background "#00FFFF"
+					-background $colors(analyzeMealsBg)
 				ttk::style configure am.TLabel \
-					-background "#00FFFF"
+					-background $colors(analyzeMealsBg)
 				ttk::style configure am.TNotebook \
-					-background "#00FFFF"
+					-background $colors(analyzeMealsBg)
 				ttk::style configure am.TSpinbox \
-					-background "#00FFFF"
+					-background $colors(analyzeMealsBg)
+
 				ttk::style configure ar.TButton \
 					-background "#BFD780"
+
 				ttk::style configure ar.TFrame \
-					-background "#7FBF00"
+					-background $colors(analyzeRecordBg)
 				ttk::style configure ar.TLabel \
-					-background "#7FBF00"
+					-background $colors(analyzeRecordBg)
 				ttk::style configure ar.TNotebook \
-					-background "#7FBF00"
+					-background $colors(analyzeRecordBg)
 				ttk::style configure ar.TRadiobutton \
-					-background "#7FBF00"
-				ttk::style configure lf.Horizontal.TProgressbar \
-					-background "#006400"
-				ttk::style configure lightmeal.TButton \
-					-background "#FF9428"
-				ttk::style configure meal.Horizontal.TProgressbar \
-					-background "#00FF00"
-				ttk::style configure meal.TButton \
-					-background "#FF7F00"
-				ttk::style configure meal.TMenubutton \
-					-background "#FF9428"
-				ttk::style configure meal.TRadiobutton \
-					-background "#FF7F00"
-				ttk::style configure nut.TCombobox \
-					-background "#FF7F00"
-				ttk::style configure nutbutton.TButton \
-					-background "#FFFF00"
-				ttk::style configure po.TButton \
-					-background "#5454FF" \
-					-foreground "#FFFF00"
-				ttk::style configure po.TCheckbutton \
-					-background "#5454FF" \
-					-foreground "#FFFF00"
-				ttk::style configure po.TFrame \
-					-background "#5454FF"
-				ttk::style configure po.TLabel \
-					-background "#5454FF" \
-					-foreground "#FFFF00"
-				ttk::style configure po.TMenubutton \
-					-background "#5454FF" \
-					-foreground "#FFFF00"
-				ttk::style configure po.red.TButton \
-					-background "#5454FF" \
-					-foreground "#FF0000"
-				ttk::style configure recipe.TButton \
-					-background "#7FBF00"
-				ttk::style configure rm.TCombobox \
-					-background "#FF7F00"
-				ttk::style configure rm.TFrame \
-					-background "#FF7F00"
-				ttk::style configure rm.TLabel \
-					-background "#FF7F00"
-				ttk::style configure rmright.TLabel \
-					-background "#FF7F00" \
-					-anchor e
-				ttk::style configure rm.TNotebook \
-					-background "#FF7F00"
-				ttk::style configure rm.TSpinbox \
-					-background "#FF7F00"
-				ttk::style configure ts.TCheckbutton \
-					-background "#00FF00" \
-					-foreground "#000000"
-				ttk::style configure ts.TCombobox \
-					-background "#00FF00"
-				ttk::style configure ts.TFrame \
-					-background "#FFFF00"
-				ttk::style configure ts.TLabel \
-					-background "#FFFF00"
-				ttk::style configure vf.TButton \
-					-background "#00FF00"
-				ttk::style configure vf.TCombobox \
-					-background "#00FF00"
-				ttk::style configure vf.TFrame \
-					-background "#00FF00"
-				ttk::style configure vf.TLabel \
-					-background "#00FF00"
-				ttk::style configure vfleft.TLabel \
-					-background "#00FF00" \
-					-anchor w
-				ttk::style configure vfright.TLabel \
-					-background "#00FF00" \
-					-anchor e
-				ttk::style configure vftop.TLabel \
-					-background "#00FF00" \
-					-anchor n
-				ttk::style configure vf.TNotebook \
-					-background "#00FF00"
-				ttk::style configure vf.TSpinbox \
-					-background "#00FF00"
+					-background $colors(analyzeRecordBg)
+
 				ttk::style configure lf.Horizontal.TProgressbar \
 					-background "#006400"
 
+				ttk::style configure lightmeal.TButton \
+					-background "#FF9428"
+				ttk::style configure meal.TMenubutton \
+					-background "#FF9428"
+
+				ttk::style configure meal.Horizontal.TProgressbar \
+					-background $colors(viewFoodsBg)
+
+				ttk::style configure meal.TButton \
+					-background $colors(recordMealsBg)
+				ttk::style configure meal.TRadiobutton \
+					-background $colors(recordMealsBg)
+				ttk::style configure nut.TCombobox \
+					-background $colors(recordMealsBg)
+				ttk::style configure rm.TCombobox \
+					-background $colors(recordMealsBg)
+				ttk::style configure rm.TFrame \
+					-background $colors(recordMealsBg)
+				ttk::style configure rm.TLabel \
+					-background $colors(recordMealsBg)
+				ttk::style configure rmright.TLabel \
+					-background $colors(recordMealsBg) \
+					-anchor e
+				ttk::style configure rm.TNotebook \
+					-background $colors(recordMealsBg)
+				ttk::style configure rm.TSpinbox \
+					-background $colors(recordMealsBg)
+
+				ttk::style configure nutbutton.TButton \
+					-background $colors(theStoryBg)
+
+				ttk::style configure po.TButton \
+					-background $colors(persOptionsBg) \
+					-foreground $colors(theStoryBg)
+				ttk::style configure po.TCheckbutton \
+					-background $colors(persOptionsBg) \
+					-foreground $colors(theStoryBg)
+
+				ttk::style configure po.TFrame \
+					-background $colors(persOptionsBg)
+				ttk::style configure po.TLabel \
+					-background $colors(persOptionsBg) \
+					-foreground $colors(theStoryBg)
+				ttk::style configure po.TMenubutton \
+					-background $colors(persOptionsBg) \
+					-foreground $colors(theStoryBg)
+				ttk::style configure po.red.TButton \
+					-background $colors(persOptionsBg) \
+					-foreground "#FF0000"
+
+				ttk::style configure recipe.TButton \
+					-background $colors(analyzeRecordBg)
+
+				ttk::style configure ts.TCheckbutton \
+					-background $colors(viewFoodsBg) \
+					-foreground "#000000"
+				ttk::style configure ts.TCombobox \
+					-background $colors(viewFoodsBg)
+				ttk::style configure ts.TFrame \
+					-background $colors(theStoryBg)
+				ttk::style configure ts.TLabel \
+					-background $colors(theStoryBg)
+				ttk::style configure vf.TButton \
+					-background $colors(viewFoodsBg)
+				ttk::style configure vf.TCombobox \
+					-background $colors(viewFoodsBg)
+				ttk::style configure vf.TFrame \
+					-background $colors(viewFoodsBg)
+				ttk::style configure vf.TLabel \
+					-background $colors(viewFoodsBg)
+				ttk::style configure vfleft.TLabel \
+					-background $colors(viewFoodsBg) \
+					-anchor w
+				ttk::style configure vfright.TLabel \
+					-background $colors(viewFoodsBg) \
+					-anchor e
+				ttk::style configure vftop.TLabel \
+					-background $colors(viewFoodsBg) \
+					-anchor n
+				ttk::style configure vf.TNotebook \
+					-background $colors(viewFoodsBg)
+				ttk::style configure vf.TSpinbox \
+					-background $colors(viewFoodsBg)
 
 				# Maps
 				ttk::style map ar.TRadiobutton \
 					-indicatorcolor { selected "#FF0000" }
 				ttk::style map meal.TRadiobutton \
 					-indicatorcolor { selected "#FF0000" }
+				ttk::style map po.TCheckbutton \
+					-indicatorcolor { selected "#FF0000" }
+				ttk::style map po.red.TButton \
+					-foreground { active "#FF0000" }
+
 				ttk::style map nut.TCombobox \
-					-fieldbackground { readonly "#FFFF00" }
+					-fieldbackground { readonly $colors(theStoryBg) }
 				ttk::style map nut.TCombobox \
-					-selectbackground { readonly "#FFFF00" }
+					-selectbackground { readonly $colors(theStoryBg) }
+
 				ttk::style map nut.TCombobox \
 					-selectforeground { readonly "#000000" }
 				ttk::style map po.TButton \
 					-foreground { active "#000000" }
 				ttk::style map po.TCheckbutton \
 					-foreground { active "#000000" }
-				ttk::style map po.TCheckbutton \
-					-indicatorcolor { selected "#FF0000" }
-				ttk::style map po.TCombobox \
-					-fieldbackground { readonly "#FFFFFF" }
 				ttk::style map po.TMenubutton \
 					-foreground { active "#000000" }
-				ttk::style map po.red.TButton \
-					-foreground { active "#FF0000" }
+				ttk::style map rm.TCombobox \
+					-selectforeground { readonly "#000000" }
+				ttk::style map ts.TCheckbutton \
+					-foreground { active "#000000" }
+				ttk::style map ts.TCombobox \
+					-selectforeground { readonly "#000000" }
+
+				ttk::style map po.TCombobox \
+					-fieldbackground { readonly "#FFFFFF" }
 				ttk::style map rm.TCombobox \
 					-fieldbackground { readonly "#FF9428" }
 				ttk::style map rm.TCombobox \
 					-selectbackground { readonly "#FF9428" }
-				ttk::style map rm.TCombobox \
-					-selectforeground { readonly "#000000" }
+
 				ttk::style map ts.TCheckbutton \
-					-background { active "#00FF00" }
-				ttk::style map ts.TCheckbutton \
-					-foreground { active "#000000" }
+					-background { active $colors(viewFoodsBg) }
+				ttk::style map ts.TCombobox \
+					-fieldbackground { readonly $colors(viewFoodsBg) }
+				ttk::style map ts.TCombobox \
+					-selectbackground { readonly $colors(viewFoodsBg) }
+				ttk::style map vf.TCombobox \
+					-fieldbackground { readonly $colors(viewFoodsBg) }
+
 				ttk::style map ts.TCheckbutton \
 					-indicatorcolor { selected "#FF0000" }
-				ttk::style map ts.TCombobox \
-					-fieldbackground { readonly "#00FF00" }
-				ttk::style map ts.TCombobox \
-					-selectbackground { readonly "#00FF00" }
-				ttk::style map ts.TCombobox \
-					-selectforeground { readonly "#000000" }
-				ttk::style map vf.TCombobox \
-					-fieldbackground { readonly "#00FF00" }
 
 
-        #ttk::style configure TPanedwindow -width 1 -padding 0
-        ttk::style map TPanedwindow -background [list hover $colors(-checklight)]
-        ttk::style map TCombobox -selectbackground [list \
-            !focus         $colors(-window) \
-            {readonly hover} $colors(-checklight) \
-            {readonly focus} $colors(-focuscolor) \
-            ]
-            
-        ttk::style map TCombobox -selectforeground [list \
-            !focus $colors(-fg) \
-            {readonly hover} $colors(-fg) \
-            {readonly focus} $colors(-selectfg) \
-            ]
-        
-        # Treeview
-        ttk::style configure Treeview -background white
-        ttk::style configure Treeview.Item -padding {2 0 0 0}
     }
 }
