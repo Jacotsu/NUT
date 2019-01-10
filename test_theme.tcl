@@ -5,15 +5,33 @@ exec tclsh "$0" "$@"
 source src/00_packages.tcl
 
 sqlite3 db nut.db
+set DiskDB nut.db
 set appSize 0.7
 set ::magnify [expr {[winfo vrootheight .] / 711.0}]
-set ::version test
-set ::ALTGUI 1
+set ::version  "NUT test"
+
+
+
+
+set DiskDB [file nativename $DiskDB]
+if {$appSize != 0.0} {
+ set ::ALTGUI 1
+ } else {
+ set ::ALTGUI 0
+ }
 
 
 source src/01_high_contrast.tcl
 source src/02_code.tcl
 source src/03_linux_gui.tcl
+
+
+#ttk::style theme use HighContrast
+
+eval $get_procs_from_db
+eval $format_meal_id
+set ::GUI_THREAD [thread::id]
+set ::SQL_THREAD [thread::create " package require sqlite3 ; sqlite3 db $DiskDB; db timeout 10000 ; set ::GUI_THREAD $::GUI_THREAD ; set ::DiskDB $DiskDB ; [info body get_procs_from_db] ; thread::wait"]
 
 eval $tuneinvf
 eval $Make_GUI_Linux
@@ -114,6 +132,4 @@ eval $load_nut_data1
 eval $load_legacy
 
 
-
-ttk::style theme use HighContrast
 
