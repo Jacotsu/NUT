@@ -154,8 +154,14 @@ namespace eval ttk::theme::HighContrast {
 					-background "#FF9428"
 				ttk::style configure .nut.rm.setmpd \
 					-background "#FF9428"
+				ttk::style configure rm.Treeview \
+					-background "#FF9428"
 				ttk::style configure .nut.vf.meal \
 					-background "#FF9428"
+
+
+				ttk::style configure vf.Treeview \
+					-background "#00FF00"
 
 
 				ttk::style configure meal.TButton \
@@ -177,9 +183,12 @@ namespace eval ttk::theme::HighContrast {
 					-anchor e
 				ttk::style configure rm.TNotebook \
 					-background $colors(recordMealsBg)
+
+
 				ttk::style configure rm.TSpinbox \
-					-padding 0 \
-					-background $colors(recordMealsBg)
+					-background $colors(recordMealsBg) \
+					-foreground "#000000"
+
 				ttk::style configure .nut.rm.frlistbox.listbox \
 					-background $colors(recordMealsBg)
 				ttk::style configure .nut.rm.frmenu.menu \
@@ -223,6 +232,7 @@ namespace eval ttk::theme::HighContrast {
 
 				ttk::style configure ts.TFrame \
 					-background $colors(theStoryBg)
+
 				ttk::style configure ts.TLabel \
 					-background $colors(theStoryBg)
 
@@ -274,8 +284,12 @@ namespace eval ttk::theme::HighContrast {
 					-background $colors(viewFoodsBg)
 				ttk::style configure meal.Horizontal.TProgressbar \
 					-background $colors(viewFoodsBg)
-				ttk::style configure nut.Treeview \
-					-background $colors(viewFoodsBg)
+
+				ttk::style configure frranking.Treeview \
+					-background "#FFFFFF"
+				ttk::style configure frranking.TFrame \
+					-background "#FFFFFF"
+
 				ttk::style configure .nut.vf.sb0 \
 					-background $colors(viewFoodsBg)
 				ttk::style configure .nut.vf.sb1 \
@@ -333,6 +347,13 @@ namespace eval ttk::theme::HighContrast {
 					-foreground { active "#000000" }
 				ttk::style map po.TMenubutton \
 					-foreground { active "#000000" }
+
+
+				ttk::style map rm.TSpinbox \
+					-readonlybackground { readonly "#FFE3CA" } \
+					-disabledforeground { active "#000000" }
+
+
 				ttk::style map po.TSpinbox \
 					-disabledforeground { active "#000000" }
 				ttk::style map rm.TCombobox \
