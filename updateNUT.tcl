@@ -24,31 +24,228 @@ package require sqlite3
 sqlite3 db nut.db
 
 db eval {pragma journal_mode = wal}
-db eval {create table if not exists z_tcl_code(name text primary key, code text)}
-db eval {create table if not exists z_tcl_version(serial integer primary key, version text, update_cd text)}
-db eval {CREATE TABLE if not exists z_tcl_jobqueue (jobnum integer primary key, jobtype text, jobint integer, jobreal real, jobtext text)}
-db eval {create view if not exists z_tcl_macropct as with vals as (select fd.NDB_No as NDB_No, ENERC_KCAL.Nutr_Val as cals, PROT_KCAL.Nutr_Val as pcals, CHO_KCAL.Nutr_Val as ccals, FAT_KCAL.Nutr_Val as fcals, ifnull(ALC.Nutr_Val, 0.0) * 6.93 as acals, case when ENERC_KCAL.Nutr_Val <= 0.0 then 0.0 else (PROT_KCAL.Nutr_Val + CHO_KCAL.Nutr_Val + FAT_KCAL.Nutr_Val + ifnull(ALC.Nutr_Val, 0.0)) / ENERC_KCAL.Nutr_Val end as factor from food_des fd left join nut_data ENERC_KCAL on fd.NDB_No = ENERC_KCAL.NDB_No and ENERC_KCAL.Nutr_No = 208 left join nut_data PROT_KCAL on fd.NDB_No = PROT_KCAL.NDB_No and PROT_KCAL.Nutr_No = 3000 left join nut_data CHO_KCAL on fd.NDB_No = CHO_KCAL.NDB_No and CHO_KCAL.Nutr_No = 3002 left join nut_data FAT_KCAL on fd.NDB_No = FAT_KCAL.NDB_No and FAT_KCAL.Nutr_No = 3001 left join nut_data ALC on fd.NDB_No = ALC.NDB_No and ALC.Nutr_No = 221) select NDB_No, case when factor = 0.0 then '0 / 0 / 0' else cast(cast(round(100.0 * pcals / cals / factor) as int) as text) || ' / ' || cast(cast(round(100.0 * ccals / cals / factor) as int) as text) || ' / '  || cast(cast(round(100.0 * fcals / cals / factor) as int) as text) end as macropct from vals;}
-db eval { create view if not exists z_tcl_n6hufa as with format as (with n6range as (with calc as (with calpct as (with vals as (select fd.NDB_No as NDB_No, max(ifnull(ENERC_KCAL.Nutr_Val, 0.000000001), 0.000000001) as ENERC_KCAL, max(ifnull(SHORT6.Nutr_Val, 0.000000001), 0.000000001) as SHORT6, max(ifnull(SHORT3.Nutr_Val, 0.000000001), 0.000000001) as SHORT3, max(ifnull(LONG6.Nutr_Val, 0.000000001), 0.000000001) as LONG6, max(ifnull(LONG3.Nutr_Val, 0.000000001), 0.000000001) as LONG3, max(ifnull(FASAT.Nutr_Val, 0.000000001), 0.000000001) as FASAT, max(ifnull(FAMS.Nutr_Val, 0.000000001), 0.000000001) as FAMS, max(ifnull(FAPU.Nutr_Val, 0.000000001), 0.000000001) as FAPU, FAPU.Nutr_Val as fapugm from food_des fd left join nut_data ENERC_KCAL on fd.NDB_No = ENERC_KCAL.NDB_No and ENERC_KCAL.Nutr_No = 208 left join nut_data SHORT3 on fd.NDB_No = SHORT3.NDB_No and SHORT3.Nutr_No = 3005 left join nut_data LONG3 on fd.NDB_No = LONG3.NDB_No and LONG3.Nutr_No = 3006 left join nut_data SHORT6 on fd.NDB_No = SHORT6.NDB_No and SHORT6.Nutr_No = 3003 left join nut_data LONG6 on fd.NDB_No = LONG6.NDB_No and LONG6.Nutr_No = 3004 left join nut_data FASAT on fd.NDB_No = FASAT.NDB_No and FASAT.Nutr_No = 606 left join nut_data FAMS on fd.NDB_No = FAMS.NDB_No and FAMS.Nutr_No = 645 left join nut_data FAPU on fd.NDB_No = FAPU.NDB_No and FAPU.Nutr_No = 646) select NDB_No, 900.0 * SHORT6 / ENERC_KCAL as SHORT6, 900.0 * SHORT3 / ENERC_KCAL as SHORT3, 900.0 * LONG6 / ENERC_KCAL as LONG6, 900.0 * LONG3 / ENERC_KCAL as LONG3, 900.0 * (FASAT + FAMS + FAPU - SHORT6 - SHORT3 - LONG6 - LONG3) / ENERC_KCAL as OTHER, fapugm from vals) select NDB_No, 100.0 / (1.0 + (0.7 / LONG6) * (1.0 + (LONG3 / 3.0))) + 100 / (1.0 + (0.0441 / SHORT6) * (1.0 + (SHORT3 / 0.0555) + (LONG3 / 0.005) + (OTHER / 5.0) + (SHORT6 / 0.175))) as n6hufa, fapugm from calpct) select * from calc) select NDB_No, case when n6hufa > 90.0 then 90 when n6hufa < 15.0 then 15 else cast(round(n6hufa) as int) end as n6hufa, fapugm from n6range) select NDB_No, case when fapugm is null then null when fapugm = 0.0 then '0 / 0' else cast(n6hufa as text) || ' / ' || cast(100 - n6hufa as text) end as n6balance from format}
-db eval {create view if not exists z_tcl_wlsumm as select case when (select weightn from z_wslope) = 0 then '0 data points so far...' 
-when (select weightn from z_wslope) = 1 then '1 data point so far...' 
-else
-'Based on the trend of ' || (select cast(cast(weightn as int) as text) from z_wslope) || ' data points so far...' || char(13) || char(10) || char(10) ||
-'Predicted lean mass today = ' ||
-(select cast(round(10.0 * (weightyintercept - fatyintercept)) / 10.0 as text) from z_wslope, z_fslope) || char(13) || char(10) ||
-'Predicted fat mass today  =  ' ||
-(select cast(round(fatyintercept, 1) as text) from z_fslope) || char(13) || char(10) || char(10) ||
-'If the predictions are correct, you ' ||
-case when (select weightslope - fatslope from z_wslope, z_fslope) >= 0.0 then 'gained ' else 'lost ' end ||
-(select cast(abs(round((weightslope - fatslope) * span * 1000.0) / 1000.0) as text) from z_wslope, z_fslope, z_span) ||
-' lean mass over ' ||
-(select span from z_span) || 
-case when (select span from z_span) = 1 then ' day' else ' days' end || 
-case when (select fatslope from z_fslope) > 0.0 then ' and gained ' else ' and lost ' end ||
-(select cast(abs(round(fatslope * span * 1000.0) / 1000.0) as text) from z_fslope, z_span) || ' fat mass.' || char(13) || char(10)
-end
-as verbiage}
+
+db eval {create table if not exists z_tcl_code(name text primary key,
+	code text)}
+
+db eval {create table if not exists z_tcl_version(serial integer primary key,
+  version text, update_cd text)}
+
+db eval {CREATE TABLE if not exists z_tcl_jobqueue (
+  jobnum integer primary key,
+  jobtype text,
+  jobint integer,
+  jobreal real,
+  jobtext text)
+}
+db eval {create view if not exists z_tcl_macropct as with vals as (
+  select
+    fd.NDB_No as NDB_No,
+    ENERC_KCAL.Nutr_Val as cals,
+    PROT_KCAL.Nutr_Val as pcals,
+    CHO_KCAL.Nutr_Val as ccals,
+    FAT_KCAL.Nutr_Val as fcals,
+    ifnull(ALC.Nutr_Val, 0.0) * 6.93 as acals,
+    case when ENERC_KCAL.Nutr_Val <= 0.0 then 0.0 else (
+      PROT_KCAL.Nutr_Val + CHO_KCAL.Nutr_Val + FAT_KCAL.Nutr_Val +
+				ifnull(ALC.Nutr_Val, 0.0)
+    ) / ENERC_KCAL.Nutr_Val end as factor
+  from
+    food_des fd
+    left join nut_data ENERC_KCAL on fd.NDB_No = ENERC_KCAL.NDB_No
+    and ENERC_KCAL.Nutr_No = 208
+    left join nut_data PROT_KCAL on fd.NDB_No = PROT_KCAL.NDB_No
+    and PROT_KCAL.Nutr_No = 3000
+    left join nut_data CHO_KCAL on fd.NDB_No = CHO_KCAL.NDB_No
+    and CHO_KCAL.Nutr_No = 3002
+    left join nut_data FAT_KCAL on fd.NDB_No = FAT_KCAL.NDB_No
+    and FAT_KCAL.Nutr_No = 3001
+    left join nut_data ALC on fd.NDB_No = ALC.NDB_No
+    and ALC.Nutr_No = 221
+)
+select
+  NDB_No,
+  case when factor = 0.0 then '0 / 0 / 0' else cast(
+    cast(round(100.0 * pcals / cals / factor) as int) as text
+  ) || ' / ' || cast(
+    cast(round(100.0 * ccals / cals / factor) as int) as text
+  ) || ' / ' || cast(
+    cast(round(100.0 * fcals / cals / factor) as int) as text
+  ) end as macropct
+from
+  vals; }
+
+db eval {
+create view if not exists z_tcl_n6hufa as with format as (
+  with n6range as (
+    with calc as (
+      with calpct as (
+        with vals as (
+          select
+            fd.NDB_No as NDB_No,
+            max(
+              ifnull(ENERC_KCAL.Nutr_Val, 0.000000001),
+              0.000000001
+            ) as ENERC_KCAL,
+            max(
+              ifnull(SHORT6.Nutr_Val, 0.000000001),
+              0.000000001
+            ) as SHORT6,
+            max(
+              ifnull(SHORT3.Nutr_Val, 0.000000001),
+              0.000000001
+            ) as SHORT3,
+            max(ifnull(LONG6.Nutr_Val, 0.000000001), 0.000000001) as LONG6,
+            max(ifnull(LONG3.Nutr_Val, 0.000000001), 0.000000001) as LONG3,
+            max(ifnull(FASAT.Nutr_Val, 0.000000001), 0.000000001) as FASAT,
+            max(ifnull(FAMS.Nutr_Val, 0.000000001), 0.000000001) as FAMS,
+            max(ifnull(FAPU.Nutr_Val, 0.000000001), 0.000000001) as FAPU,
+            FAPU.Nutr_Val as fapugm
+          from
+            food_des fd
+            left join nut_data ENERC_KCAL on fd.NDB_No = ENERC_KCAL.NDB_No
+            and ENERC_KCAL.Nutr_No = 208
+            left join nut_data SHORT3 on fd.NDB_No = SHORT3.NDB_No
+            and SHORT3.Nutr_No = 3005
+            left join nut_data LONG3 on fd.NDB_No = LONG3.NDB_No
+            and LONG3.Nutr_No = 3006
+            left join nut_data SHORT6 on fd.NDB_No = SHORT6.NDB_No
+            and SHORT6.Nutr_No = 3003
+            left join nut_data LONG6 on fd.NDB_No = LONG6.NDB_No
+            and LONG6.Nutr_No = 3004
+            left join nut_data FASAT on fd.NDB_No = FASAT.NDB_No
+            and FASAT.Nutr_No = 606
+            left join nut_data FAMS on fd.NDB_No = FAMS.NDB_No
+            and FAMS.Nutr_No = 645
+            left join nut_data FAPU on fd.NDB_No = FAPU.NDB_No
+            and FAPU.Nutr_No = 646
+        )
+        select
+          NDB_No,
+          900.0 * SHORT6 / ENERC_KCAL as SHORT6,
+          900.0 * SHORT3 / ENERC_KCAL as SHORT3,
+          900.0 * LONG6 / ENERC_KCAL as LONG6,
+          900.0 * LONG3 / ENERC_KCAL as LONG3,
+          900.0 * (
+            FASAT + FAMS + FAPU - SHORT6 - SHORT3 - LONG6 - LONG3
+          ) / ENERC_KCAL as OTHER,
+          fapugm
+        from
+          vals
+      )
+      select
+        NDB_No,
+        100.0 / (1.0 + (0.7 / LONG6) * (1.0 + (LONG3 / 3.0))) + 100 / (
+          1.0 + (0.0441 / SHORT6) * (
+            1.0 + (SHORT3 / 0.0555) + (LONG3 / 0.005) + (OTHER / 5.0) +
+						(SHORT6 / 0.175)
+          )
+        ) as n6hufa,
+        fapugm
+      from
+        calpct
+    )
+    select
+      *
+    from
+      calc
+  )
+  select
+    NDB_No,
+    case when n6hufa > 90.0 then 90 when n6hufa < 15.0 then 15 else
+			cast(round(n6hufa) as int) end as n6hufa,
+    fapugm
+  from
+    n6range
+)
+select
+  NDB_No,
+  case when fapugm is null then null when fapugm = 0.0 then '0 / 0' else
+		cast(n6hufa as text) || ' / ' || cast(100 - n6hufa as text) end
+		as n6balance
+from
+  format
+}
+
+db eval {
+create view if not exists z_tcl_wlsumm as
+select
+  case when (
+    select
+      weightn
+    from
+      z_wslope
+  ) = 0 then '0 data points so far...' when (
+    select
+      weightn
+    from
+      z_wslope
+  ) = 1 then '1 data point so far...' else 'Based on the trend of ' || (
+    select
+      cast(cast(weightn as int) as text)
+    from
+      z_wslope
+  ) || ' data points so far...' || char(13) || char(10) || char(10) ||
+			'Predicted lean mass today = ' || (
+    select
+      cast(
+        round(10.0 * (weightyintercept - fatyintercept)) / 10.0 as text
+      )
+    from
+      z_wslope,
+      z_fslope
+  ) || char(13) || char(10) || 'Predicted fat mass today  =  ' || (
+    select
+      cast(round(fatyintercept, 1) as text)
+    from
+      z_fslope
+  ) || char(13) || char(10) || char(10) ||
+		'If the predictions are correct, you ' || case when (
+    select
+      weightslope - fatslope
+    from
+      z_wslope,
+      z_fslope
+  ) >= 0.0 then 'gained ' else 'lost ' end || (
+    select
+      cast(
+        abs(
+          round((weightslope - fatslope) * span * 1000.0) / 1000.0
+        ) as text
+      )
+    from
+      z_wslope,
+      z_fslope,
+      z_span
+  ) || ' lean mass over ' || (
+    select
+      span
+    from
+      z_span
+  ) || case when (
+    select
+      span
+    from
+      z_span
+  ) = 1 then ' day' else ' days' end || case when (
+    select
+      fatslope
+    from
+      z_fslope
+  ) > 0.0 then ' and gained ' else ' and lost ' end || (
+    select
+      cast(
+        abs(round(fatslope * span * 1000.0) / 1000.0) as text
+      )
+    from
+      z_fslope,
+      z_span
+  ) || ' fat mass.' || char(13) || char(10) end as verbiage
+
+}
+
 set Main {
- 
+
 # NUT nutrition software
 # Copyright (C) 1996-2018 by Jim Jozwiak.
 
@@ -68,7 +265,19 @@ set Main {
 
 set DiskDB [file nativename $DiskDB]
 
-db eval {select version as "::version" from z_tcl_version where serial = (select max(serial) from z_tcl_version)} { }
+db eval {
+	select
+		version as "::version"
+	from
+		z_tcl_version
+	where
+		serial = (
+			select
+				max(serial)
+			from
+				z_tcl_version
+		)
+} { }
 
 db eval {select code from z_tcl_code where name = 'get_procs_from_db'} {
  eval $code
@@ -95,11 +304,11 @@ if {$appSize != 0.0} {
 }
 
 set Make_GUI_WinMac {
- 
+
 wm title . $::version
 catch {set im [image create photo -file nuticon.gif]}
 catch {wm iconphoto . -default $im}
-bind . <Destroy> { 
+bind . <Destroy> {
  thread::send -async $::SQL_THREAD {db close}
  db close
  thread::release $::SQL_THREAD
@@ -108,14 +317,56 @@ bind . <Destroy> {
 
 set ::magnify 1.0
 set i [font measure TkDefaultFont -displayof . "  TransMonoenoic  "]
-set ::column18 [expr {int(round($i / 3.0))}]                      
+set ::column18 [expr {int(round($i / 3.0))}]
 set ::column15 [expr {int(round(2.0 * $i / 5.0))}]
+
+set ::SetDefanalPreviousValue 0
+set ::LastSetDefanal 0
+
+set ::MealfoodSequence 0
+set ::MealfoodStatus {}
+set ::MealfoodPCF {}
+set ::MealfoodPCFfactor {}
+
+set ::lastrmq 0
+set ::lastamrm 0
+set ::lastac 0
+set ::lastbubble 0
+set ::BubbleMachineStatus 0
+
+set ::realmealchange 0
+
+set ::newtheusual ""
+
+set gramsvf 0
+set ouncesvf 0.0
+set caloriesvf 0
+set Amountvf 0.0
+set ounce2gram 0.0
+set cal2gram 0
+set Amount2gram 0.0
+
+set ::ENERC_KCALpo 0
+
+set ::balvals {}
+
+set ::PCFchoices {{No Auto Portion Control} {Protein} {Non-Fiber Carb} {Total Fat} {Vitamin A} {Thiamin} {Riboflavin} {Niacin} {Panto. Acid} {Vitamin B6} {Folate} {Vitamin B12} {Choline} {Vitamin C} {Vitamin D} {Vitamin E} {Vitamin K1} {Calcium} {Copper} {Iron} {Magnesium} {Manganese} {Phosphorus} {Potassium} {Selenium} {Sodium} {Zinc} {Glycine} {Retinol} {Fiber}}
+set ::rmMenu .nut.rm.frmenu
+
+set screen 0
+set row 0
+set bcol 0
+set valcol 3
+set ucol 5
+
+
 option add *Dialog.msg.wrapLength [expr {400 * $::magnify}]
 option add *Dialog.dtl.wrapLength [expr {400 * $::magnify}]
 
 trace add variable ::FIRSTMEALam write SetMealRange_am
 trace add variable ::LASTMEALam write SetMealRange_am
-ttk::style configure nutbutton.TButton 
+
+ttk::style configure nutbutton.TButton
 ttk::style configure recipe.TButton
 ttk::style configure meal.TButton
 ttk::style configure lightmeal.TButton
@@ -174,7 +425,16 @@ ttk::style configure lf.Horizontal.TProgressbar
 ttk::style configure meal.Horizontal.TProgressbar
 ttk::style configure meal.TMenubutton
 ttk::style configure ar.TButton
-if {$::magnify > 0.0} {ttk::style configure nut.Treeview -font TkFixedFont -rowheight [expr {int(round($::magnify * 15.0))}]} else {ttk::style configure nut.Treeview -font TkFixedFont}
+
+if {$::magnify > 0.0} {
+  ttk::style configure nut.Treeview
+  -font TkFixedFont
+  -rowheight [expr {
+    int(round($::magnify * 15.0))}]
+  } else {
+    ttk::style configure nut.Treeview
+    -font TkFixedFont
+  }
 
 grid [ttk::notebook .nut]
 ttk::frame .nut.am -padding [expr {$::magnify * 2}] -style "am.TFrame"
@@ -182,225 +442,1090 @@ ttk::frame .nut.rm -padding [expr {$::magnify * 2}] -style "rm.TFrame"
 ttk::frame .nut.ar -padding [expr {$::magnify * 2}] -style "ar.TFrame"
 ttk::frame .nut.vf -padding [expr {$::magnify * 2}] -style "vf.TFrame"
 ttk::frame .nut.po -padding [expr {$::magnify * 2}] -style "po.TFrame"
-ttk::frame .nut.ts -padding [expr {$::magnify * 2}] -style "ts.TFrame" 
-ttk::frame .nut.qn -padding [expr {$::magnify * 2}] 
-grid [ttk::label .nut.am.herelabel -text "Here are \"Daily Value\" average percentages for your previous " -style am.TLabel] -row 2 -column 1 -columnspan 9 -sticky e
-grid [tk::spinbox .nut.am.mealsb -width 5 -justify right -from 1 -to 999999 -increment 1 -textvariable ::meals_to_analyze_am -buttonbackground "#00FFFF"] -row 2 -column 10 -columnspan 2 -sticky we
-grid [ttk::label .nut.am.meallabel -text " meals:" -style am.TLabel] -row 2 -column 12 -columnspan 2 -sticky w
-grid [ttk::label .nut.am.rangelabel -textvariable mealrange -style am.TLabel] -row 3 -column 0 -columnspan 15
+ttk::frame .nut.ts -padding [expr {$::magnify * 2}] -style "ts.TFrame"
+ttk::frame .nut.qn -padding [expr {$::magnify * 2}]
 
-set ::SetDefanalPreviousValue 0
-set ::LastSetDefanal 0
+grid [ttk::label .nut.am.herelabel\
+  -text "Here are \"Daily Value\" average percentages for your previous "\
+  -style am.TLabel] -row 2 -column 1 -columnspan 9 -sticky e
+grid [tk::spinbox .nut.am.mealsb \
+  -width 5 \
+  -justify right \
+  -from 1 -to 999999 \
+  -increment 1 \
+  -textvariable ::meals_to_analyze_am -buttonbackground "#00FFFF"] \
+  -row 2 \
+  -column 10 \
+  -columnspan 2 \
+  -sticky we
+grid [ttk::label .nut.am.meallabel -text " meals:" -style am.TLabel] \
+  -row 2 \
+  -column 12 \
+  -columnspan 2 \
+  -sticky w
+grid [ttk::label .nut.am.rangelabel \
+  -textvariable mealrange \
+  -style am.TLabel] \
+  -row 3 \
+  -column 0 \
+  -columnspan 15
 
-set ::MealfoodSequence 0
-set ::MealfoodStatus {}
-set ::MealfoodPCF {}
-set ::MealfoodPCFfactor {}
 
-set ::lastrmq 0
-set ::lastamrm 0
-set ::lastac 0
-set ::lastbubble 0
-set ::BubbleMachineStatus 0
+grid [scale .nut.rm.scale \
+  -background "#FF9428" \
+  -width [expr {$::magnify * 11}] \
+  -sliderlength [expr {$::magnify * 20}] \
+  -length [expr {10 + ($::column15 * 4)}] \
+  -showvalue 0 \
+  -orient horizontal \
+  -variable ::mealoffset \
+  -from -100 -to 100 \
+  -command mealchange]\
+  -row 0\
+  -rowspan 2\
+  -column 0\
+  -columnspan 4\
+  -sticky w
 
-set ::realmealchange 0
-grid [scale .nut.rm.scale -background "#FF9428" -width [expr {$::magnify * 11}] -sliderlength [expr {$::magnify * 20}] -length [expr {10 + ($::column15 * 4)}] -showvalue 0 -orient horizontal -variable ::mealoffset -from -100 -to 100 -command mealchange] -row 0 -rowspan 2 -column 0 -columnspan 4 -sticky w
-
-grid [ttk::menubutton .nut.rm.theusual -style meal.TMenubutton -text "Customary Meals" -direction right -menu .nut.rm.theusual.m] -row 2 -column 0 -columnspan 4 -sticky nsw
-grid [ttk::button .nut.rm.recipebutton -style ar.TButton -width 16 -text "Save as a Recipe" -state disabled -command RecipeSaveAs] -row 3 -rowspan 2 -column 0 -columnspan 2 -pady [expr {$::magnify * 5.0}] -sticky w
-menu .nut.rm.theusual.m -background "#FF9428" -tearoff 0 -postcommand theusualPopulateMenu
-.nut.rm.theusual.m add cascade -label "Add Customary Meal to this meal" -menu .nut.rm.theusual.m.add -background "#FF9428"
-.nut.rm.theusual.m add cascade -label "Save this meal as a Customary Meal" -menu .nut.rm.theusual.m.save -background "#FF9428"
-.nut.rm.theusual.m add cascade -label "Delete a Customary Meal" -menu .nut.rm.theusual.m.delete -background "#FF9428"
+grid [ttk::menubutton .nut.rm.theusual \
+  -style meal.TMenubutton \
+  -text "Customary Meals" \
+  -direction right \
+  -menu .nut.rm.theusual.m]\
+  -row 2 \
+  -column 0 \
+  -columnspan 4 \
+  -sticky nsw \
+grid [ttk::button .nut.rm.recipebutton \
+  -style ar.TButton \
+  -width 16 \
+  -text "Save as a Recipe" \
+  -state disabled \
+  -command RecipeSaveAs] \
+  -row 3 \
+  -rowspan 2 \
+  -column 0 \
+  -columnspan 2 \
+  -pady [expr {$::magnify * 5.0}] \
+  -sticky w
+menu .nut.rm.theusual.m \
+  -background "#FF9428" \
+  -tearoff 0 \
+  -postcommand theusualPopulateMenu
+.nut.rm.theusual.m add cascade \
+  -label "Add Customary Meal to this meal" \
+  -menu .nut.rm.theusual.m.add \
+  -background "#FF9428"
+.nut.rm.theusual.m add cascade \
+  -label "Save this meal as a Customary Meal" \
+  -menu .nut.rm.theusual.m.save \
+  -background "#FF9428"
+.nut.rm.theusual.m add cascade \
+  -label "Delete a Customary Meal" \
+  -menu .nut.rm.theusual.m.delete \
+  -background "#FF9428"
 menu .nut.rm.theusual.m.add -tearoff 0
 menu .nut.rm.theusual.m.save -tearoff 0
 menu .nut.rm.theusual.m.delete -tearoff 0
 
-grid [ttk::label .nut.rm.newtheusuallabel -style rm.TLabel -text "Type new Customary Meal name and press Save" -wraplength [expr {4 * $::column15}]] -row 0 -rowspan 2 -column 5 -columnspan 4 -sticky ws
-grid [ttk::entry .nut.rm.newtheusualentry -textvariable ::newtheusual] -row 2 -rowspan 2 -column 5 -columnspan 4 -sticky w
-grid [ttk::button .nut.rm.newtheusualbutton -text "Save" -command theusualNewName -width 5] -row 2 -rowspan 2 -column 9 -columnspan 2 -sticky w
-set ::newtheusual ""
+grid [ttk::label .nut.rm.newtheusuallabel \
+  -style rm.TLabel \
+  -text "Type new Customary Meal name and press Save" \
+  -wraplength [expr {4 * $::column15}]] \
+  -row 0 \
+  -rowspan 2 \
+  -column 5 \
+  -columnspan 4 \
+  -sticky ws
+grid [ttk::entry .nut.rm.newtheusualentry \
+  -textvariable ::newtheusual] \
+  -row 2 \
+  -rowspan 2 \
+  -column 5 \
+  -columnspan 4 \
+  -sticky w
+grid [ttk::button .nut.rm.newtheusualbutton \
+  -text "Save" \
+  -command theusualNewName \
+  -width 5] \
+  -row 2 \
+  -rowspan 2 \
+  -column 9 \
+  -columnspan 2 \
+  -sticky w
 grid remove .nut.rm.newtheusuallabel
 grid remove .nut.rm.newtheusualentry
 grid remove .nut.rm.newtheusualbutton
 
-grid [ttk::radiobutton .nut.rm.grams -text "Grams" -width 6 -variable ::GRAMSopt -value 1 -style meal.TRadiobutton] -row 0 -column 13 -columnspan 3 -sticky nsw
-grid [ttk::radiobutton .nut.rm.ounces -text "Ounces" -width 6 -variable ::GRAMSopt -value 0 -style meal.TRadiobutton] -row 1 -column 13 -columnspan 3 -sticky nsw
-grid [ttk::button .nut.rm.analysismeal -text "Analysis" -command SwitchToAnalysis -style lightmeal.TButton] -row 3 -rowspan 2 -column 13 -columnspan 3 -sticky nw
+grid [ttk::radiobutton .nut.rm.grams \
+  -text "Grams" \
+  -width 6 \
+  -variable ::GRAMSopt \
+  -value 1 \
+  -style meal.TRadiobutton] \
+  -row 0 \
+  -column 13 \
+  -columnspan 3 \
+  -sticky nsw
+grid [ttk::radiobutton .nut.rm.ounces \
+  -text "Ounces" \
+  -width 6 \
+  -variable ::GRAMSopt \
+  -value 0 \
+  -style meal.TRadiobutton] \
+  -row 1 \
+  -column 13 \
+  -columnspan 3 \
+  -sticky nsw
+grid [ttk::button .nut.rm.analysismeal \
+  -text "Analysis" \
+  -command SwitchToAnalysis \
+  -style lightmeal.TButton] \
+  -row 3 \
+  -rowspan 2 \
+  -column 13 \
+  -columnspan 3 \
+  -sticky nw
 grid remove .nut.rm.grams
 grid remove .nut.rm.ounces
 grid remove .nut.rm.analysismeal
-grid [menubutton .nut.rm.setmpd -background "#FF9428" -text "Delete All Meals and Set Meals Per Day" -relief raised -menu .nut.rm.setmpd.m] -row 0 -column 8 -columnspan 8 -sticky e
-grid [ttk::label .nut.rm.fslabel -text "Food Search" -style rm.TLabel] -row 4 -column 4 -columnspan 2 -sticky e
-grid [ttk::combobox .nut.rm.fsentry -textvariable ::like_this_rm -style rm.TCombobox] -padx [expr {$::magnify * 5}] -row 4 -column 6 -columnspan 7 -sticky we
-grid [ttk::progressbar .nut.rm.bubblemachine -style meal.Horizontal.TProgressbar -orient horizontal -mode indeterminate] -row 4 -column 6 -columnspan 7 -sticky nswe
+grid [menubutton .nut.rm.setmpd \
+  -background "#FF9428" \
+  -text "Delete All Meals and Set Meals Per Day" \
+  -relief raised \
+  -menu .nut.rm.setmpd.m] \
+  -row 0 \
+  -column 8 \
+  -columnspan 8 \
+  -sticky e
+grid [ttk::label .nut.rm.fslabel \
+  -text "Food Search" \
+  -style rm.TLabel] \
+  -row 4 \
+  -column 4 \
+  -columnspan 2 \
+  -sticky e
+grid [ttk::combobox .nut.rm.fsentry \
+  -textvariable ::like_this_rm \
+  -style rm.TCombobox] \
+  -padx [expr {$::magnify * 5}] \
+  -row 4 \
+  -column 6 \
+  -columnspan 7 \
+  -sticky we
+grid [ttk::progressbar .nut.rm.bubblemachine \
+  -style meal.Horizontal.TProgressbar \
+  -orient horizontal \
+  -mode indeterminate] \
+  -row 4 \
+  -column 6 \
+  -columnspan 7 \
+  -sticky nswe
 grid remove .nut.rm.bubblemachine
 
-grid [ttk::button .nut.rm.searchcancel -text "Cancel" -width 6 -command CancelSearch -style vf.TButton] -row 3 -rowspan 2 -column 13 -columnspan 3 -sticky sw
+grid [ttk::button .nut.rm.searchcancel \
+  -text "Cancel" \
+  -width 6 \
+  -command CancelSearch \
+  -style vf.TButton] \
+  -row 3 \
+  -rowspan 2 \
+  -column 13 \
+  -columnspan 3 \
+  -sticky sw
 grid remove .nut.rm.searchcancel
-grid [ttk::frame .nut.rm.frlistbox -style rm.TFrame -width [expr {15 * $::column15}] ] -row 5 -rowspan 16 -column 0 -columnspan 15 -sticky nswe
-grid [tk::listbox .nut.rm.frlistbox.listbox -listvariable foodsrm -yscrollcommand ".nut.rm.frlistbox.scrollv set" -xscrollcommand ".nut.rm.frlistbox.scrollh set" -height 22 -width 85 -background "#FF7F00" -setgrid 1] -row 0 -column 0 -sticky nsew
-grid [scrollbar .nut.rm.frlistbox.scrollv -width [expr {$::magnify * 5}] -relief sunken -orient vertical -command ".nut.rm.frlistbox.listbox yview"] -row 0 -column 1 -sticky nsew
-grid [scrollbar .nut.rm.frlistbox.scrollh -width [expr {$::magnify * 5}] -relief sunken -orient horizontal -command ".nut.rm.frlistbox.listbox xview"] -row 1 -column 0 -sticky nswe
-grid rowconfig .nut.rm.frlistbox 0 -weight 1 -minsize 0
-grid columnconfig .nut.rm.frlistbox 0 -weight 1 -minsize 0
+grid [ttk::frame .nut.rm.frlistbox \
+  -style rm.TFrame \
+  -width [expr {15 * $::column15}] ] \
+  -row 5 \
+  -rowspan 16 \
+  -column 0 \
+  -columnspan 15 \
+  -sticky nswe
+grid [tk::listbox .nut.rm.frlistbox.listbox \
+  -listvariable foodsrm \
+  -yscrollcommand ".nut.rm.frlistbox.scrollv set" \
+  -xscrollcommand ".nut.rm.frlistbox.scrollh set" \
+  -height 22 \
+  -width 85 \
+  -background "#FF7F00" \
+  -setgrid 1] \
+  -row 0 \
+  -column 0 \
+  -sticky nsew
+grid [scrollbar .nut.rm.frlistbox.scrollv \
+  -width [expr {$::magnify * 5}] \
+  -relief sunken \
+  -orient vertical \
+  -command ".nut.rm.frlistbox.listbox yview"] \
+  -row 0 \
+  -column 1 \
+  -sticky nsew
+grid [scrollbar .nut.rm.frlistbox.scrollh \
+  -width [expr {$::magnify * 5}] \
+  -relief sunken \
+  -orient horizontal \
+  -command ".nut.rm.frlistbox.listbox xview"] \
+  -row 1 \
+  -column 0 \
+  -sticky nswe
+grid rowconfig .nut.rm.frlistbox 0 \
+  -weight 1 \
+  -minsize 0
+grid columnconfig .nut.rm.frlistbox 0 \
+  -weight 1 \
+  -minsize 0
 grid propagate .nut.rm.frlistbox 0
 
 bind .nut.rm.frlistbox.listbox <<ListboxSelect>> FoodChoicerm
 trace add variable ::like_this_rm write FindFoodrm
 bind .nut.rm.fsentry <FocusIn> FoodSearchrm
+
 grid remove .nut.rm.frlistbox
-grid [ttk::label .nut.vf.label -textvariable Long_Desc -style vf.TLabel -wraplength [expr {$::magnify * 250}]] -row 0 -column 3 -columnspan 9 -rowspan 3
+grid [ttk::label .nut.vf.label \
+  -textvariable Long_Desc \
+  -style vf.TLabel \
+  -wraplength [expr {$::magnify * 250}]] \
+  -row 0 \
+  -column 3 \
+  -columnspan 9 \
+  -rowspan 3
 
-set gramsvf 0
-set ouncesvf 0.0
-set caloriesvf 0
-set Amountvf 0.0
-set ounce2gram 0.0
-set cal2gram 0
-set Amount2gram 0.0
 
-grid [tk::spinbox .nut.vf.sb0 -width 5 -justify right -from -9999 -to 9999 -increment 1 -textvariable gramsvf -buttonbackground "#00FF00"] -row 0 -column 0 -columnspan 2 -sticky e
-grid [tk::spinbox .nut.vf.sb1 -width 5 -justify right -from -999 -to 999 -increment 0.125 -textvariable ouncesvf -buttonbackground "#00FF00"] -row 1 -column 0 -columnspan 2 -sticky e
-grid [tk::spinbox .nut.vf.sb2 -width 5 -justify right -from -9999 -to 9999 -increment 1 -textvariable caloriesvf -buttonbackground "#00FF00"] -row 2 -column 0 -columnspan 2 -sticky e
-grid [tk::spinbox .nut.vf.sb3 -width 5 -justify right -from -999 -to 999 -increment 0.125 -textvariable Amountvf -buttonbackground "#00FF00"] -row 3 -column 0 -columnspan 2 -sticky e
-grid [ttk::label .nut.vf.sbl0 -text "gm." -style vf.TLabel] -row 0 -column 2 -columnspan 2 -padx [expr {$::magnify * 5}] -sticky w
-grid [ttk::label .nut.vf.sbl1 -text "oz." -style vf.TLabel] -row 1 -column 2 -columnspan 2 -padx [expr {$::magnify * 5}] -sticky w
-grid [ttk::label .nut.vf.sbl2 -text "cal." -style vf.TLabel] -row 2 -column 2 -columnspan 2 -padx [expr {$::magnify * 5}] -sticky w
-grid [menubutton .nut.vf.refusemb -background "#00FF00" -text "Refuse"  -direction below -relief raised -menu .nut.vf.refusemb.m ] -row 4 -column 0 -columnspan 2 -sticky e
-menu .nut.vf.refusemb.m -tearoff 0 -background "#00FF00"
-.nut.vf.refusemb.m add command -label "No refuse description provided"
-grid [ttk::label .nut.vf.refusevalue -textvariable Refusevf -style vf.TLabel] -row 4 -column 2 -padx [expr {$::magnify * 5}] -columnspan 2 -sticky w
-grid [ttk::button .nut.vf.meal -text "Add to Meal" -state disabled -command vf2rm -style meal.TButton] -row 1 -rowspan 2 -column 12 -columnspan 3 -sticky nw
-grid [ttk::label .nut.vf.fslabel -text "Food Search" -style vf.TLabel] -row 4 -column 4 -columnspan 2 -sticky e
-grid [ttk::combobox .nut.vf.cb -textvariable Msre_Descvf -state readonly -style vf.TCombobox] -padx [expr {$::magnify * 5}] -row 3 -column 2 -columnspan 11 -sticky we
-grid [ttk::combobox .nut.vf.fsentry -textvariable like_this_vf -style vf.TCombobox] -padx [expr {$::magnify * 5}] -row 4 -column 6 -columnspan 7 -sticky we
+grid [tk::spinbox .nut.vf.sb0 \
+  -width 5 \
+  -justify right \
+  -from \
+  -9999 \
+  -to 9999 \
+  -increment 1 \
+  -textvariable gramsvf \
+  -buttonbackground "#00FF00"] \
+  -row 0 \
+  -column 0 \
+  -columnspan 2 \
+  -sticky e
+grid [tk::spinbox .nut.vf.sb1 \
+  -width 5 \
+  -justify right \
+  -from \
+  -999 \
+  -to 999 \
+  -increment 0.125 \
+  -textvariable ouncesvf \
+  -buttonbackground "#00FF00"] \
+  -row 1 \
+  -column 0 \
+  -columnspan 2 \
+  -sticky e
+grid [tk::spinbox .nut.vf.sb2 \
+  -width 5 \
+  -justify right \
+  -from \
+  -9999 \
+  -to 9999 \
+  -increment 1 \
+  -textvariable caloriesvf \
+  -buttonbackground "#00FF00"] \
+  -row 2 \
+  -column 0 \
+  -columnspan 2 \
+  -sticky e
+grid [tk::spinbox .nut.vf.sb3 \
+  -width 5 \
+  -justify right \
+  -from \
+  -999 \
+  -to 999 \
+  -increment 0.125 \
+  -textvariable Amountvf \
+  -buttonbackground "#00FF00"] \
+  -row 3 \
+  -column 0 \
+  -columnspan 2 \
+  -sticky e
+grid [ttk::label .nut.vf.sbl0 \
+  -text "gm." \
+  -style vf.TLabel] \
+  -row 0 \
+  -column 2 \
+  -columnspan 2 \
+  -padx [expr {$::magnify * 5}] \
+  -sticky w
+grid [ttk::label .nut.vf.sbl1 \
+  -text "oz." \
+  -style vf.TLabel] \
+  -row 1 \
+  -column 2 \
+  -columnspan 2 \
+  -padx [expr {$::magnify * 5}] \
+  -sticky w
+grid [ttk::label .nut.vf.sbl2 \
+  -text "cal." \
+  -style vf.TLabel] \
+  -row 2 \
+  -column 2 \
+  -columnspan 2 \
+  -padx [expr {$::magnify * 5}] \
+  -sticky w
+grid [menubutton .nut.vf.refusemb \
+  -background "#00FF00" \
+  -text "Refuse"  \
+  -direction below \
+  -relief raised \
+  -menu .nut.vf.refusemb.m ] \
+  -row 4 \
+  -column 0 \
+  -columnspan 2 \
+  -sticky e
+menu .nut.vf.refusemb.m \
+  -tearoff 0 \
+  -background "#00FF00"
+.nut.vf.refusemb.m add command \
+  -label "No refuse description provided"
+grid [ttk::label .nut.vf.refusevalue \
+  -textvariable Refusevf \
+  -style vf.TLabel] \
+  -row 4 \
+  -column 2 \
+  -padx [expr {$::magnify * 5}] \
+  -columnspan 2 \
+  -sticky w
+grid [ttk::button .nut.vf.meal \
+  -text "Add to Meal" \
+  -state disabled \
+  -command vf2rm \
+  -style meal.TButton] \
+  -row 1 \
+  -rowspan 2 \
+  -column 12 \
+  -columnspan 3 \
+  -sticky nw
+grid [ttk::label .nut.vf.fslabel \
+  -text "Food Search" \
+  -style vf.TLabel] \
+  -row 4 \
+  -column 4 \
+  -columnspan 2 \
+  -sticky e
+grid [ttk::combobox .nut.vf.cb \
+  -textvariable Msre_Descvf \
+  -state readonly \
+  -style vf.TCombobox] \
+  -padx [expr {$::magnify * 5}] \
+  -row 3 \
+  -column 2 \
+  -columnspan 11 \
+  -sticky we
+grid [ttk::combobox .nut.vf.fsentry \
+  -textvariable like_this_vf \
+  -style vf.TCombobox] \
+  -padx [expr {$::magnify * 5}] \
+  -row 4 \
+  -column 6 \
+  -columnspan 7 \
+  -sticky we
 
-grid [ttk::label .nut.ar.name -text "Recipe Name" -style ar.TLabel] -row 0 -column 0 -columnspan 2 -sticky e
-grid [ttk::entry .nut.ar.name_entry -textvariable ::RecipeName ] -row 0 -column 2 -columnspan 11 -padx [expr {$::magnify * 5}] -sticky we
+grid [ttk::label .nut.ar.name \
+  -text "Recipe Name" \
+  -style ar.TLabel] \
+  -row 0 \
+  -column 0 \
+  -columnspan 2 \
+  -sticky e
+grid [ttk::entry .nut.ar.name_entry \
+  -textvariable ::RecipeName ] \
+  -row 0 \
+  -column 2 \
+  -columnspan 11 \
+  -padx [expr {$::magnify * 5}] \
+  -sticky we
 
-grid [ttk::label .nut.ar.numserv -text "Number of servings recipe makes" -style ar.TLabel] -row 1 -column 0 -columnspan 2 -sticky e
-grid [ttk::entry .nut.ar.numserv_entry -textvariable ::RecipeServNum -width 7] -row 1 -column 2 -columnspan 2 -padx [expr {$::magnify * 5}] -sticky w
+grid [ttk::label .nut.ar.numserv \
+  -text "Number of servings recipe makes" \
+  -style ar.TLabel] \
+  -row 1 \
+  -column 0 \
+  -columnspan 2 \
+  -sticky e
+grid [ttk::entry .nut.ar.numserv_entry \
+  -textvariable ::RecipeServNum \
+  -width 7] \
+  -row 1 \
+  -column 2 \
+  -columnspan 2 \
+  -padx [expr {$::magnify * 5}] \
+  -sticky w
 
-grid [ttk::label .nut.ar.servunit -text "Serving Unit (cup, piece, tbsp, etc.)" -style ar.TLabel] -row 2 -column 0 -columnspan 2 -sticky e
-grid [ttk::entry .nut.ar.servunit_entry -textvariable ::RecipeServUnit] -row 2 -column 2 -columnspan 2 -padx [expr {$::magnify * 5}] -sticky w
+grid [ttk::label .nut.ar.servunit \
+  -text "Serving Unit (cup, piece, tbsp, etc.)" \
+  -style ar.TLabel] \
+  -row 2 \
+  -column 0 \
+  -columnspan 2 \
+  -sticky e
+grid [ttk::entry .nut.ar.servunit_entry \
+  -textvariable ::RecipeServUnit] \
+  -row 2 \
+  -column 2 \
+  -columnspan 2 \
+  -padx [expr {$::magnify * 5}] \
+  -sticky w
 
-grid [ttk::label .nut.ar.servnum -text "Number of units in one serving" -style ar.TLabel] -row 3 -column 0 -columnspan 2 -sticky e
-grid [ttk::entry .nut.ar.servnum_entry -textvariable ::RecipeServUnitNum -width 7] -row 3 -column 2 -columnspan 2 -padx [expr {$::magnify * 5}] -sticky w
+grid [ttk::label .nut.ar.servnum \
+  -text "Number of units in one serving" \
+  -style ar.TLabel] \
+  -row 3 \
+  -column 0 \
+  -columnspan 2 \
+  -sticky e
+grid [ttk::entry .nut.ar.servnum_entry \
+  -textvariable ::RecipeServUnitNum \
+  -width 7] \
+  -row 3 \
+  -column 2 \
+  -columnspan 2 \
+  -padx [expr {$::magnify * 5}] \
+  -sticky w
 
-grid [ttk::label .nut.ar.weight -text "Weight of one serving (if known)" -style ar.TLabel] -row 4 -column 0 -columnspan 2 -sticky e
-grid [ttk::entry .nut.ar.weight_entry -textvariable ::RecipeServWeight -width 7] -row 4 -column 2 -columnspan 2 -padx [expr {$::magnify * 5}] -sticky w
+grid [ttk::label .nut.ar.weight \
+  -text "Weight of one serving (if known)" \
+  -style ar.TLabel] \
+  -row 4 \
+  -column 0 \
+  -columnspan 2 \
+  -sticky e
+grid [ttk::entry .nut.ar.weight_entry \
+  -textvariable ::RecipeServWeight \
+  -width 7] \
+  -row 4 \
+  -column 2 \
+  -columnspan 2 \
+  -padx [expr {$::magnify * 5}] \
+  -sticky w
 
-grid [ttk::button .nut.ar.save -text "Save" -command RecipeDone -style vf.TButton] -row 3 -column 13 -columnspan 3 -sticky e
-grid [ttk::button .nut.ar.cancel -text "Cancel" -command RecipeCancel -style ar.TButton] -row 4 -column 13 -columnspan 3 -sticky e
+grid [ttk::button .nut.ar.save \
+  -text "Save" \
+  -command RecipeDone \
+  -style vf.TButton] \
+  -row 3 \
+  -column 13 \
+  -columnspan 3 \
+  -sticky e
+grid [ttk::button .nut.ar.cancel \
+  -text "Cancel" \
+  -command RecipeCancel \
+  -style ar.TButton] \
+  -row 4 \
+  -column 13 \
+  -columnspan 3 \
+  -sticky e
 
-grid [ttk::radiobutton .nut.ar.grams -text "Grams" -width 6 -variable ::GRAMSopt -value 1 -style ar.TRadiobutton] -row 0 -column 13 -columnspan 3 -sticky nsw
-grid [ttk::radiobutton .nut.ar.ounces -text "Ounces" -width 6 -variable ::GRAMSopt -value 0 -style ar.TRadiobutton] -row 1 -column 13 -columnspan 3 -sticky nsw
+grid [ttk::radiobutton .nut.ar.grams \
+  -text "Grams" \
+  -width 6 \
+  -variable ::GRAMSopt \
+  -value 1 \
+  -style ar.TRadiobutton] \
+  -row 0 \
+  -column 13 \
+  -columnspan 3 \
+  -sticky nsw
+grid [ttk::radiobutton .nut.ar.ounces \
+  -text "Ounces" \
+  -width 6 \
+  -variable ::GRAMSopt \
+  -value 0 \
+  -style ar.TRadiobutton] \
+  -row 1 \
+  -column 13 \
+  -columnspan 3 \
+  -sticky nsw
 
-panedwindow .nut.po.pane -orient horizontal -showhandle 0 -handlesize [expr {round($::magnify * 10.0)}] -background "#5454FF" -relief solid
-ttk::frame .nut.po.pane.optframe -style po.TFrame
-ttk::frame .nut.po.pane.wlogframe -style po.TFrame
+panedwindow .nut.po.pane \
+  -orient horizontal \
+  -showhandle 0 \
+  -handlesize [expr {round($::magnify * 10.0)}] \
+  -background "#5454FF" \
+  -relief solid
+ttk::frame .nut.po.pane.optframe \
+  -style po.TFrame
+ttk::frame .nut.po.pane.wlogframe \
+  -style po.TFrame
 .nut.po.pane add .nut.po.pane.optframe .nut.po.pane.wlogframe
-grid .nut.po.pane -in .nut.po -sticky nsew -row 0 -column 0
+grid .nut.po.pane \
+  -in .nut.po \
+  -sticky nsew \
+  -row 0 \
+  -column 0
 
-grid rowconfigure .nut.po.pane.wlogframe all -uniform 1
-grid columnconfigure .nut.po.pane.wlogframe all -uniform 1
+grid rowconfigure .nut.po.pane.wlogframe all \
+  -uniform 1
+grid columnconfigure .nut.po.pane.wlogframe all \
+  -uniform 1
 
-grid [ttk::label .nut.po.pane.wlogframe.weight_l -text "Weight" -style "po.TLabel" -justify right] -row 0 -column 1 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}] -sticky e
-grid [tk::spinbox .nut.po.pane.wlogframe.weight_s -width 7 -justify right -from 1 -to 9999 -increment 0.1 -textvariable ::weightyintercept -disabledforeground "#000000" ] -row 0 -column 2 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}]
-grid [ttk::label .nut.po.pane.wlogframe.bf_l -text "Body Fat %" -style "po.TLabel" -justify right] -row 1 -column 1 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}] -sticky e
-grid [tk::spinbox .nut.po.pane.wlogframe.bf_s -width 7 -justify right -from 1 -to 9999 -increment 0.1 -textvariable ::currentbfp -disabledforeground "#000000" ] -row 1 -column 2 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}]
-grid [ttk::button .nut.po.pane.wlogframe.accept -text "Accept New\nMeasurements" -command AcceptNewMeasurements] -row 2 -rowspan 2 -column 0 -columnspan 3 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}] -sticky e
-grid [ttk::button .nut.po.pane.wlogframe.clear -text "Clear Weight Log" -command ClearWeightLog] -row 10 -column 0 -columnspan 3 -padx [expr {$::magnify * 5}] -sticky e
+grid [ttk::label .nut.po.pane.wlogframe.weight_l \
+  -text "Weight" \
+  -style "po.TLabel" \
+  -justify right] \
+  -row 0 \
+  -column 1 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}] \
+  -sticky e
+grid [tk::spinbox .nut.po.pane.wlogframe.weight_s \
+  -width 7 \
+  -justify right \
+  -from 1 \
+  -to 9999 \
+  -increment 0.1 \
+  -textvariable ::weightyintercept \
+  -disabledforeground "#000000" ] \
+  -row 0 \
+  -column 2 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}]
+grid [ttk::label .nut.po.pane.wlogframe.bf_l \
+  -text "Body Fat %" \
+  -style "po.TLabel" \
+  -justify right] \
+  -row 1 \
+  -column 1 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}] \
+  -sticky e
+grid [tk::spinbox .nut.po.pane.wlogframe.bf_s \
+  -width 7 \
+  -justify right \
+  -from 1 \
+  -to 9999 \
+  -increment 0.1 \
+  -textvariable ::currentbfp \
+  -disabledforeground "#000000" ] \
+  -row 1 \
+  -column 2 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}]
+grid [ttk::button .nut.po.pane.wlogframe.accept \
+  -text "Accept New\nMeasurements" \
+  -command AcceptNewMeasurements] \
+  -row 2 \
+  -rowspan 2 \
+  -column 0 \
+  -columnspan 3 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}] \
+  -sticky e
+grid [ttk::button .nut.po.pane.wlogframe.clear \
+  -text "Clear Weight Log" \
+  -command ClearWeightLog] \
+  -row 10 \
+  -column 0 \
+  -columnspan 3 \
+  -padx [expr {$::magnify * 5}] \
+  -sticky e
 
-grid [ttk::label .nut.po.pane.wlogframe.summary -wraplength [expr {$::magnify * 150}] -textvariable ::wlogsummary -justify right -style po.TLabel] -row 4 -rowspan 6 -column 0 -columnspan 3 -padx [expr {$::magnify * 5}] -sticky e
+grid [ttk::label .nut.po.pane.wlogframe.summary \
+  -wraplength [expr {$::magnify * 150}] \
+  -textvariable ::wlogsummary \
+  -justify right \
+  -style po.TLabel] \
+  -row 4 \
+  -rowspan 6 \
+  -column 0 \
+  -columnspan 3 \
+  -padx [expr {$::magnify * 5}] \
+  -sticky e
 
-grid rowconfigure .nut.po.pane.optframe all -uniform 1
-grid columnconfigure .nut.po.pane.optframe all -uniform 1
+grid rowconfigure .nut.po.pane.optframe all \
+  -uniform 1
+grid columnconfigure .nut.po.pane.optframe all \
+  -uniform 1
 
-grid [ttk::label .nut.po.pane.optframe.cal_l -text "Calories kc" -style "po.TLabel" -justify right] -row 0 -column 0 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}] -sticky e
-grid [tk::spinbox .nut.po.pane.optframe.cal_s -width 7 -justify right -from 1 -to 9999 -increment 0.1 -textvariable ::ENERC_KCALopt -disabledforeground "#000000" ] -row 0 -column 1 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}]
-set ::ENERC_KCALpo 0
-grid [ttk::checkbutton .nut.po.pane.optframe.cal_cb1 -text "Adjust to my meals" -variable ::ENERC_KCALpo -onvalue -1 -style po.TCheckbutton -command [list ChangePersonalOptions ENERC_KCAL]] -row 0 -column 2 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}] -sticky w
-grid [ttk::checkbutton .nut.po.pane.optframe.cal_cb2 -text "Auto-Set" -variable ::ENERC_KCALpo -onvalue 2 -style po.TCheckbutton -command [list ChangePersonalOptions ENERC_KCAL]] -row 0 -column 3 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}] -sticky w
+grid [ttk::label .nut.po.pane.optframe.cal_l \
+  -text "Calories kc" \
+  -style "po.TLabel" \
+  -justify right] \
+  -row 0 \
+  -column 0 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}] \
+  -sticky e
+grid [tk::spinbox .nut.po.pane.optframe.cal_s \
+  -width 7 \
+  -justify right \
+  -from 1 \
+  -to 9999 \
+  -increment 0.1 \
+  -textvariable ::ENERC_KCALopt \
+  -disabledforeground "#000000" ] \
+  -row 0 \
+  -column 1 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}]
 
-grid [ttk::label .nut.po.pane.optframe.fat_l -text "Total Fat g" -style "po.TLabel" -justify right] -row 1 -column 0 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}] -sticky e
-grid [tk::spinbox .nut.po.pane.optframe.fat_s -width 7 -justify right -from 1 -to 9999 -increment 0.1 -textvariable ::FATopt -disabledforeground "#000000" ] -row 1 -column 1 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}]
-grid [ttk::checkbutton .nut.po.pane.optframe.fat_cb1 -text "Adjust to my meals" -variable ::FATpo -onvalue -1 -style po.TCheckbutton -command [list ChangePersonalOptions FAT]] -row 1 -column 2 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}] -sticky w
-grid [ttk::checkbutton .nut.po.pane.optframe.fat_cb2 -text "DV 36% of Calories" -variable ::FATpo -onvalue 2 -style po.TCheckbutton -command [list ChangePersonalOptions FAT]] -row 1 -column 3 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}] -sticky w
+grid [ttk::checkbutton .nut.po.pane.optframe.cal_cb1 \
+  -text "Adjust to my meals" \
+  -variable ::ENERC_KCALpo \
+  -onvalue \
+  -1 \
+  -style po.TCheckbutton \
+  -command [list ChangePersonalOptions ENERC_KCAL]] \
+  -row 0 \
+  -column 2 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}] \
+  -sticky w
+grid [ttk::checkbutton .nut.po.pane.optframe.cal_cb2 \
+  -text "Auto-Set" \
+  -variable ::ENERC_KCALpo \
+  -onvalue 2 \
+  -style po.TCheckbutton \
+  -command [list ChangePersonalOptions ENERC_KCAL]] \
+  -row 0 \
+  -column 3 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}] \
+  -sticky w
 
-grid [ttk::label .nut.po.pane.optframe.prot_l -text "Protein g" -style "po.TLabel" -justify right] -row 2 -column 0 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}] -sticky e
-grid [tk::spinbox .nut.po.pane.optframe.prot_s -width 7 -justify right -from 1 -to 9999 -increment 0.1 -textvariable ::PROCNTopt -disabledforeground "#000000" ] -row 2 -column 1 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}]
-grid [ttk::checkbutton .nut.po.pane.optframe.prot_cb1 -text "Adjust to my meals" -variable ::PROCNTpo -onvalue -1 -style po.TCheckbutton -command [list ChangePersonalOptions PROCNT]] -row 2 -column 2 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}] -sticky w
-grid [ttk::checkbutton .nut.po.pane.optframe.prot_cb2 -text "DV 10% of Calories" -variable ::PROCNTpo -onvalue 2 -style po.TCheckbutton -command [list ChangePersonalOptions PROCNT]] -row 2 -column 3 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}] -sticky w
+grid [ttk::label .nut.po.pane.optframe.fat_l \
+  -text "Total Fat g" \
+  -style "po.TLabel" \
+  -justify right] \
+  -row 1 \
+  -column 0 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}] \
+  -sticky e
+grid [tk::spinbox .nut.po.pane.optframe.fat_s \
+  -width 7 \
+  -justify right \
+  -from 1 \
+  -to 9999 \
+  -increment 0.1 \
+  -textvariable ::FATopt \
+  -disabledforeground "#000000" ] \
+  -row 1 \
+  -column 1 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}]
+grid [ttk::checkbutton .nut.po.pane.optframe.fat_cb1 \
+  -text "Adjust to my meals" \
+  -variable ::FATpo \
+  -onvalue \
+  -1 \
+  -style po.TCheckbutton \
+  -command [list ChangePersonalOptions FAT]] \
+  -row 1 \
+  -column 2 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}] \
+  -sticky w
+grid [ttk::checkbutton .nut.po.pane.optframe.fat_cb2 \
+  -text "DV 36% of Calories" \
+  -variable ::FATpo \
+  -onvalue 2 \
+  -style po.TCheckbutton \
+  -command [list ChangePersonalOptions FAT]] \
+  -row 1 \
+  -column 3 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}] \
+  -sticky w
 
-grid [ttk::label .nut.po.pane.optframe.nfc_l -text "Non-Fiber Carb g" -style "po.TLabel" -justify right] -row 3 -column 0 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}] -sticky e
-grid [tk::spinbox .nut.po.pane.optframe.nfc_s -width 7 -justify right -from 1 -to 9999 -increment 0.1 -textvariable ::CHO_NONFIBopt -disabledforeground "#000000" ] -row 3 -column 1 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}]
-grid [ttk::checkbutton .nut.po.pane.optframe.nfc_cb1 -text "Adjust to my meals" -variable ::CHO_NONFIBpo -onvalue -1 -style po.TCheckbutton -command [list ChangePersonalOptions CHO_NONFIB]] -row 3 -column 2 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}] -sticky w
-grid [ttk::checkbutton .nut.po.pane.optframe.nfc_cb2 -text "Balance of Calories" -variable ::CHO_NONFIBpo -onvalue 2 -style po.TCheckbutton -command [list ChangePersonalOptions CHO_NONFIB]] -row 3 -column 3 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}] -sticky w
+grid [ttk::label .nut.po.pane.optframe.prot_l \
+  -text "Protein g" \
+  -style "po.TLabel" \
+  -justify right] \
+  -row 2 \
+  -column 0 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}] \
+  -sticky e
+grid [tk::spinbox .nut.po.pane.optframe.prot_s \
+  -width 7 \
+  -justify right \
+  -from 1 \
+  -to 9999 \
+  -increment 0.1 \
+  -textvariable ::PROCNTopt \
+  -disabledforeground "#000000" ] \
+  -row 2 \
+  -column 1 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}]
+grid [ttk::checkbutton .nut.po.pane.optframe.prot_cb1 \
+  -text "Adjust to my meals" \
+  -variable ::PROCNTpo \
+  -onvalue \
+  -1 \
+  -style po.TCheckbutton \
+  -command [list ChangePersonalOptions PROCNT]] \
+  -row 2 \
+  -column 2 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}] \
+  -sticky w
+grid [ttk::checkbutton .nut.po.pane.optframe.prot_cb2 \
+  -text "DV 10% of Calories" \
+  -variable ::PROCNTpo \
+  -onvalue 2 \
+  -style po.TCheckbutton \
+  -command [list ChangePersonalOptions PROCNT]] \
+  -row 2 \
+  -column 3 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}] \
+  -sticky w
 
-grid [ttk::label .nut.po.pane.optframe.fiber_l -text "Fiber g" -style "po.TLabel" -justify right] -row 4 -column 0 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}] -sticky e
-grid [tk::spinbox .nut.po.pane.optframe.fiber_s -width 7 -justify right -from 1 -to 9999 -increment 0.1 -textvariable ::FIBTGopt -disabledforeground "#000000" ] -row 4 -column 1 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}]
-grid [ttk::checkbutton .nut.po.pane.optframe.fiber_cb1 -text "Adjust to my meals" -variable ::FIBTGpo -onvalue -1 -style po.TCheckbutton -command [list ChangePersonalOptions FIBTG]] -row 4 -column 2 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}] -sticky w
-grid [ttk::checkbutton .nut.po.pane.optframe.fiber_cb2 -text "Daily Value Default" -variable ::FIBTGpo -onvalue 2 -style po.TCheckbutton -command [list ChangePersonalOptions FIBTG]] -row 4 -column 3 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}] -sticky w
+grid [ttk::label .nut.po.pane.optframe.nfc_l \
+  -text "Non-Fiber Carb g" \
+  -style "po.TLabel" \
+  -justify right] \
+  -row 3 \
+  -column 0 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}] \
+  -sticky e
+grid [tk::spinbox .nut.po.pane.optframe.nfc_s \
+  -width 7 \
+  -justify right \
+  -from 1 \
+  -to 9999 \
+  -increment 0.1 \
+  -textvariable ::CHO_NONFIBopt \
+  -disabledforeground "#000000" ] \
+  -row 3 \
+  -column 1 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}]
+grid [ttk::checkbutton .nut.po.pane.optframe.nfc_cb1 \
+  -text "Adjust to my meals" \
+  -variable ::CHO_NONFIBpo \
+  -onvalue \
+  -1 \
+  -style po.TCheckbutton \
+  -command [list ChangePersonalOptions CHO_NONFIB]] \
+  -row 3 \
+  -column 2 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}] \
+  -sticky w
+grid [ttk::checkbutton .nut.po.pane.optframe.nfc_cb2 \
+  -text "Balance of Calories" \
+  -variable ::CHO_NONFIBpo \
+  -onvalue 2 \
+  -style po.TCheckbutton \
+  -command [list ChangePersonalOptions CHO_NONFIB]] \
+  -row 3 \
+  -column 3 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}] \
+  -sticky w
 
-grid [ttk::label .nut.po.pane.optframe.sat_l -text "Saturated Fat g" -style "po.TLabel" -justify right] -row 5 -column 0 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}] -sticky e
-grid [tk::spinbox .nut.po.pane.optframe.sat_s -width 7 -justify right -from 1 -to 9999 -increment 0.1 -textvariable ::FASATopt -disabledforeground "#000000" ] -row 5 -column 1 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}]
-grid [ttk::checkbutton .nut.po.pane.optframe.sat_cb1 -text "Adjust to my meals" -variable ::FASATpo -onvalue -1 -style po.TCheckbutton -command [list ChangePersonalOptions FASAT]] -row 5 -column 2 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}] -sticky w
-grid [ttk::checkbutton .nut.po.pane.optframe.sat_cb2 -text "DV 10% of Calories" -variable ::FASATpo -onvalue 2 -style po.TCheckbutton -command [list ChangePersonalOptions FASAT]] -row 5 -column 3 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}] -sticky w
+grid [ttk::label .nut.po.pane.optframe.fiber_l \
+  -text "Fiber g" \
+  -style "po.TLabel" \
+  -justify right] \
+  -row 4 \
+  -column 0 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}] \
+  -sticky e
+grid [tk::spinbox .nut.po.pane.optframe.fiber_s \
+  -width 7 \
+  -justify right \
+  -from 1 \
+  -to 9999 \
+  -increment 0.1 \
+  -textvariable ::FIBTGopt \
+  -disabledforeground "#000000" ] \
+  -row 4 \
+  -column 1 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}]
+grid [ttk::checkbutton .nut.po.pane.optframe.fiber_cb1 \
+  -text "Adjust to my meals" \
+  -variable ::FIBTGpo \
+  -onvalue \
+  -1 \
+  -style po.TCheckbutton \
+  -command [list ChangePersonalOptions FIBTG]] \
+  -row 4 \
+  -column 2 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}] \
+  -sticky w
+grid [ttk::checkbutton .nut.po.pane.optframe.fiber_cb2 \
+  -text "Daily Value Default" \
+  -variable ::FIBTGpo \
+  -onvalue 2 \
+  -style po.TCheckbutton \
+  -command [list ChangePersonalOptions FIBTG]] \
+  -row 4 \
+  -column 3 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}] \
+  -sticky w
 
-grid [ttk::label .nut.po.pane.optframe.efa_l -text "Essential Fatty Acids g" -style "po.TLabel" -justify right] -row 6 -column 0 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}] -sticky e
-grid [tk::spinbox .nut.po.pane.optframe.efa_s -width 7 -justify right -from 1 -to 9999 -increment 0.1 -textvariable ::FAPUopt -disabledforeground "#000000" ] -row 6 -column 1 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}]
-grid [ttk::checkbutton .nut.po.pane.optframe.efa_cb1 -text "Adjust to my meals" -variable ::FAPUpo -onvalue -1 -style po.TCheckbutton -command [list ChangePersonalOptions FAPU]] -row 6 -column 2 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}] -sticky w
-grid [ttk::checkbutton .nut.po.pane.optframe.efa_cb2 -text "4% of Calories" -variable ::FAPUpo -onvalue 2 -style po.TCheckbutton -command [list ChangePersonalOptions FAPU]] -row 6 -column 3 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}] -sticky w
+grid [ttk::label .nut.po.pane.optframe.sat_l \
+  -text "Saturated Fat g" \
+  -style "po.TLabel" \
+  -justify right] \
+  -row 5 \
+  -column 0 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}] \
+  -sticky e
+grid [tk::spinbox .nut.po.pane.optframe.sat_s \
+  -width 7 \
+  -justify right \
+  -from 1 \
+  -to 9999 \
+  -increment 0.1 \
+  -textvariable ::FASATopt \
+  -disabledforeground "#000000" ] \
+  -row 5 \
+  -column 1 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}]
+grid [ttk::checkbutton .nut.po.pane.optframe.sat_cb1 \
+  -text "Adjust to my meals" \
+  -variable ::FASATpo \
+  -onvalue \
+  -1 \
+  -style po.TCheckbutton \
+  -command [list ChangePersonalOptions FASAT]] \
+  -row 5 \
+  -column 2 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}] \
+  -sticky w
+grid [ttk::checkbutton .nut.po.pane.optframe.sat_cb2 \
+  -text "DV 10% of Calories" \
+  -variable ::FASATpo \
+  -onvalue 2 \
+  -style po.TCheckbutton \
+  -command [list ChangePersonalOptions FASAT]] \
+  -row 5 \
+  -column 3 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}] \
+  -sticky w
 
-grid [ttk::label .nut.po.pane.optframe.fish_l -text "Omega-6/3 Balance" -style "po.TLabel" -justify right] -row 7 -column 0 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}] -sticky e
-set ::balvals {}
+grid [ttk::label .nut.po.pane.optframe.efa_l \
+  -text "Essential Fatty Acids g" \
+  -style "po.TLabel" \
+  -justify right] \
+  -row 6 \
+  -column 0 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}] \
+  -sticky e
+grid [tk::spinbox .nut.po.pane.optframe.efa_s \
+  -width 7 \
+  -justify right \
+  -from 1 \
+  -to 9999 \
+  -increment 0.1 \
+  -textvariable ::FAPUopt \
+  -disabledforeground "#000000" ] \
+  -row 6 \
+  -column 1 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}]
+grid [ttk::checkbutton .nut.po.pane.optframe.efa_cb1 \
+  -text "Adjust to my meals" \
+  -variable ::FAPUpo \
+  -onvalue \
+  -1 \
+  -style po.TCheckbutton \
+  -command [list ChangePersonalOptions FAPU]] \
+  -row 6 \
+  -column 2 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}] \
+  -sticky w
+grid [ttk::checkbutton .nut.po.pane.optframe.efa_cb2 \
+  -text "4% of Calories" \
+  -variable ::FAPUpo \
+  -onvalue 2 \
+  -style po.TCheckbutton \
+  -command [list ChangePersonalOptions FAPU]] \
+  -row 6 \
+  -column 3 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}] \
+  -sticky w
+
+grid [ttk::label .nut.po.pane.optframe.fish_l \
+  -text "Omega-6/3 Balance" \
+  -style "po.TLabel" \
+  -justify right] \
+  -row 7 \
+  -column 0 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}] \
+  -sticky e
+
 for {set i 15} {$i < 91} {incr i} {
  lappend ::balvals "$i / [expr {100 - $i}]"
  }
-grid [ttk::combobox .nut.po.pane.optframe.fish_s -width 7 -justify right -textvariable ::FAPU1po -values $::balvals -state readonly -style po.TCombobox] -row 7 -column 1 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}]
-trace add variable ::FAPU1po write [list ChangePersonalOptions FAPU1] 
-
-grid [ttk::menubutton .nut.po.pane.optframe.dv_mb -style po.TMenubutton -text "Daily Values for Individual Micronutrients" -direction right -menu .nut.po.pane.optframe.dv_mb.m] -row 8 -column 0 -columnspan 3 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}] -sticky w
-menu .nut.po.pane.optframe.dv_mb.m -tearoff 0 
-foreach nut {{Vitamin A} Thiamin Riboflavin Niacin {Panto. Acid} {Vitamin B6} Folate {Vitamin B12} Choline {Vitamin C} {Vitamin D} {Vitamin E} {Vitamin K1} Calcium Copper Iron Magnesium Manganese Phosphorus Potassium Selenium Sodium Zinc Glycine Retinol} {
- .nut.po.pane.optframe.dv_mb.m add command -label $nut -command [list changedv_vitmin $nut]
+grid [ttk::combobox .nut.po.pane.optframe.fish_s \
+  -width 7 \
+  -justify right \
+  -textvariable ::FAPU1po \
+  -values $::balvals \
+  -state readonly \
+  -style po.TCombobox] \
+  -row 7 \
+  -column 1 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}]
+trace add variable ::FAPU1po write [list ChangePersonalOptions FAPU1]
+grid [ttk::menubutton .nut.po.pane.optframe.dv_mb \
+  -style po.TMenubutton \
+  -text "Daily Values for Individual Micronutrients" \
+  -direction right \
+  -menu .nut.po.pane.optframe.dv_mb.m] \
+  -row 8 \
+  -column 0 \
+  -columnspan 3 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}] \
+  -sticky w
+menu .nut.po.pane.optframe.dv_mb.m \
+  -tearoff 0foreach nut {{Vitamin A} Thiamin Riboflavin Niacin {Panto. Acid} {Vitamin B6} Folate {Vitamin B12} Choline {Vitamin C} {Vitamin D} {Vitamin E} {Vitamin K1} Calcium Copper Iron Magnesium Manganese Phosphorus Potassium Selenium Sodium Zinc Glycine Retinol} {
+ .nut.po.pane.optframe.dv_mb.m add command \
+  -label $nut \
+  -command [list changedv_vitmin $nut]
  }
 
-grid [ttk::label .nut.po.pane.optframe.vite_l -text "vite" -style "po.TLabel" -justify right] -row 9 -column 0 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}] -sticky e
-grid [tk::spinbox .nut.po.pane.optframe.vite_s -width 7 -justify right -from 1 -to 9999 -increment 0.1 -textvariable ::NULLopt -disabledforeground "#000000" ] -row 9 -column 1 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}]
-grid [ttk::checkbutton .nut.po.pane.optframe.vite_cb1 -text "Adjust to my meals" -variable ::vitminpo -onvalue -1 -style po.TCheckbutton] -row 9 -column 2 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}] -sticky w
-grid [ttk::checkbutton .nut.po.pane.optframe.vite_cb2 -text "Daily Value Default" -variable ::vitminpo -onvalue 2 -style po.TCheckbutton] -row 9 -column 3 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 10}] -sticky w
+grid [ttk::label .nut.po.pane.optframe.vite_l \
+  -text "vite" \
+  -style "po.TLabel" \
+  -justify right] \
+  -row 9 \
+  -column 0 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}] \
+  -sticky e
+grid [tk::spinbox .nut.po.pane.optframe.vite_s \
+  -width 7 \
+  -justify right \
+  -from 1 \
+  -to 9999 \
+  -increment 0.1 \
+  -textvariable ::NULLopt \
+  -disabledforeground "#000000" ] \
+  -row 9 \
+  -column 1 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}]
+grid [ttk::checkbutton .nut.po.pane.optframe.vite_cb1 \
+  -text "Adjust to my meals" \
+  -variable ::vitminpo \
+  -onvalue \
+  -1 \
+  -style po.TCheckbutton] \
+  -row 9 \
+  -column 2 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}] \
+  -sticky w
+grid [ttk::checkbutton .nut.po.pane.optframe.vite_cb2 \
+  -text "Daily Value Default" \
+  -variable ::vitminpo \
+  -onvalue 2 \
+  -style po.TCheckbutton] \
+  -row 9 \
+  -column 3 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 10}] \
+  -sticky w
 grid remove .nut.po.pane.optframe.vite_l
 grid remove .nut.po.pane.optframe.vite_s
 grid remove .nut.po.pane.optframe.vite_cb1
 grid remove .nut.po.pane.optframe.vite_cb2
 
-ttk::frame .nut.ts.frranking -style vf.TFrame
+ttk::frame .nut.ts.frranking \
+  -style vf.TFrame
 grid propagate .nut.ts.frranking 0
 
-grid [ttk::combobox .nut.ts.rankchoice -state readonly -justify center -style ts.TCombobox] -row 0 -column 0 -sticky we
-grid [ttk::combobox .nut.ts.fdgroupchoice -textvariable ::fdgroupchoice -state readonly -justify center -style ts.TCombobox] -row 0 -column 1 -sticky we
-grid .nut.ts.frranking -in .nut.ts -sticky nsew -row 1 -column 0 -columnspan 2
-pack .nut.ts -fill both -expand 1
-grid column .nut.ts 0 -weight 1
-grid column .nut.ts 1 -weight 1
-grid row .nut.ts 1 -weight 4
-grid [labelframe .nut.ts.frgraph -background "#FFFF00"] -row 2 -column 0 -columnspan 2 -sticky nsew
-canvas .nut.ts.frgraph.canvas -relief flat -background "#FFFF00" 
-grid .nut.ts.frgraph.canvas -in .nut.ts.frgraph -sticky nsew
-grid row .nut.ts 2 -weight 2
+grid [ttk::combobox .nut.ts.rankchoice \
+  -state readonly \
+  -justify center \
+  -style ts.TCombobox] \
+  -row 0 \
+  -column 0 \
+  -sticky we
+grid [ttk::combobox .nut.ts.fdgroupchoice \
+  -textvariable ::fdgroupchoice \
+  -state readonly \
+  -justify center \
+  -style ts.TCombobox] \
+  -row 0 \
+  -column 1 \
+  -sticky we
+grid .nut.ts.frranking \
+  -in .nut.ts \
+  -sticky nsew \
+  -row 1 \
+  -column 0 \
+  -columnspan 2
+pack .nut.ts \
+  -fill both \
+  -expand 1
+grid column .nut.ts 0 \
+  -weight 1
+grid column .nut.ts 1 \
+  -weight 1
+grid row .nut.ts 1 \
+  -weight 4
+grid [labelframe .nut.ts.frgraph \
+  -background "#FFFF00"] \
+  -row 2 \
+  -column 0 \
+  -columnspan 2 \
+  -sticky nsew
+canvas .nut.ts.frgraph.canvas \
+  -relief flat \
+  -background "#FFFF00"grid .nut.ts.frgraph.canvas \
+  -in .nut.ts.frgraph \
+  -sticky nsew
+grid row .nut.ts 2 \
+  -weight 2
 grid propagate .nut.ts.frgraph 0
 
-grid [ttk::treeview .nut.ts.frranking.ranking -yscrollcommand [list .nut.ts.frranking.vsb set] -style nut.Treeview -columns {food field1 field2} -show headings] -row 0 -column 0 -sticky nsew
-.nut.ts.frranking.ranking column 0 -minwidth [expr {10 * $::column15}]
-.nut.ts.frranking.ranking column 1 -minwidth [expr {2 * $::column15}]
-.nut.ts.frranking.ranking column 2 -minwidth [expr {3 * $::column15}]
-grid [scrollbar .nut.ts.frranking.vsb -width [expr {$::magnify * 5}] -relief sunken -orient vertical -command [list .nut.ts.frranking.ranking yview]] -row 0 -column 1 -sticky nsew
+grid [ttk::treeview .nut.ts.frranking.ranking \
+  -yscrollcommand [list .nut.ts.frranking.vsb set] \
+  -style nut.Treeview \
+  -columns {food field1 field2} \
+  -show headings] \
+  -row 0 \
+  -column 0 \
+  -sticky nsew
+.nut.ts.frranking.ranking column 0 \
+  -minwidth [expr {10 * $::column15}]
+.nut.ts.frranking.ranking column 1 \
+  -minwidth [expr {2 * $::column15}]
+.nut.ts.frranking.ranking column 2 \
+  -minwidth [expr {3 * $::column15}]
+grid [scrollbar .nut.ts.frranking.vsb \
+  -width [expr {$::magnify * 5}] \
+  -relief sunken \
+  -orient vertical \
+  -command [list .nut.ts.frranking.ranking yview]] \
+  -row 0 \
+  -column 1 \
+  -sticky nsew
 
-grid columnconfigure .nut.ts.frranking 0 -weight 1 -minsize 0
-grid rowconfigure .nut.ts.frranking 0 -weight 1 -minsize 0
+grid columnconfigure .nut.ts.frranking 0 \
+  -weight 1 \
+  -minsize 0
+grid rowconfigure .nut.ts.frranking 0 \
+  -weight 1 \
+  -minsize 0
 
 bind .nut.ts.frranking.ranking <<TreeviewSelect>> rank2vf
 
@@ -408,83 +1533,252 @@ tuneinvf
 
 trace add variable like_this_vf write FindFoodvf
 bind .nut.vf.fsentry <FocusIn> FoodSearchvf
-pack [ttk::label .nut.qn.label -text "\nNUT has ended."]
-.nut add .nut.am -text "Analyze Meals" -sticky nsew
-.nut add .nut.rm -text "Record Meals & Recipes" -sticky nsew
-.nut add .nut.ar -text "Record Meals & Recipes" -sticky nsew
-.nut add .nut.vf -text "View Foods" -sticky nsew
-.nut add .nut.po -text "Personal Options"
-.nut add .nut.ts -text "The Story"
+
+pack [ttk::label .nut.qn.label \
+  -text "\nNUT has ended."]
+.nut add .nut.am \
+  -text "Analyze Meals" \
+  -sticky nsew
+.nut add .nut.rm \
+  -text "Record Meals & Recipes" \
+  -sticky nsew
+.nut add .nut.ar \
+  -text "Record Meals & Recipes" \
+  -sticky nsew
+.nut add .nut.vf \
+  -text "View Foods" \
+  -sticky nsew
+.nut add .nut.po \
+  -text "Personal Options"
+.nut add .nut.ts \
+  -text "The Story"
 #.nut hide .nut.rm
 .nut hide .nut.ar
 .nut hide .nut.ts
-.nut add .nut.qn -text "Quit NUT"
+.nut add .nut.qn \
+  -text "Quit NUT"
+
 bind .nut <<NotebookTabChanged>> NutTabChange
-grid [ttk::frame .nut.vf.frlistbox -style vf.TFrame -width [expr {15 * $::column15}] ] -row 5 -rowspan 16 -column 0 -columnspan 15 -sticky nsew
+
+grid [ttk::frame .nut.vf.frlistbox \
+  -style vf.TFrame \
+  -width [expr {15 * $::column15}] ] \
+  -row 5 \
+  -rowspan 16 \
+  -column 0 \
+  -columnspan 15 \
+  -sticky nsew
 grid propagate .nut.vf.frlistbox 0
-grid [tk::listbox .nut.vf.frlistbox.listbox -width 85 -height 22 -listvariable foodsvf -yscrollcommand ".nut.vf.frlistbox.scrollv set" -xscrollcommand ".nut.vf.frlistbox.scrollh set" -background "#00FF00" -setgrid 1] -row 0 -column 0 -sticky nsew
-grid [scrollbar .nut.vf.frlistbox.scrollv -width [expr {$::magnify * 5}] -relief sunken -orient vertical -command ".nut.vf.frlistbox.listbox yview"] -row 0 -column 1 -sticky nsew
-grid [scrollbar .nut.vf.frlistbox.scrollh -width [expr {$::magnify * 5}] -relief sunken -orient horizontal -command ".nut.vf.frlistbox.listbox xview"] -row 1 -column 0 -sticky nswe
-grid rowconfig .nut.vf.frlistbox 0 -weight 1 -minsize 0
-grid columnconfig .nut.vf.frlistbox 0 -weight 1 -minsize 0
+grid [tk::listbox .nut.vf.frlistbox.listbox \
+  -width 85 \
+  -height 22 \
+  -listvariable foodsvf \
+  -yscrollcommand ".nut.vf.frlistbox.scrollv set" \
+  -xscrollcommand ".nut.vf.frlistbox.scrollh set" \
+  -background "#00FF00" \
+  -setgrid 1] \
+  -row 0 \
+  -column 0 \
+  -sticky nsew
+grid [scrollbar .nut.vf.frlistbox.scrollv \
+  -width [expr {$::magnify * 5}] \
+  -relief sunken \
+  -orient vertical \
+  -command ".nut.vf.frlistbox.listbox yview"] \
+  -row 0 \
+  -column 1 \
+  -sticky nsew
+grid [scrollbar .nut.vf.frlistbox.scrollh \
+  -width [expr {$::magnify * 5}] \
+  -relief sunken \
+  -orient horizontal \
+  -command ".nut.vf.frlistbox.listbox xview"] \
+  -row 1 \
+  -column 0 \
+  -sticky nswe
+grid rowconfig .nut.vf.frlistbox 0 \
+  -weight 1 \
+  -minsize 0
+grid columnconfig .nut.vf.frlistbox 0 \
+  -weight 1 \
+  -minsize 0
 bind .nut.vf.frlistbox.listbox <<ListboxSelect>> FoodChoicevf
 grid remove .nut.vf.frlistbox
 
-grid [ttk::frame .nut.rm.frmenu -style rm.TFrame -width [expr {15 * $::column15}] ] -row 5 -rowspan 16 -column 0 -columnspan 15
+grid [ttk::frame .nut.rm.frmenu \
+  -style rm.TFrame \
+  -width [expr {15 * $::column15}] ] \
+  -row 5 \
+  -rowspan 16 \
+  -column 0 \
+  -columnspan 15
 grid propagate .nut.rm.frmenu 0
-grid [tk::text .nut.rm.frmenu.menu -yscrollcommand ".nut.rm.frmenu.scrollv set" -state disabled -wrap none -height 32 -width 99 -inactiveselectbackground {} -background "#FF7F00" -cursor [. cget -cursor] ] -row 0 -column 0 -sticky nsew
-grid [scrollbar .nut.rm.frmenu.scrollv -width [expr {$::magnify * 5}] -relief sunken -orient vertical -command ".nut.rm.frmenu.menu yview"] -row 0 -column 1 -sticky nsew
-grid rowconfig .nut.rm.frmenu 0 -weight 1 -minsize 0
-grid columnconfig .nut.rm.frmenu 0 -weight 1 -minsize 0
+grid [tk::text .nut.rm.frmenu.menu \
+  -yscrollcommand ".nut.rm.frmenu.scrollv set" \
+  -state disabled \
+  -wrap none \
+  -height 32 \
+  -width 99 \
+  -inactiveselectbackground {} \
+  -background "#FF7F00" \
+  -cursor [. cget \
+  -cursor] ] \
+  -row 0 \
+  -column 0 \
+  -sticky nsew
+grid [scrollbar .nut.rm.frmenu.scrollv \
+  -width [expr {$::magnify * 5}] \
+  -relief sunken \
+  -orient vertical \
+  -command ".nut.rm.frmenu.menu yview"] \
+  -row 0 \
+  -column 1 \
+  -sticky nsew
+grid rowconfig .nut.rm.frmenu 0 \
+  -weight 1 \
+  -minsize 0
+grid columnconfig .nut.rm.frmenu 0 \
+  -weight 1 \
+  -minsize 0
 
-set ::PCFchoices {{No Auto Portion Control} {Protein} {Non-Fiber Carb} {Total Fat} {Vitamin A} {Thiamin} {Riboflavin} {Niacin} {Panto. Acid} {Vitamin B6} {Folate} {Vitamin B12} {Choline} {Vitamin C} {Vitamin D} {Vitamin E} {Vitamin K1} {Calcium} {Copper} {Iron} {Magnesium} {Manganese} {Phosphorus} {Potassium} {Selenium} {Sodium} {Zinc} {Glycine} {Retinol} {Fiber}}
-set ::rmMenu .nut.rm.frmenu
 grid remove .nut.rm.frmenu
 
 foreach x {am rm vf ar} {
- grid [ttk::notebook .nut.${x}.nbw -style ${x}.TNotebook] -row 5 -rowspan 16 -column 0 -columnspan 15 -sticky s
+ grid [ttk::notebook .nut.${x}.nbw \
+  -style ${x}.TNotebook] \
+  -row 5 \
+  -rowspan 16 \
+  -column 0 \
+  -columnspan 15 \
+  -sticky s
  for {set i 0} {$i < 16} {incr i} {
-  grid columnconfigure .nut.${x} $i -uniform 1
+  grid columnconfigure .nut.${x} $i \
+  -uniform 1
   }
  for {set i 0} {$i < 5} {incr i} {
-  grid rowconfigure .nut.${x} $i -uniform 1 -weight 1
+  grid rowconfigure .nut.${x} $i \
+  -uniform 1 \
+  -weight 1
   }
  for {set i 5} {$i < 21} {incr i} {
-  grid rowconfigure .nut.${x} $i -uniform 1
+  grid rowconfigure .nut.${x} $i \
+  -uniform 1
   }
- ttk::frame .nut.${x}.nbw.screen0 -style ${x}.TFrame
- ttk::frame .nut.${x}.nbw.screen1 -style ${x}.TFrame
- ttk::frame .nut.${x}.nbw.screen2 -style ${x}.TFrame
- ttk::frame .nut.${x}.nbw.screen3 -style ${x}.TFrame
- ttk::frame .nut.${x}.nbw.screen4 -style ${x}.TFrame
- ttk::frame .nut.${x}.nbw.screen5 -style ${x}.TFrame
- .nut.${x}.nbw add .nut.${x}.nbw.screen0 -text "Daily Value %"
- .nut.${x}.nbw add .nut.${x}.nbw.screen1 -text "DV Amounts"
- .nut.${x}.nbw add .nut.${x}.nbw.screen2 -text "Carbs & Amino Acids"
- .nut.${x}.nbw add .nut.${x}.nbw.screen3 -text "Miscellaneous"
- .nut.${x}.nbw add .nut.${x}.nbw.screen4 -text "Sat & Mono FA"
- .nut.${x}.nbw add .nut.${x}.nbw.screen5 -text "Poly & Trans FA"
+ ttk::frame .nut.${x}.nbw.screen0 \
+  -style ${x}.TFrame
+ ttk::frame .nut.${x}.nbw.screen1 \
+  -style ${x}.TFrame
+ ttk::frame .nut.${x}.nbw.screen2 \
+  -style ${x}.TFrame
+ ttk::frame .nut.${x}.nbw.screen3 \
+  -style ${x}.TFrame
+ ttk::frame .nut.${x}.nbw.screen4 \
+  -style ${x}.TFrame
+ ttk::frame .nut.${x}.nbw.screen5 \
+  -style ${x}.TFrame
+ .nut.${x}.nbw add .nut.${x}.nbw.screen0 \
+  -text "Daily Value %"
+ .nut.${x}.nbw add .nut.${x}.nbw.screen1 \
+  -text "DV Amounts"
+ .nut.${x}.nbw add .nut.${x}.nbw.screen2 \
+  -text "Carbs & Amino Acids"
+ .nut.${x}.nbw add .nut.${x}.nbw.screen3 \
+  -text "Miscellaneous"
+ .nut.${x}.nbw add .nut.${x}.nbw.screen4 \
+  -text "Sat & Mono FA"
+ .nut.${x}.nbw add .nut.${x}.nbw.screen5 \
+  -text "Poly & Trans FA"
+
  set screen 0                                         
  set row 0
  set bcol 0
  set valcol 3
  set ucol 5
- foreach nut {ENERC_KCAL} {
-  if {$x != "ar"} {grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::caloriebutton -command "NewStory $nut $screen" -style "nutbutton.TButton"] -row $row -column $bcol -columnspan 3 -sticky we} else {grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} -text "Calories (2000)" -command "NewStory $nut $screen" -style "nutbutton.TButton"] -row $row -column $bcol -columnspan 3 -sticky we}
-  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}dv -justify right -width 8] -row $row -column $valcol -columnspan 2 -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}dv -style ${x}.TLabel] -row $row -column $valcol -columnspan 2 -sticky e}
-  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} -text "%" -style ${x}.TLabel] -row $row -column $ucol -sticky w
+  foreach nut {ENERC_KCAL} {
+  if {$x != "ar"} {grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::caloriebutton \
+  -command "NewStory $nut $screen" \
+  -style "nutbutton.TButton"] \
+  -row $row \
+  -column $bcol \
+  -columnspan 3 \
+  -sticky we} else {grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -text "Calories (2000)" \
+  -command "NewStory $nut $screen" \
+  -style "nutbutton.TButton"] \
+  -row $row \
+  -column $bcol \
+  -columnspan 3 \
+  -sticky we}
+  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}dv \
+  -justify right \
+  -width 8] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}dv \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e}
+  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -text "%" \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $ucol \
+  -sticky w
   incr row
   }
  foreach nut {ENERC_KCAL1} {
-  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} -text "Prot / Carb / Fat" -command "NewStory ENERC_KCAL $x" -style "nutbutton.TButton"] -row $row -column $bcol -columnspan 3 -sticky we
-  grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -style ${x}.TLabel] -row $row -column $valcol -columnspan 3
+  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -text "Prot / Carb / Fat" \
+  -command "NewStory ENERC_KCAL $x" \
+  -style "nutbutton.TButton"] \
+  -row $row \
+  -column $bcol \
+  -columnspan 3 \
+  -sticky we
+  grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $valcol \
+  -columnspan 3
   incr row
   }
  set row 4
  foreach nut {FAT FASAT FAMS FAPU OMEGA6 LA AA OMEGA3 ALA EPA DHA CHOLE} {
-  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -style "nutbutton.TButton"] -row $row -column $bcol -columnspan 3 -sticky we
-  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}dv -justify right -width 8] -row $row -column $valcol -columnspan 2 -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}dv -style ${x}.TLabel] -row $row -column $valcol -columnspan 2 -sticky e}
-  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} -text "%" -style ${x}.TLabel] -row $row -column $ucol -sticky w
+  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -style "nutbutton.TButton"] \
+  -row $row \
+  -column $bcol \
+  -columnspan 3 \
+  -sticky we
+  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}dv \
+  -justify right \
+  -width 8] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}dv \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e}
+  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -text "%" \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $ucol \
+  -sticky w
   incr row
   }
  set row 0
@@ -492,16 +1786,66 @@ foreach x {am rm vf ar} {
  set valcol 9
  set ucol 11
  foreach nut {CHOCDF FIBTG} {
-  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -style "nutbutton.TButton"] -row $row -column $bcol -columnspan 3 -sticky we
-  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}dv -justify right -width 8] -row $row -column $valcol -columnspan 2 -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}dv -style ${x}.TLabel] -row $row -column $valcol -columnspan 2 -sticky e}
-  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} -text "%" -style ${x}.TLabel] -row $row -column $ucol -sticky w
+  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -style "nutbutton.TButton"] \
+  -row $row \
+  -column $bcol \
+  -columnspan 3 \
+  -sticky we
+  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}dv \
+  -justify right \
+  -width 8] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}dv \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e}
+  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -text "%" \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $ucol \
+  -sticky w
   incr row
   }
  set row 3
  foreach nut {VITA_RAE THIA RIBF NIA PANTAC VITB6A FOL VITB12 CHOLN VITC VITD_BOTH VITE VITK1} {
-  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -style "nutbutton.TButton"] -row $row -column $bcol -columnspan 3 -sticky we
-  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}dv -justify right -width 8] -row $row -column $valcol -columnspan 2 -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}dv -style ${x}.TLabel] -row $row -column $valcol -columnspan 2 -sticky e}
-  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} -text "%" -style ${x}.TLabel] -row $row -column $ucol -sticky w
+  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -style "nutbutton.TButton"] \
+  -row $row \
+  -column $bcol \
+  -columnspan 3 \
+  -sticky we
+  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}dv \
+  -justify right \
+  -width 8] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}dv \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e}
+  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -text "%" \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $ucol \
+  -sticky w
   incr row
   }
  set row 0
@@ -509,63 +1853,233 @@ foreach x {am rm vf ar} {
  set valcol 15
  set ucol 17
  foreach nut {PROCNT} {
-  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -style "nutbutton.TButton"] -row $row -column $bcol -columnspan 3 -sticky we
-  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}dv -justify right -width 8] -row $row -column $valcol -columnspan 2 -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}dv -style ${x}.TLabel] -row $row -column $valcol -columnspan 2 -sticky e}
-  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} -text "%" -style ${x}.TLabel] -row $row -column $ucol -sticky w
+  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -style "nutbutton.TButton"] \
+  -row $row \
+  -column $bcol \
+  -columnspan 3 \
+  -sticky we
+  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}dv \
+  -justify right \
+  -width 8] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}dv \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e}
+  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -text "%" \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $ucol \
+  -sticky w
   incr row
   }
  foreach nut {CHO_NONFIB} {
-  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -style "nutbutton.TButton"] -row $row -column $bcol -columnspan 3 -sticky we
-   if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}1 -justify right -width 8] -row $row -column $valcol -columnspan 2 -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}1 -style ${x}.TLabel] -row $row -column $valcol -columnspan 2 -sticky e}
-   grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -style ${x}.TLabel] -row $row -column $ucol -sticky w
+  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -style "nutbutton.TButton"] \
+  -row $row \
+  -column $bcol \
+  -columnspan 3 \
+  -sticky we
+   if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}1 \
+  -justify right \
+  -width 8] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}1 \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e}
+   grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $ucol \
+  -sticky w
 
 #uncomment these two lines and comment out the previous two if user insists he
 #must see CHO_NONFIB percentage of DV instead of grams
 
-#   if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}1 -justify right -width 8] -row $row -column $valcol -columnspan 2 -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}dv -style ${x}.TLabel] -row $row -column $valcol -columnspan 2 -sticky e}
-#   grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} -text "%" -style ${x}.TLabel] -row $row -column $ucol -sticky w
+#   if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}1 \
+  -justify right \
+  -width 8] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}dv \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e}
+#   grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -text "%" \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $ucol \
+  -sticky w
   incr row
   }
  set row 4
  foreach nut {CA CU FE MG MN P K SE NA ZN} {
-  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -style "nutbutton.TButton"] -row $row -column $bcol -columnspan 3 -sticky we
-  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}dv -justify right -width 8] -row $row -column $valcol -columnspan 2 -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}dv -style ${x}.TLabel] -row $row -column $valcol -columnspan 2 -sticky e}
-  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} -text "%" -style ${x}.TLabel] -row $row -column $ucol -sticky w
+  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -style "nutbutton.TButton"] \
+  -row $row \
+  -column $bcol \
+  -columnspan 3 \
+  -sticky we
+  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}dv \
+  -justify right \
+  -width 8] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}dv \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e}
+  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -text "%" \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $ucol \
+  -sticky w
   incr row
   }
  set row 15
  foreach nut {FAPU1} {
-  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} -text "Omega-6/3 Bal." -command "NewStory FAPU $x" -style "nutbutton.TButton"] -row $row -column $bcol -columnspan 3 -sticky we
-  grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -style ${x}.TLabel] -row $row -column $valcol -columnspan 3
+  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -text "Omega-6/3 Bal." \
+  -command "NewStory FAPU $x" \
+  -style "nutbutton.TButton"] \
+  -row $row \
+  -column $bcol \
+  -columnspan 3 \
+  -sticky we
+  grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $valcol \
+  -columnspan 3
   incr row
   }
  for {set i 0} {$i < 18} {incr i} {
-  grid columnconfigure .nut.${x}.nbw.screen${screen} $i -uniform 1 -minsize $::column18
+  grid columnconfigure .nut.${x}.nbw.screen${screen} $i \
+  -uniform 1 \
+  -minsize $::column18
   }
  for {set i 0} {$i < 15} {incr i} {
-  grid rowconfigure .nut.${x}.nbw.screen${screen} $i -uniform 1
+  grid rowconfigure .nut.${x}.nbw.screen${screen} $i \
+  -uniform 1
   }
- set screen 1                                         
+ set screen 1
  set row 0
  set bcol 0
  set valcol 3
  set ucol 5
  foreach nut {ENERC_KCAL} {
-  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -style "nutbutton.TButton"] -row $row -column $bcol -columnspan 3 -sticky we
-  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right -width 8] -row $row -column $valcol -columnspan 2 -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -style ${x}.TLabel] -row $row -column $valcol -columnspan 2 -sticky e}
-  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -style ${x}.TLabel] -row $row -column $ucol -sticky w
+  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -style "nutbutton.TButton"] \
+  -row $row \
+  -column $bcol \
+  -columnspan 3 \
+  -sticky we
+  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right \
+  -width 8] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e}
+  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $ucol \
+  -sticky w
   incr row
   }
  foreach nut {ENERC_KCAL1} {
-  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} -text "Prot / Carb / Fat" -command "NewStory ENERC_KCAL $x" -style "nutbutton.TButton"] -row $row -column $bcol -columnspan 3 -sticky we
-  grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -style ${x}.TLabel] -row $row -column $valcol -columnspan 3
+  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -text "Prot / Carb / Fat" \
+  -command "NewStory ENERC_KCAL $x" \
+  -style "nutbutton.TButton"] \
+  -row $row \
+  -column $bcol \
+  -columnspan 3 \
+  -sticky we
+  grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $valcol \
+  -columnspan 3
   incr row
   }
  set row 4
  foreach nut {FAT FASAT FAMS FAPU OMEGA6 LA AA OMEGA3 ALA EPA DHA CHOLE} {
-  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -style "nutbutton.TButton"] -row $row -column $bcol -columnspan 3 -sticky we
-  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right -width 8] -row $row -column $valcol -columnspan 2 -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -style ${x}.TLabel] -row $row -column $valcol -columnspan 2 -sticky e}
-  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -style ${x}.TLabel] -row $row -column $ucol -sticky w
+  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -style "nutbutton.TButton"] \
+  -row $row \
+  -column $bcol \
+  -columnspan 3 \
+  -sticky we
+  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right \
+  -width 8] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e}
+  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $ucol \
+  -sticky w
   incr row
   }
  set row 0
@@ -573,16 +2087,66 @@ foreach x {am rm vf ar} {
  set valcol 9
  set ucol 11
  foreach nut {CHOCDF FIBTG} {
-  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -style "nutbutton.TButton"] -row $row -column $bcol -columnspan 3 -sticky we
-  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right -width 8] -row $row -column $valcol -columnspan 2 -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -style ${x}.TLabel] -row $row -column $valcol -columnspan 2 -sticky e}
-  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -style ${x}.TLabel] -row $row -column $ucol -sticky w
+  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -style "nutbutton.TButton"] \
+  -row $row \
+  -column $bcol \
+  -columnspan 3 \
+  -sticky we
+  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right \
+  -width 8] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e}
+  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $ucol \
+  -sticky w
   incr row
   }
  set row 3
  foreach nut {VITA_RAE THIA RIBF NIA PANTAC VITB6A FOL VITB12 CHOLN VITC VITD_BOTH VITE VITK1} {
-  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -style "nutbutton.TButton"] -row $row -column $bcol -columnspan 3 -sticky we
-  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right -width 8] -row $row -column $valcol -columnspan 2 -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -style ${x}.TLabel] -row $row -column $valcol -columnspan 2 -sticky e}
-  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -style ${x}.TLabel] -row $row -column $ucol -sticky w
+  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -style "nutbutton.TButton"] \
+  -row $row \
+  -column $bcol \
+  -columnspan 3 \
+  -sticky we
+  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right \
+  -width 8] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e}
+  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $ucol \
+  -sticky w
   incr row
   }
  set row 0
@@ -590,39 +2154,129 @@ foreach x {am rm vf ar} {
  set valcol 15
  set ucol 17
  foreach nut {PROCNT CHO_NONFIB} {
-  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -style "nutbutton.TButton"] -row $row -column $bcol -columnspan 3 -sticky we
-  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right -width 8] -row $row -column $valcol -columnspan 2 -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -style ${x}.TLabel] -row $row -column $valcol -columnspan 2 -sticky e}
-  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -style ${x}.TLabel] -row $row -column $ucol -sticky w
+  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -style "nutbutton.TButton"] \
+  -row $row \
+  -column $bcol \
+  -columnspan 3 \
+  -sticky we
+  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right \
+  -width 8] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e}
+  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $ucol \
+  -sticky w
   incr row
   }
  set row 4
  foreach nut {CA CU FE MG MN P K SE NA ZN} {
-  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -style "nutbutton.TButton"] -row $row -column $bcol -columnspan 3 -sticky we
-  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right -width 8] -row $row -column $valcol -columnspan 2 -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -style ${x}.TLabel] -row $row -column $valcol -columnspan 2 -sticky e}
-  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -style ${x}.TLabel] -row $row -column $ucol -sticky w
+  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -style "nutbutton.TButton"] \
+  -row $row \
+  -column $bcol \
+  -columnspan 3 \
+  -sticky we
+  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right \
+  -width 8] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e}
+  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $ucol \
+  -sticky w
   incr row
   }
  set row 15
  foreach nut {FAPU1} {
-  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} -text "Omega-6/3 Bal." -command "NewStory FAPU $x" -style "nutbutton.TButton"] -row $row -column $bcol -columnspan 3 -sticky we
-  grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -style ${x}.TLabel] -row $row -column $valcol -columnspan 3
+  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -text "Omega-6/3 Bal." \
+  -command "NewStory FAPU $x" \
+  -style "nutbutton.TButton"] \
+  -row $row \
+  -column $bcol \
+  -columnspan 3 \
+  -sticky we
+  grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $valcol \
+  -columnspan 3
   incr row
   }
  for {set i 0} {$i < 18} {incr i} {
-  grid columnconfigure .nut.${x}.nbw.screen${screen} $i -uniform 1 -minsize $::column18
+  grid columnconfigure .nut.${x}.nbw.screen${screen} $i \
+  -uniform 1 \
+  -minsize $::column18
   }
  for {set i 0} {$i < 15} {incr i} {
-  grid rowconfigure .nut.${x}.nbw.screen${screen} $i -uniform 1
+  grid rowconfigure .nut.${x}.nbw.screen${screen} $i \
+  -uniform 1
   }
- set screen 2                                         
+ set screen 2
  set row 2
  set bcol 0
  set valcol 3
  set ucol 5
  foreach nut {CHOCDF FIBTG STARCH SUGAR FRUS GALS GLUS LACS MALS SUCS} {
-  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -style "nutbutton.TButton"] -row $row -column $bcol -columnspan 3 -sticky we
-  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right -width 8] -row $row -column $valcol -columnspan 2 -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -style ${x}.TLabel] -row $row -column $valcol -columnspan 2 -sticky e}
-  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -style ${x}.TLabel] -row $row -column $ucol -sticky w
+  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -style "nutbutton.TButton"] \
+  -row $row \
+  -column $bcol \
+  -columnspan 3 \
+  -sticky we
+  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right \
+  -width 8] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e}
+  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $ucol \
+  -sticky w
   incr row
   }
  set row 2
@@ -630,9 +2284,34 @@ foreach x {am rm vf ar} {
  set valcol 9
  set ucol 11
  foreach nut {PROCNT ADPROT ALA_G ARG_G ASP_G CYS_G GLU_G GLY_G HISTN_G HYP ILE_G} {
-  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -style "nutbutton.TButton"] -row $row -column $bcol -columnspan 3 -sticky we
-  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right -width 8] -row $row -column $valcol -columnspan 2 -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -style ${x}.TLabel] -row $row -column $valcol -columnspan 2 -sticky e}
-  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -style ${x}.TLabel] -row $row -column $ucol -sticky w
+  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -style "nutbutton.TButton"] \
+  -row $row \
+  -column $bcol \
+  -columnspan 3 \
+  -sticky we
+  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right \
+  -width 8] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e}
+  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $ucol \
+  -sticky w
   incr row
   }
  set row 2
@@ -640,26 +2319,79 @@ foreach x {am rm vf ar} {
  set valcol 15
  set ucol 17
  foreach nut {LEU_G LYS_G MET_G PHE_G PRO_G SER_G THR_G TRP_G TYR_G VAL_G} {
-  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -style "nutbutton.TButton"] -row $row -column $bcol -columnspan 3 -sticky we
-  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right -width 8] -row $row -column $valcol -columnspan 2 -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -style ${x}.TLabel] -row $row -column $valcol -columnspan 2 -sticky e}
-  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -style ${x}.TLabel] -row $row -column $ucol -sticky w
+  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -style "nutbutton.TButton"] \
+  -row $row \
+  -column $bcol \
+  -columnspan 3 \
+  -sticky we
+  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right \
+  -width 8] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e}
+  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $ucol \
+  -sticky w
   incr row
   }
  for {set i 0} {$i < 18} {incr i} {
-  grid columnconfigure .nut.${x}.nbw.screen${screen} $i -uniform 1 -minsize $::column18
+  grid columnconfigure .nut.${x}.nbw.screen${screen} $i \
+  -uniform 1 \
+  -minsize $::column18
   }
  for {set i 0} {$i < 15} {incr i} {
-  grid rowconfigure .nut.${x}.nbw.screen${screen} $i -uniform 1
+  grid rowconfigure .nut.${x}.nbw.screen${screen} $i \
+  -uniform 1
   }
- set screen 3                                         
+ set screen 3
  set row 1
  set bcol 0
  set valcol 3
  set ucol 5
  foreach nut {ENERC_KJ ASH WATER CAFFN THEBRN ALC FLD BETN CHOLN FOLAC FOLFD FOLDFE RETOL} {
-  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -style "nutbutton.TButton"] -row $row -column $bcol -columnspan 3 -sticky we
-  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right -width 8] -row $row -column $valcol -columnspan 2 -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -style ${x}.TLabel] -row $row -column $valcol -columnspan 2 -sticky e}
-  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -style ${x}.TLabel] -row $row -column $ucol -sticky w
+  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -style "nutbutton.TButton"] \
+  -row $row \
+  -column $bcol \
+  -columnspan 3 \
+  -sticky we
+  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right \
+  -width 8] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e}
+  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $ucol \
+  -sticky w
   incr row
   }
  set row 1
@@ -667,9 +2399,34 @@ foreach x {am rm vf ar} {
  set valcol 9
  set ucol 11
  foreach nut {VITA_IU ERGCAL CHOCAL VITD VITB12_ADDED VITE_ADDED VITK1D MK4 TOCPHA TOCPHB TOCPHG TOCPHD TOCTRA} {
-  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -style "nutbutton.TButton"] -row $row -column $bcol -columnspan 3 -sticky we
-  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right -width 8] -row $row -column $valcol -columnspan 2 -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -style ${x}.TLabel] -row $row -column $valcol -columnspan 2 -sticky e}
-  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -style ${x}.TLabel] -row $row -column $ucol -sticky w
+  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -style "nutbutton.TButton"] \
+  -row $row \
+  -column $bcol \
+  -columnspan 3 \
+  -sticky we
+  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right \
+  -width 8] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e}
+  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $ucol \
+  -sticky w
   incr row
   }
  set row 1
@@ -677,26 +2434,79 @@ foreach x {am rm vf ar} {
  set valcol 15
  set ucol 17
  foreach nut {TOCTRB TOCTRG TOCTRD CARTA CARTB CRYPX LUT_ZEA LYCPN CHOLE PHYSTR SITSTR CAMD5 STID7} {
-  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -style "nutbutton.TButton"] -row $row -column $bcol -columnspan 3 -sticky we
-  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right -width 8] -row $row -column $valcol -columnspan 2 -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -style ${x}.TLabel] -row $row -column $valcol -columnspan 2 -sticky e}
-  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -style ${x}.TLabel] -row $row -column $ucol -sticky w
+  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -style "nutbutton.TButton"] \
+  -row $row \
+  -column $bcol \
+  -columnspan 3 \
+  -sticky we
+  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right \
+  -width 8] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e}
+  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $ucol \
+  -sticky w
   incr row
   }
  for {set i 0} {$i < 18} {incr i} {
-  grid columnconfigure .nut.${x}.nbw.screen${screen} $i -uniform 1 -minsize $::column18
+  grid columnconfigure .nut.${x}.nbw.screen${screen} $i \
+  -uniform 1 \
+  -minsize $::column18
   }
  for {set i 0} {$i < 15} {incr i} {
-  grid rowconfigure .nut.${x}.nbw.screen${screen} $i -uniform 1
+  grid rowconfigure .nut.${x}.nbw.screen${screen} $i \
+  -uniform 1
   }
- set screen 4                                         
+ set screen 4
  set row 0
  set bcol 3
  set valcol 6
  set ucol 8
  foreach nut {FASAT F4D0 F6D0 F8D0 F10D0 F12D0 F13D0 F14D0 F15D0 F16D0 F17D0 F18D0 F20D0 F22D0 F24D0} {
-  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -style "nutbutton.TButton"] -row $row -column $bcol -columnspan 3 -sticky we
-  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right -width 8] -row $row -column $valcol -columnspan 2 -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -style ${x}.TLabel] -row $row -column $valcol -columnspan 2 -sticky e}
-  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -style ${x}.TLabel] -row $row -column $ucol -sticky w
+  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -style "nutbutton.TButton"] \
+  -row $row \
+  -column $bcol \
+  -columnspan 3 \
+  -sticky we
+  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right \
+  -width 8] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e}
+  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $ucol \
+  -sticky w
   incr row
   }
  set row 1
@@ -704,26 +2514,79 @@ foreach x {am rm vf ar} {
  set valcol 12
  set ucol 14
  foreach nut {FAMS F14D1 F15D1 F16D1 F16D1C F17D1 F18D1 F18D1C F20D1 F22D1 F22D1C F24D1C} {
-  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -style "nutbutton.TButton"] -row $row -column $bcol -columnspan 3 -sticky we
-  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right -width 8] -row $row -column $valcol -columnspan 2 -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -style ${x}.TLabel] -row $row -column $valcol -columnspan 2 -sticky e}
-  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -style ${x}.TLabel] -row $row -column $ucol -sticky w
+  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -style "nutbutton.TButton"] \
+  -row $row \
+  -column $bcol \
+  -columnspan 3 \
+  -sticky we
+  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right \
+  -width 8] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e}
+  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $ucol \
+  -sticky w
   incr row
   }
  for {set i 0} {$i < 18} {incr i} {
-  grid columnconfigure .nut.${x}.nbw.screen${screen} $i -uniform 1 -minsize $::column18
+  grid columnconfigure .nut.${x}.nbw.screen${screen} $i \
+  -uniform 1 \
+  -minsize $::column18
   }
  for {set i 0} {$i < 15} {incr i} {
-  grid rowconfigure .nut.${x}.nbw.screen${screen} $i -uniform 1
+  grid rowconfigure .nut.${x}.nbw.screen${screen} $i \
+  -uniform 1
   }
- set screen 5                                         
+ set screen 5
  set row 3
  set bcol 0
  set valcol 3
  set ucol 5
  foreach nut {FAPU F18D2 F18D2CN6 F18D3 F18D3CN3 F18D3CN6 F18D4 F20D2CN6} {
-  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -style "nutbutton.TButton"] -row $row -column $bcol -columnspan 3 -sticky we
-  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right -width 8] -row $row -column $valcol -columnspan 2 -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -style ${x}.TLabel] -row $row -column $valcol -columnspan 2 -sticky e}
-  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -style ${x}.TLabel] -row $row -column $ucol -sticky w
+  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -style "nutbutton.TButton"] \
+  -row $row \
+  -column $bcol \
+  -columnspan 3 \
+  -sticky we
+  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right \
+  -width 8] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e}
+  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $ucol \
+  -sticky w
   incr row
   }
  set row 2
@@ -731,9 +2594,34 @@ foreach x {am rm vf ar} {
  set valcol 9
  set ucol 11
  foreach nut {F20D3 F20D3N3 F20D3N6 F20D4 F20D4N6 F20D5 F21D5 F22D4 F22D5 F22D6} {
-  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -style "nutbutton.TButton"] -row $row -column $bcol -columnspan 3 -sticky we
-  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right -width 8] -row $row -column $valcol -columnspan 2 -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -style ${x}.TLabel] -row $row -column $valcol -columnspan 2 -sticky e}
-  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -style ${x}.TLabel] -row $row -column $ucol -sticky w
+  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -style "nutbutton.TButton"] \
+  -row $row \
+  -column $bcol \
+  -columnspan 3 \
+  -sticky we
+  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right \
+  -width 8] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e}
+  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $ucol \
+  -sticky w
   incr row
   }
  set row 1
@@ -741,16 +2629,44 @@ foreach x {am rm vf ar} {
  set valcol 15
  set ucol 17
  foreach nut {FATRN FATRNM F16D1T F18D1T F18D1TN7 F22D1T FATRNP F18D2I F18D2T F18D2TT F18D2CLA F18D3I} {
-  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -style "nutbutton.TButton"] -row $row -column $bcol -columnspan 3 -sticky we
-  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right -width 8] -row $row -column $valcol -columnspan 2 -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -style ${x}.TLabel] -row $row -column $valcol -columnspan 2 -sticky e}
-  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -style ${x}.TLabel] -row $row -column $ucol -sticky w
+  grid [ttk::button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -style "nutbutton.TButton"] \
+  -row $row \
+  -column $bcol \
+  -columnspan 3 \
+  -sticky we
+  if {$x == "ar"} {grid [ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right \
+  -width 8] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e} else {grid [ttk::label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $valcol \
+  -columnspan 2 \
+  -sticky e}
+  grid [ttk::label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -style ${x}.TLabel] \
+  -row $row \
+  -column $ucol \
+  -sticky w
   incr row
   }
  for {set i 0} {$i < 18} {incr i} {
-  grid columnconfigure .nut.${x}.nbw.screen${screen} $i -uniform 1 -minsize $::column18
+  grid columnconfigure .nut.${x}.nbw.screen${screen} $i \
+  -uniform 1 \
+  -minsize $::column18
   }
  for {set i 0} {$i < 15} {incr i} {
-  grid rowconfigure .nut.${x}.nbw.screen${screen} $i -uniform 1
+  grid rowconfigure .nut.${x}.nbw.screen${screen} $i \
+  -uniform 1
   }
  }
 bind .nut.am.nbw <<NotebookTabChanged>> NBWamTabChange
@@ -763,25 +2679,84 @@ if {[file exists "NUTR_DEF.txt"]} {
  toplevel .loadframe
  wm title .loadframe $::version
  wm withdraw .
- 
- grid [ttk::label .loadframe.mainlabel -text "Updating USDA Nutrient Database"] -column 0 -row 0 -columnspan 2 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 5}]
- 
+ grid [ttk::label .loadframe.mainlabel \
+  -text "Updating USDA Nutrient Database"] \
+  -column 0 \
+  -row 0 \
+  -columnspan 2 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 5}]
  set ::pbprog1counter 0
 
  for {set i 1} {$i < 9} {incr i} {
   set pbar($i) 0.0
-  grid [ttk::progressbar .loadframe.pbar${i} -style lf.Horizontal.TProgressbar -variable pbar($i) -orient horizontal -length [expr {$::magnify * 100}] -mode determinate] -column 0 -row $i -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 5}]
+  grid [ttk::progressbar .loadframe.pbar${i} \
+  -style lf.Horizontal.TProgressbar \
+  -variable pbar($i) \
+  -orient horizontal \
+  -length [expr {$::magnify * 100}] \
+  -mode determinate] \
+  -column 0 \
+  -row $i \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 5}]
   }
- 
- grid [ttk::label .loadframe.label1 -text "Load Nutrient Definitions"] -column 1 -row 1 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 5}] -sticky w
- grid [ttk::label .loadframe.label2 -text "Load Food Groups"] -column 1 -row 2 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 5}] -sticky w
- grid [ttk::label .loadframe.label3 -text "Load Foods"] -column 1 -row 3 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 5}] -sticky w
- grid [ttk::label .loadframe.label4 -text "Load Serving Sizes"] -column 1 -row 4 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 5}] -sticky w
- grid [ttk::label .loadframe.label5 -text "Load Nutrient Values"] -column 1 -row 5 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 5}] -sticky w
- grid [ttk::label .loadframe.label6 -text "Compute Derived Nutrient Values"] -column 1 -row 6 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 5}] -sticky w
- grid [ttk::label .loadframe.label7 -text "Load NUT Logic"] -column 1 -row 7 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 5}] -sticky w
- grid [ttk::label .loadframe.label8 -text "Load Legacy Database if it exists"] -column 1 -row 8 -padx [expr {$::magnify * 5}] -pady [expr {$::magnify * 5}] -sticky w
- 
+ grid [ttk::label .loadframe.label1 \
+  -text "Load Nutrient Definitions"] \
+  -column 1 \
+  -row 1 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 5}] \
+  -sticky w
+ grid [ttk::label .loadframe.label2 \
+  -text "Load Food Groups"] \
+  -column 1 \
+  -row 2 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 5}] \
+  -sticky w
+ grid [ttk::label .loadframe.label3 \
+  -text "Load Foods"] \
+  -column 1 \
+  -row 3 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 5}] \
+  -sticky w
+ grid [ttk::label .loadframe.label4 \
+  -text "Load Serving Sizes"] \
+  -column 1 \
+  -row 4 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 5}] \
+  -sticky w
+ grid [ttk::label .loadframe.label5 \
+  -text "Load Nutrient Values"] \
+  -column 1 \
+  -row 5 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 5}] \
+  -sticky w
+ grid [ttk::label .loadframe.label6 \
+  -text "Compute Derived Nutrient Values"] \
+  -column 1 \
+  -row 6 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 5}] \
+  -sticky w
+ grid [ttk::label .loadframe.label7 \
+  -text "Load NUT Logic"] \
+  -column 1 \
+  -row 7 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 5}] \
+  -sticky w
+ grid [ttk::label .loadframe.label8 \
+  -text "Load Legacy Database if it exists"] \
+  -column 1 \
+  -row 8 \
+  -padx [expr {$::magnify * 5}] \
+  -pady [expr {$::magnify * 5}] \
+  -sticky w
 db eval {select code from z_tcl_code where name = 'ComputeDerivedValues'} { }
 eval $code
 db eval {select code from z_tcl_code where name = 'InitialLoad'} { }
@@ -790,7 +2765,11 @@ eval $code
  set tablename [db eval {select name from sqlite_master where type='table' and name = "nutr_def"}]
  if { $tablename == "" } {
   set ::meals_to_analyze_am 0
-  tk_messageBox -type ok -title $::version -message "NUT requires the USDA Nutrient Database to be present initially in order to be loaded into SQLite.  Download it in the full ascii version from \"https://data.nal.usda.gov/dataset/composition-foods-raw-processed-prepared-usda-national-nutrient-database-standard-referen-11\" or from \"http://nut.sourceforge.net\" and unzip it in this directory, [pwd]." -detail "Follow this same procedure later when you want to upgrade the USDA database yet retain your personal data.  After USDA files have been loaded into NUT they can be deleted.\n\nIf you really do want to reload a USDA database that you have already loaded, rename the file \"NUTR_DEF.txt.loaded\" to \"NUTR_DEF.txt\"."
+  tk_messageBox \
+  -type ok \
+  -title $::version \
+  -message "NUT requires the USDA Nutrient Database to be present initially in order to be loaded into SQLite.  Download it in the full ascii version from \"https://data.nal.usda.gov/dataset/composition-foods-raw-processed-prepared-usda-national-nutrient-database-standard-referen-11\" or from \"http://nut.sourceforge.net\" and unzip it in this directory, [pwd]." \
+  -detail "Follow this same procedure later when you want to upgrade the USDA database yet retain your personal data.  After USDA files have been loaded into NUT they can be deleted.\n\nIf you really do want to reload a USDA database that you have already loaded, rename the file \"NUTR_DEF.txt.loaded\" to \"NUTR_DEF.txt\"."
   rename unknown ""
   rename _original_unknown unknown
   destroy .
@@ -828,96 +2807,17 @@ if {[winfo vrootheight .] * $gr > [winfo vrootwidth .]} {
  }
 set ::magnify [expr {$appSize / 1.3 * $vroothGR / 500.0}]
 foreach font [font names] {
- font configure $font -size [expr {int($::magnify * [font configure $font -size])}]
+ font configure $font \
+  -size [expr {int($::magnify * [font configure $font \
+  -size])}]
  }
 option add *Dialog.msg.wrapLength [expr {400 * $::magnify}]
 option add *Dialog.dtl.wrapLength [expr {400 * $::magnify}]
 
-wm geometry . [expr {int($appSize / 1.3 * $vrootwGR)}]x[expr {int($appSize / 1.3 * $vroothGR)}]
-wm title . $::version
-catch {set im [image create photo -file nuticon.gif]}
-catch {wm iconphoto . -default $im}
-bind . <Destroy> { 
- thread::send -async $::SQL_THREAD {db close}
- db close
- thread::release $::SQL_THREAD
- exit 0
- }
-
-ttk::style theme use default
-ttk::style configure lf.Horizontal.TProgressbar -background "#006400"
-if {$::magnify > 0.0} {ttk::style configure nut.Treeview -font TkFixedFont -background "#00FF00" -rowheight [expr {int(round($::magnify * 15.0))}]} else {ttk::style configure nut.Treeview -font TkFixedFont -background "#00FF00"}
-ttk::style configure am.TFrame -background "#00FFFF"
-ttk::style configure am.TLabel -background "#00FFFF"
-ttk::style configure am.TNotebook -background "#00FFFF"
-ttk::style configure am.TSpinbox -background "#00FFFF"
-ttk::style configure ar.TButton -background "#BFD780"
-ttk::style configure ar.TFrame -background "#7FBF00"
-ttk::style configure ar.TLabel -background "#7FBF00"
-ttk::style configure ar.TNotebook -background "#7FBF00"
-ttk::style configure ar.TRadiobutton -background "#7FBF00"
-ttk::style configure lf.Horizontal.TProgressbar -background "#006400"
-ttk::style configure lightmeal.TButton -background "#FF9428"
-ttk::style configure meal.Horizontal.TProgressbar -background "#00FF00"
-ttk::style configure meal.TButton -background "#FF7F00"
-ttk::style configure meal.TMenubutton -background "#FF9428"
-ttk::style configure meal.TRadiobutton -background "#FF7F00"
-ttk::style configure nut.TCombobox -background "#FF7F00"
-ttk::style configure nutbutton.TButton -background "#FFFF00"
-ttk::style configure po.TButton -background "#5454FF" -foreground "#FFFF00"
-ttk::style configure po.TCheckbutton -background "#5454FF" -foreground "#FFFF00"
-ttk::style configure po.TFrame -background "#5454FF"
-ttk::style configure po.TLabel -background "#5454FF" -foreground "#FFFF00"
-ttk::style configure po.TMenubutton -background "#5454FF" -foreground "#FFFF00"
-ttk::style configure po.red.TButton -background "#5454FF" -foreground "#FF0000"
-ttk::style configure recipe.TButton -background "#7FBF00"
-ttk::style configure rm.TCombobox -background "#FF7F00"
-ttk::style configure rm.TFrame -background "#FF7F00"
-ttk::style configure rm.TLabel -background "#FF7F00"
-ttk::style configure rmright.TLabel -background "#FF7F00" -anchor e
-ttk::style configure rm.TNotebook -background "#FF7F00"
-ttk::style configure rm.TSpinbox -background "#FF7F00"
-ttk::style configure ts.TCheckbutton -background "#00FF00" -foreground "#000000"
-ttk::style configure ts.TCombobox -background "#00FF00"
-ttk::style configure ts.TFrame -background "#FFFF00"
-ttk::style configure ts.TLabel -background "#FFFF00"
-ttk::style configure vf.TButton -background "#00FF00"
-ttk::style configure vf.TCombobox -background "#00FF00"
-ttk::style configure vf.TFrame -background "#00FF00"
-ttk::style configure vf.TLabel -background "#00FF00"
-ttk::style configure vfleft.TLabel -background "#00FF00" -anchor w
-ttk::style configure vfright.TLabel -background "#00FF00" -anchor e
-ttk::style configure vftop.TLabel -background "#00FF00" -anchor n
-ttk::style configure vf.TNotebook -background "#00FF00"
-ttk::style configure vf.TSpinbox -background "#00FF00"
-ttk::style map ar.TRadiobutton -indicatorcolor { selected "#FF0000" }
-ttk::style map meal.TRadiobutton -indicatorcolor { selected "#FF0000" }
-ttk::style map nut.TCombobox -fieldbackground { readonly "#FFFF00" }
-ttk::style map nut.TCombobox -selectbackground { readonly "#FFFF00" }
-ttk::style map nut.TCombobox -selectforeground { readonly "#000000" }
-ttk::style map po.TButton -foreground { active "#000000" }
-ttk::style map po.TCheckbutton -foreground { active "#000000" }
-ttk::style map po.TCheckbutton -indicatorcolor { selected "#FF0000" }
-ttk::style map po.TCombobox -fieldbackground { readonly "#FFFFFF" }
-ttk::style map po.TMenubutton -foreground { active "#000000" }
-ttk::style map po.red.TButton -foreground { active "#FF0000" }
-ttk::style map rm.TCombobox -fieldbackground { readonly "#FF9428" }
-ttk::style map rm.TCombobox -selectbackground { readonly "#FF9428" }
-ttk::style map rm.TCombobox -selectforeground { readonly "#000000" }
-ttk::style map ts.TCheckbutton -background { active "#00FF00" }
-ttk::style map ts.TCheckbutton -foreground { active "#000000" }
-ttk::style map ts.TCheckbutton -indicatorcolor { selected "#FF0000" }
-ttk::style map ts.TCombobox -fieldbackground { readonly "#00FF00" }
-ttk::style map ts.TCombobox -selectbackground { readonly "#00FF00" }
-ttk::style map ts.TCombobox -selectforeground { readonly "#000000" }
-ttk::style map vf.TCombobox -fieldbackground { readonly "#00FF00" }
 set background(am) "#00FFFF"
 set background(rm) "#FF7F00"
 set background(vf) "#00FF00"
 set background(ar) "#7FBF00"
-
-trace add variable ::FIRSTMEALam write SetMealRange_am
-trace add variable ::LASTMEALam write SetMealRange_am
 
 set ::SetDefanalPreviousValue 0
 set ::LastSetDefanal 0
@@ -942,325 +2842,1421 @@ set Amount2gram 0.0
 set ::PCFchoices {{No Auto Portion Control} {Protein} {Non-Fiber Carb} {Total Fat} {Vitamin A} {Thiamin} {Riboflavin} {Niacin} {Panto. Acid} {Vitamin B6} {Folate} {Vitamin B12} {Choline} {Vitamin C} {Vitamin D} {Vitamin E} {Vitamin K1} {Calcium} {Copper} {Iron} {Magnesium} {Manganese} {Phosphorus} {Potassium} {Selenium} {Sodium} {Zinc} {Glycine} {Retinol} {Fiber}}
 set ::rmMenu .nut.rm.frmenu
 
-ttk::notebook .nut 
-place .nut -relx 0.0 -rely 0.0 -relheight 1.0 -relwidth 1.0
-frame .nut.am -background "#00FFFF"
-frame .nut.rm -background "#FF7F00"
-frame .nut.ar -background "#7FBF00"
-frame .nut.vf -background "#00FF00"
-frame .nut.po -background "#5454FF"
-frame .nut.ts -background "#FFFF00"
-frame .nut.qn 
-.nut add .nut.am -text "Analyze Meals"
-.nut add .nut.rm -text "Record Meals & Recipes"
-.nut add .nut.ar -text "Record Meals & Recipes"
-.nut add .nut.vf -text "View Foods"
-.nut add .nut.po -text "Personal Options"
-.nut add .nut.ts -text "The Story"
-.nut add .nut.qn -text "Quit NUT"
-.nut hide .nut.ar 
+set ::newtheusual ""
+
+set ratio_widget_height_to_spacer 9.6
+set Refusevf "0%"
+set ::ENERC_KCALpo 0
+set ::balvals {}
+set screen 0
+set rely 0.252109375
+
+
+wm geometry . [expr {int($appSize / 1.3 * $vrootwGR)}]x[expr {int($appSize / 1.3 * $vroothGR)}]
+wm title . $::version
+catch {set im [image create photo \
+  -file nuticon.gif]}
+catch {wm iconphoto . \
+  -default $im}
+bind . <Destroy> { thread::send \
+  -async $::SQL_THREAD {db close}
+ db close
+ thread::release $::SQL_THREAD
+ exit 0
+ }
+
+ttk::style theme use default
+ttk::style configure lf.Horizontal.TProgressbar \
+  -background "#006400"
+if {$::magnify > 0.0} {ttk::style configure nut.Treeview \
+  -font TkFixedFont \
+  -background "#00FF00" \
+  -rowheight [expr {int(round($::magnify * 15.0))}]} else {ttk::style configure nut.Treeview \
+  -font TkFixedFont \
+  -background "#00FF00"}
+ttk::style configure am.TFrame \
+  -background "#00FFFF"
+ttk::style configure am.TLabel \
+  -background "#00FFFF"
+ttk::style configure am.TNotebook \
+  -background "#00FFFF"
+ttk::style configure am.TSpinbox \
+  -background "#00FFFF"
+ttk::style configure ar.TButton \
+  -background "#BFD780"
+ttk::style configure ar.TFrame \
+  -background "#7FBF00"
+ttk::style configure ar.TLabel \
+  -background "#7FBF00"
+ttk::style configure ar.TNotebook \
+  -background "#7FBF00"
+ttk::style configure ar.TRadiobutton \
+  -background "#7FBF00"
+ttk::style configure lf.Horizontal.TProgressbar \
+  -background "#006400"
+ttk::style configure lightmeal.TButton \
+  -background "#FF9428"
+ttk::style configure meal.Horizontal.TProgressbar \
+  -background "#00FF00"
+ttk::style configure meal.TButton \
+  -background "#FF7F00"
+ttk::style configure meal.TMenubutton \
+  -background "#FF9428"
+ttk::style configure meal.TRadiobutton \
+  -background "#FF7F00"
+ttk::style configure nut.TCombobox \
+  -background "#FF7F00"
+ttk::style configure nutbutton.TButton \
+  -background "#FFFF00"
+ttk::style configure po.TButton \
+  -background "#5454FF" \
+  -foreground "#FFFF00"
+ttk::style configure po.TCheckbutton \
+  -background "#5454FF" \
+  -foreground "#FFFF00"
+ttk::style configure po.TFrame \
+  -background "#5454FF"
+ttk::style configure po.TLabel \
+  -background "#5454FF" \
+  -foreground "#FFFF00"
+ttk::style configure po.TMenubutton \
+  -background "#5454FF" \
+  -foreground "#FFFF00"
+ttk::style configure po.red.TButton \
+  -background "#5454FF" \
+  -foreground "#FF0000"
+ttk::style configure recipe.TButton \
+  -background "#7FBF00"
+ttk::style configure rm.TCombobox \
+  -background "#FF7F00"
+ttk::style configure rm.TFrame \
+  -background "#FF7F00"
+ttk::style configure rm.TLabel \
+  -background "#FF7F00"
+ttk::style configure rmright.TLabel \
+  -background "#FF7F00" \
+  -anchor e
+ttk::style configure rm.TNotebook \
+  -background "#FF7F00"
+ttk::style configure rm.TSpinbox \
+  -background "#FF7F00"
+ttk::style configure ts.TCheckbutton \
+  -background "#00FF00" \
+  -foreground "#000000"
+ttk::style configure ts.TCombobox \
+  -background "#00FF00"
+ttk::style configure ts.TFrame \
+  -background "#FFFF00"
+ttk::style configure ts.TLabel \
+  -background "#FFFF00"
+ttk::style configure vf.TButton \
+  -background "#00FF00"
+ttk::style configure vf.TCombobox \
+  -background "#00FF00"
+ttk::style configure vf.TFrame \
+  -background "#00FF00"
+ttk::style configure vf.TLabel \
+  -background "#00FF00"
+ttk::style configure vfleft.TLabel \
+  -background "#00FF00" \
+  -anchor w
+ttk::style configure vfright.TLabel \
+  -background "#00FF00" \
+  -anchor e
+ttk::style configure vftop.TLabel \
+  -background "#00FF00" \
+  -anchor n
+ttk::style configure vf.TNotebook \
+  -background "#00FF00"
+ttk::style configure vf.TSpinbox \
+  -background "#00FF00"
+ttk::style map ar.TRadiobutton \
+  -indicatorcolor { selected "#FF0000" }
+ttk::style map meal.TRadiobutton \
+  -indicatorcolor { selected "#FF0000" }
+ttk::style map nut.TCombobox \
+  -fieldbackground { readonly "#FFFF00" }
+ttk::style map nut.TCombobox \
+  -selectbackground { readonly "#FFFF00" }
+ttk::style map nut.TCombobox \
+  -selectforeground { readonly "#000000" }
+ttk::style map po.TButton \
+  -foreground { active "#000000" }
+ttk::style map po.TCheckbutton \
+  -foreground { active "#000000" }
+ttk::style map po.TCheckbutton \
+  -indicatorcolor { selected "#FF0000" }
+ttk::style map po.TCombobox \
+  -fieldbackground { readonly "#FFFFFF" }
+ttk::style map po.TMenubutton \
+  -foreground { active "#000000" }
+ttk::style map po.red.TButton \
+  -foreground { active "#FF0000" }
+ttk::style map rm.TCombobox \
+  -fieldbackground { readonly "#FF9428" }
+ttk::style map rm.TCombobox \
+  -selectbackground { readonly "#FF9428" }
+ttk::style map rm.TCombobox \
+  -selectforeground { readonly "#000000" }
+ttk::style map ts.TCheckbutton \
+  -background { active "#00FF00" }
+ttk::style map ts.TCheckbutton \
+  -foreground { active "#000000" }
+ttk::style map ts.TCheckbutton \
+  -indicatorcolor { selected "#FF0000" }
+ttk::style map ts.TCombobox \
+  -fieldbackground { readonly "#00FF00" }
+ttk::style map ts.TCombobox \
+  -selectbackground { readonly "#00FF00" }
+ttk::style map ts.TCombobox \
+  -selectforeground { readonly "#000000" }
+ttk::style map vf.TCombobox \
+  -fieldbackground { readonly "#00FF00" }
+
+trace add variable ::FIRSTMEALam write SetMealRange_am
+trace add variable ::LASTMEALam write SetMealRange_am
+
+
+ttk::notebook .nut
+place .nut \
+  -relx 0.0 \
+  -rely 0.0 \
+  -relheight 1.0 \
+  -relwidth 1.0
+frame .nut.am \
+  -background "#00FFFF"
+frame .nut.rm \
+  -background "#FF7F00"
+frame .nut.ar \
+  -background "#7FBF00"
+frame .nut.vf \
+  -background "#00FF00"
+frame .nut.po \
+  -background "#5454FF"
+frame .nut.ts \
+  -background "#FFFF00"
+frame .nut.qn
+.nut add .nut.am \
+  -text "Analyze Meals"
+.nut add .nut.rm \
+  -text "Record Meals & Recipes"
+.nut add .nut.ar \
+  -text "Record Meals & Recipes"
+.nut add .nut.vf \
+  -text "View Foods"
+.nut add .nut.po \
+  -text "Personal Options"
+.nut add .nut.ts \
+  -text "The Story"
+.nut add .nut.qn \
+  -text "Quit NUT"
+.nut hide .nut.ar
 .nut hide .nut.ts
 
-pack [ttk::label .nut.qn.label -text "\nNUT has ended."]
+pack [ttk::label .nut.qn.label \
+  -text "\nNUT has ended."]
 bind .nut <<NotebookTabChanged>> NutTabChange
 
-ttk::label .nut.am.herelabel -text "Here are \"Daily Value\" average percentages for your previous " -style am.TLabel -anchor e
-spinbox .nut.am.mealsb -width 5 -justify right -from 1 -to 999999 -increment 1 -textvariable ::meals_to_analyze_am -buttonbackground "#00FFFF"
-ttk::label .nut.am.meallabel -text " meals:" -style am.TLabel
-ttk::label .nut.am.rangelabel -textvariable mealrange -style am.TLabel -anchor center
-place .nut.am.herelabel -relx 0.0 -rely 0.088148146  -relheight 0.044444444 -relwidth 0.64
-place .nut.am.mealsb -relx 0.64 -rely 0.088148146  -relheight 0.044444444 -relwidth 0.12
-place .nut.am.meallabel -relx 0.76 -rely 0.088148146  -relheight 0.044444444 -relwidth 0.12
-place .nut.am.rangelabel -relx 0.0 -rely 0.15  -relheight 0.044444444 -relwidth 1.0
+ttk::label .nut.am.herelabel \
+  -text "Here are \"Daily Value\" average percentages for your previous " \
+  -style am.TLabel \
+  -anchor e
+spinbox .nut.am.mealsb \
+  -width 5 \
+  -justify right \
+  -from 1 \
+  -to 999999 \
+  -increment 1 \
+  -textvariable ::meals_to_analyze_am \
+  -buttonbackground "#00FFFF"
+ttk::label .nut.am.meallabel \
+  -text " meals:" \
+  -style am.TLabel
+ttk::label .nut.am.rangelabel \
+  -textvariable mealrange \
+  -style am.TLabel \
+  -anchor center
+place .nut.am.herelabel \
+  -relx 0.0 \
+  -rely 0.088148146  \
+  -relheight 0.044444444 \
+  -relwidth 0.64
+place .nut.am.mealsb \
+  -relx 0.64 \
+  -rely 0.088148146  \
+  -relheight 0.044444444 \
+  -relwidth 0.12
+place .nut.am.meallabel \
+  -relx 0.76 \
+  -rely 0.088148146  \
+  -relheight 0.044444444 \
+  -relwidth 0.12
+place .nut.am.rangelabel \
+  -relx 0.0 \
+  -rely 0.15  \
+  -relheight 0.044444444 \
+  -relwidth 1.0
 
-scale .nut.rm.scale -background "#FF9428" -width [expr {$::magnify * 11}] -sliderlength [expr {$::magnify * 20}] -showvalue 0 -orient horizontal -variable ::mealoffset -from -100 -to 100 -command mealchange
-place .nut.rm.scale -relx 0.0058 -rely 0.0046296296 -relheight 0.1 -relwidth 0.24
+scale .nut.rm.scale \
+  -background "#FF9428" \
+  -width [expr {$::magnify * 11}] \
+  -sliderlength [expr {$::magnify * 20}] \
+  -showvalue 0 \
+  -orient horizontal \
+  -variable ::mealoffset \
+  -from \
+  -100 \
+  -to 100 \
+  -command mealchange
+place .nut.rm.scale \
+  -relx 0.0058 \
+  -rely 0.0046296296 \
+  -relheight 0.1 \
+  -relwidth 0.24
 
-menubutton .nut.rm.theusual -text "Customary Meals" -direction right -background "#FF9428" -anchor center -relief raised -menu .nut.rm.theusual.m
-place .nut.rm.theusual -relx 0.0058 -rely 0.12 -relheight 0.05 -relwidth 0.2
-menu .nut.rm.theusual.m -background "#FF9428" -tearoff 0 -postcommand theusualPopulateMenu
-.nut.rm.theusual.m add cascade -label "Add Customary Meal to this meal" -menu .nut.rm.theusual.m.add -background "#FF9428"
-.nut.rm.theusual.m add cascade -label "Save this meal as a Customary Meal" -menu .nut.rm.theusual.m.save -background "#FF9428"
-.nut.rm.theusual.m add cascade -label "Delete a Customary Meal" -menu .nut.rm.theusual.m.delete -background "#FF9428"
-menu .nut.rm.theusual.m.add -tearoff 0
-menu .nut.rm.theusual.m.save -tearoff 0
-menu .nut.rm.theusual.m.delete -tearoff 0
+menubutton .nut.rm.theusual \
+  -text "Customary Meals" \
+  -direction right \
+  -background "#FF9428" \
+  -anchor center \
+  -relief raised \
+  -menu .nut.rm.theusual.m
+place .nut.rm.theusual \
+  -relx 0.0058 \
+  -rely 0.12 \
+  -relheight 0.05 \
+  -relwidth 0.2
+menu .nut.rm.theusual.m \
+  -background "#FF9428" \
+  -tearoff 0 \
+  -postcommand theusualPopulateMenu
+.nut.rm.theusual.m add cascade \
+  -label "Add Customary Meal to this meal" \
+  -menu .nut.rm.theusual.m.add \
+  -background "#FF9428"
+.nut.rm.theusual.m add cascade \
+  -label "Save this meal as a Customary Meal" \
+  -menu .nut.rm.theusual.m.save \
+  -background "#FF9428"
+.nut.rm.theusual.m add cascade \
+  -label "Delete a Customary Meal" \
+  -menu .nut.rm.theusual.m.delete \
+  -background "#FF9428"
+menu .nut.rm.theusual.m.add \
+  -tearoff 0
+menu .nut.rm.theusual.m.save \
+  -tearoff 0
+menu .nut.rm.theusual.m.delete \
+  -tearoff 0
 
-button .nut.rm.recipebutton -background "#FF9428" -anchor center -text "Save as a Recipe" -relief raised -state disabled -command RecipeSaveAs
-place .nut.rm.recipebutton -relx 0.0058 -rely 0.185 -relheight 0.045 -relwidth 0.2
+button .nut.rm.recipebutton \
+  -background "#FF9428" \
+  -anchor center \
+  -text "Save as a Recipe" \
+  -relief raised \
+  -state disabled \
+  -command RecipeSaveAs
+place .nut.rm.recipebutton \
+  -relx 0.0058 \
+  -rely 0.185 \
+  -relheight 0.045 \
+  -relwidth 0.2
 
-ttk::label .nut.rm.newtheusuallabel -style rm.TLabel -text "Type new Customary Meal name and press Save" -wraplength [expr {$::magnify * 175}] -justify center
-#place .nut.rm.newtheusuallabel -relx 0.39 -rely 0.03 -relheight 0.09 -relwidth 0.33
+ttk::label .nut.rm.newtheusuallabel \
+  -style rm.TLabel \
+  -text "Type new Customary Meal name and press Save" \
+  -wraplength [expr {$::magnify * 175}] \
+  -justify center
+#place .nut.rm.newtheusuallabel \
+  -relx 0.39 \
+  -rely 0.03 \
+  -relheight 0.09 \
+  -relwidth 0.33
 
-ttk::entry .nut.rm.newtheusualentry -textvariable ::newtheusual
-set ::newtheusual ""
-#place .nut.rm.newtheusualentry -relx 0.31 -rely 0.12 -relheight 0.045 -relwidth 0.33
+ttk::entry .nut.rm.newtheusualentry \
+  -textvariable ::newtheusual
+#place .nut.rm.newtheusualentry \
+  -relx 0.31 \
+  -rely 0.12 \
+  -relheight 0.045 \
+  -relwidth 0.33
 
-button .nut.rm.newtheusualbutton -anchor center -text "Save" -command theusualNewName
-#place .nut.rm.newtheusualbutton -relx 0.65 -rely 0.12 -relheight 0.045 -relwidth 0.07
+button .nut.rm.newtheusualbutton \
+  -anchor center \
+  -text "Save" \
+  -command theusualNewName
+#place .nut.rm.newtheusualbutton \
+  -relx 0.65 \
+  -rely 0.12 \
+  -relheight 0.045 \
+  -relwidth 0.07
 
-ttk::radiobutton .nut.rm.grams -text "Grams" -width 6 -variable ::GRAMSopt -value 1 -style meal.TRadiobutton
-ttk::radiobutton .nut.rm.ounces -text "Ounces" -width 6 -variable ::GRAMSopt -value 0 -style meal.TRadiobutton
-#place .nut.rm.grams -relx 0.87 -rely 0.0046296296 -relheight 0.044444444 -relwidth 0.11
-#place .nut.rm.ounces -relx 0.87 -rely 0.0490740736 -relheight 0.044444444 -relwidth 0.11
-button .nut.rm.analysismeal -text "Analysis" -background "#FF9428" -command SwitchToAnalysis -relief raised
-#place .nut.rm.analysismeal -relx 0.87 -rely 0.14722222 -relheight 0.044444444 -relwidth 0.11
+ttk::radiobutton .nut.rm.grams \
+  -text "Grams" \
+  -width 6 \
+  -variable ::GRAMSopt \
+  -value 1 \
+  -style meal.TRadiobutton
+ttk::radiobutton .nut.rm.ounces \
+  -text "Ounces" \
+  -width 6 \
+  -variable ::GRAMSopt \
+  -value 0 \
+  -style meal.TRadiobutton
+#place .nut.rm.grams \
+  -relx 0.87 \
+  -rely 0.0046296296 \
+  -relheight 0.044444444 \
+  -relwidth 0.11
+#place .nut.rm.ounces \
+  -relx 0.87 \
+  -rely 0.0490740736 \
+  -relheight 0.044444444 \
+  -relwidth 0.11
+button .nut.rm.analysismeal \
+  -text "Analysis" \
+  -background "#FF9428" \
+  -command SwitchToAnalysis \
+  -relief raised
+#place .nut.rm.analysismeal \
+  -relx 0.87 \
+  -rely 0.14722222 \
+  -relheight 0.044444444 \
+  -relwidth 0.11
 
-menubutton .nut.rm.setmpd -background "#FF9428" -text "Delete All Meals and Set Meals Per Day" -relief raised -menu .nut.rm.setmpd.m
-place .nut.rm.setmpd -relx 0.667 -rely 0.006 -relheight 0.045 -relwidth 0.33
+menubutton .nut.rm.setmpd \
+  -background "#FF9428" \
+  -text "Delete All Meals and Set Meals Per Day" \
+  -relief raised \
+  -menu .nut.rm.setmpd.m
+place .nut.rm.setmpd \
+  -relx 0.667 \
+  -rely 0.006 \
+  -relheight 0.045 \
+  -relwidth 0.33
 
-ttk::label .nut.rm.fslabel -text "Food Search" -style rmright.TLabel
-place .nut.rm.fslabel -relx 0.29 -rely 0.19629629  -relheight 0.044444444 -relwidth 0.1
-ttk::combobox .nut.rm.fsentry -takefocus 0 -textvariable ::like_this_rm -style rm.TCombobox
-place .nut.rm.fsentry -relx 0.4 -rely 0.19629629  -relheight 0.044444444 -relwidth 0.45
-ttk::progressbar .nut.rm.bubblemachine -style meal.Horizontal.TProgressbar -orient horizontal -mode indeterminate
-#place .nut.rm.bubblemachine -relx 0.4 -rely 0.19629629  -relheight 0.044444444 -relwidth 0.45
+ttk::label .nut.rm.fslabel \
+  -text "Food Search" \
+  -style rmright.TLabel
+place .nut.rm.fslabel \
+  -relx 0.29 \
+  -rely 0.19629629  \
+  -relheight 0.044444444 \
+  -relwidth 0.1
+ttk::combobox .nut.rm.fsentry \
+  -takefocus 0 \
+  -textvariable ::like_this_rm \
+  -style rm.TCombobox
+place .nut.rm.fsentry \
+  -relx 0.4 \
+  -rely 0.19629629  \
+  -relheight 0.044444444 \
+  -relwidth 0.45
+ttk::progressbar .nut.rm.bubblemachine \
+  -style meal.Horizontal.TProgressbar \
+  -orient horizontal \
+  -mode indeterminate
+#place .nut.rm.bubblemachine \
+  -relx 0.4 \
+  -rely 0.19629629  \
+  -relheight 0.044444444 \
+  -relwidth 0.45
 
-button .nut.rm.searchcancel -text "Cancel" -width 6 -command CancelSearch -background "#00FF00"
-#place .nut.rm.searchcancel -relx 0.86 -rely 0.19629629  -relheight 0.044444444 -relwidth 0.09
+button .nut.rm.searchcancel \
+  -text "Cancel" \
+  -width 6 \
+  -command CancelSearch \
+  -background "#00FF00"
+#place .nut.rm.searchcancel \
+  -relx 0.86 \
+  -rely 0.19629629  \
+  -relheight 0.044444444 \
+  -relwidth 0.09
 
-ttk::frame .nut.rm.frlistbox -style rm.TFrame
-#place .nut.rm.frlistbox -relx 0.0 -rely 0.25 -relheight 0.75 -relwidth 1.0
+ttk::frame .nut.rm.frlistbox \
+  -style rm.TFrame
+#place .nut.rm.frlistbox \
+  -relx 0.0 \
+  -rely 0.25 \
+  -relheight 0.75 \
+  -relwidth 1.0
 grid propagate .nut.rm.frlistbox 0
-grid [tk::listbox .nut.rm.frlistbox.listbox -listvariable foodsrm -yscrollcommand ".nut.rm.frlistbox.scrollv set" -xscrollcommand ".nut.rm.frlistbox.scrollh set" -background "#FF7F00" ] -row 0 -column 0 -sticky nsew
-grid [scrollbar .nut.rm.frlistbox.scrollv -width [expr {$::magnify * 5}] -relief sunken -orient vertical -command ".nut.rm.frlistbox.listbox yview"] -row 0 -column 1 -sticky nsew
-grid [scrollbar .nut.rm.frlistbox.scrollh -width [expr {$::magnify * 5}] -relief sunken -orient horizontal -command ".nut.rm.frlistbox.listbox xview"] -row 1 -column 0 -sticky nswe
-grid rowconfig .nut.rm.frlistbox 0 -weight 1 -minsize 0
-grid columnconfig .nut.rm.frlistbox 0 -weight 1 -minsize 0
+grid [tk::listbox .nut.rm.frlistbox.listbox \
+  -listvariable foodsrm \
+  -yscrollcommand ".nut.rm.frlistbox.scrollv set" \
+  -xscrollcommand ".nut.rm.frlistbox.scrollh set" \
+  -background "#FF7F00" ] \
+  -row 0 \
+  -column 0 \
+  -sticky nsew
+grid [scrollbar .nut.rm.frlistbox.scrollv \
+  -width [expr {$::magnify * 5}] \
+  -relief sunken \
+  -orient vertical \
+  -command ".nut.rm.frlistbox.listbox yview"] \
+  -row 0 \
+  -column 1 \
+  -sticky nsew
+grid [scrollbar .nut.rm.frlistbox.scrollh \
+  -width [expr {$::magnify * 5}] \
+  -relief sunken \
+  -orient horizontal \
+  -command ".nut.rm.frlistbox.listbox xview"] \
+  -row 1 \
+  -column 0 \
+  -sticky nswe
+grid rowconfig .nut.rm.frlistbox 0 \
+  -weight 1 \
+  -minsize 0
+grid columnconfig .nut.rm.frlistbox 0 \
+  -weight 1 \
+  -minsize 0
 
 bind .nut.rm.frlistbox.listbox <<ListboxSelect>> FoodChoicerm
 trace add variable ::like_this_rm write FindFoodrm
 bind .nut.rm.fsentry <FocusIn> FoodSearchrm
 
-ttk::frame .nut.rm.frmenu -style rm.TFrame
-#place .nut.rm.frmenu -relx 0.0 -rely 0.25 -relheight 0.75 -relwidth 1.0
+ttk::frame .nut.rm.frmenu \
+  -style rm.TFrame
+#place .nut.rm.frmenu \
+  -relx 0.0 \
+  -rely 0.25 \
+  -relheight 0.75 \
+  -relwidth 1.0
 grid propagate .nut.rm.frmenu 0
-grid [tk::text .nut.rm.frmenu.menu -yscrollcommand ".nut.rm.frmenu.scrollv set" -state disabled -wrap none -inactiveselectbackground {} -background "#FF7F00" -cursor [. cget -cursor] ] -row 0 -column 0 -sticky nsew
-grid [scrollbar .nut.rm.frmenu.scrollv -width [expr {$::magnify * 5}] -relief sunken -orient vertical -command ".nut.rm.frmenu.menu yview"] -row 0 -column 1 -sticky nsew
-grid rowconfig .nut.rm.frmenu 0 -weight 1 -minsize 0
-grid columnconfig .nut.rm.frmenu 0 -weight 1 -minsize 0
+grid [tk::text .nut.rm.frmenu.menu \
+  -yscrollcommand ".nut.rm.frmenu.scrollv set" \
+  -state disabled \
+  -wrap none \
+  -inactiveselectbackground {} \
+  -background "#FF7F00" \
+  -cursor [. cget \
+  -cursor] ] \
+  -row 0 \
+  -column 0 \
+  -sticky nsew
+grid [scrollbar .nut.rm.frmenu.scrollv \
+  -width [expr {$::magnify * 5}] \
+  -relief sunken \
+  -orient vertical \
+  -command ".nut.rm.frmenu.menu yview"] \
+  -row 0 \
+  -column 1 \
+  -sticky nsew
+grid rowconfig .nut.rm.frmenu 0 \
+  -weight 1 \
+  -minsize 0
+grid columnconfig .nut.rm.frmenu 0 \
+  -weight 1 \
+  -minsize 0
 
-ttk::label .nut.vf.label -textvariable Long_Desc -style vftop.TLabel -wraplength [expr {$::magnify * 250}]
-place .nut.vf.label -relx 0.33 -rely 0.015 -relheight 0.12759259 -relwidth 0.33
+ttk::label .nut.vf.label \
+  -textvariable Long_Desc \
+  -style vftop.TLabel \
+  -wraplength [expr {$::magnify * 250}]
+place .nut.vf.label \
+  -relx 0.33 \
+  -rely 0.015 \
+  -relheight 0.12759259 \
+  -relwidth 0.33
 
-set ratio_widget_height_to_spacer 9.6
-tk::spinbox .nut.vf.sb0 -width 5 -justify right -from -9999 -to 9999 -increment 1 -textvariable gramsvf -buttonbackground "#00FF00"
-tk::spinbox .nut.vf.sb1 -width 5 -justify right -from -999 -to 999 -increment 0.125 -textvariable ouncesvf -buttonbackground "#00FF00"
-tk::spinbox .nut.vf.sb2 -width 5 -justify right -from -9999 -to 9999 -increment 1 -textvariable caloriesvf -buttonbackground "#00FF00"
-tk::spinbox .nut.vf.sb3 -width 5 -justify right -from -999 -to 999 -increment 0.125 -textvariable Amountvf -buttonbackground "#00FF00"
-menubutton .nut.vf.refusemb -background "#00FF00" -text "Refuse" -direction below -relief raised -menu .nut.vf.refusemb.m
-menu .nut.vf.refusemb.m -tearoff 0 -background "#00FF00"
-.nut.vf.refusemb.m add command -label "No refuse description provided"
-place .nut.vf.sb0 -relx 0.0458 -rely 0.0046296296 -relheight 0.044444444 -relwidth 0.08
-place .nut.vf.sb1 -relx 0.0458 -rely 0.0490740736 -relheight 0.044444444 -relwidth 0.08
-place .nut.vf.sb2 -relx 0.0458 -rely 0.098148146  -relheight 0.044444444 -relwidth 0.08
-place .nut.vf.sb3 -relx 0.0458 -rely 0.14722222   -relheight 0.044444444 -relwidth 0.08
-place .nut.vf.refusemb -relx 0.0458 -rely 0.19629629  -relheight 0.044444444 -relwidth 0.08
+tk::spinbox .nut.vf.sb0 \
+  -width 5 \
+  -justify right \
+  -from \
+  -9999 \
+  -to 9999 \
+  -increment 1 \
+  -textvariable gramsvf \
+  -buttonbackground "#00FF00"
+tk::spinbox .nut.vf.sb1 \
+  -width 5 \
+  -justify right \
+  -from \
+  -999 \
+  -to 999 \
+  -increment 0.125 \
+  -textvariable ouncesvf \
+  -buttonbackground "#00FF00"
+tk::spinbox .nut.vf.sb2 \
+  -width 5 \
+  -justify right \
+  -from \
+  -9999 \
+  -to 9999 \
+  -increment 1 \
+  -textvariable caloriesvf \
+  -buttonbackground "#00FF00"
+tk::spinbox .nut.vf.sb3 \
+  -width 5 \
+  -justify right \
+  -from \
+  -999 \
+  -to 999 \
+  -increment 0.125 \
+  -textvariable Amountvf \
+  -buttonbackground "#00FF00"
+menubutton .nut.vf.refusemb \
+  -background "#00FF00" \
+  -text "Refuse" \
+  -direction below \
+  -relief raised \
+  -menu .nut.vf.refusemb.m
+menu .nut.vf.refusemb.m \
+  -tearoff 0 \
+  -background "#00FF00"
+.nut.vf.refusemb.m add command \
+  -label "No refuse description provided"
+place .nut.vf.sb0 \
+  -relx 0.0458 \
+  -rely 0.0046296296 \
+  -relheight 0.044444444 \
+  -relwidth 0.08
+place .nut.vf.sb1 \
+  -relx 0.0458 \
+  -rely 0.0490740736 \
+  -relheight 0.044444444 \
+  -relwidth 0.08
+place .nut.vf.sb2 \
+  -relx 0.0458 \
+  -rely 0.098148146  \
+  -relheight 0.044444444 \
+  -relwidth 0.08
+place .nut.vf.sb3 \
+  -relx 0.0458 \
+  -rely 0.14722222   \
+  -relheight 0.044444444 \
+  -relwidth 0.08
+place .nut.vf.refusemb \
+  -relx 0.0458 \
+  -rely 0.19629629  \
+  -relheight 0.044444444 \
+  -relwidth 0.08
 
-ttk::label .nut.vf.sbl0 -text "gm." -style vfleft.TLabel
-ttk::label .nut.vf.sbl1 -text "oz." -style vfleft.TLabel
-ttk::label .nut.vf.sbl2 -text "cal." -style vfleft.TLabel
-ttk::label .nut.vf.refusevalue -textvariable Refusevf -style vfleft.TLabel
-set Refusevf "0%"
-place .nut.vf.sbl0 -relx 0.133 -rely 0.0046296296 -relheight 0.044444444 -relwidth 0.05
-place .nut.vf.sbl1 -relx 0.133 -rely 0.0490740736 -relheight 0.044444444 -relwidth 0.05
-place .nut.vf.sbl2 -relx 0.133 -rely 0.098148146  -relheight 0.044444444 -relwidth 0.05
-place .nut.vf.refusevalue -relx 0.133 -rely 0.19629629  -relheight 0.044444444 -relwidth 0.05
+ttk::label .nut.vf.sbl0 \
+  -text "gm." \
+  -style vfleft.TLabel
+ttk::label .nut.vf.sbl1 \
+  -text "oz." \
+  -style vfleft.TLabel
+ttk::label .nut.vf.sbl2 \
+  -text "cal." \
+  -style vfleft.TLabel
+ttk::label .nut.vf.refusevalue \
+  -textvariable Refusevf \
+  -style vfleft.TLabel
 
-button .nut.vf.meal -text "Add to Meal" -state disabled -background "#FF9428" -relief raised -command vf2rm
-place .nut.vf.meal -relx 0.78 -rely 0.0490740736 -relheight 0.044444444 -relwidth 0.12
-ttk::label .nut.vf.fslabel -text "Food Search" -style vfright.TLabel
-place .nut.vf.fslabel -relx 0.29 -rely 0.19629629  -relheight 0.044444444 -relwidth 0.1
-ttk::combobox .nut.vf.cb -textvariable Msre_Descvf -state readonly -style vf.TCombobox
-place .nut.vf.cb -relx 0.133 -rely 0.14722222  -relheight 0.044444444 -relwidth 0.717
-ttk::combobox .nut.vf.fsentry -textvariable like_this_vf -style vf.TCombobox
-place .nut.vf.fsentry -relx 0.4 -rely 0.19629629  -relheight 0.044444444 -relwidth 0.45
+place .nut.vf.sbl0 \
+  -relx 0.133 \
+  -rely 0.0046296296 \
+  -relheight 0.044444444 \
+  -relwidth 0.05
+place .nut.vf.sbl1 \
+  -relx 0.133 \
+  -rely 0.0490740736 \
+  -relheight 0.044444444 \
+  -relwidth 0.05
+place .nut.vf.sbl2 \
+  -relx 0.133 \
+  -rely 0.098148146  \
+  -relheight 0.044444444 \
+  -relwidth 0.05
+place .nut.vf.refusevalue \
+  -relx 0.133 \
+  -rely 0.19629629  \
+  -relheight 0.044444444 \
+  -relwidth 0.05
 
-ttk::frame .nut.vf.frlistbox -style vf.TFrame
-#place .nut.vf.frlistbox -relx 0.0 -rely 0.25 -relheight 0.75 -relwidth 1.0
+button .nut.vf.meal \
+  -text "Add to Meal" \
+  -state disabled \
+  -background "#FF9428" \
+  -relief raised \
+  -command vf2rm
+place .nut.vf.meal \
+  -relx 0.78 \
+  -rely 0.0490740736 \
+  -relheight 0.044444444 \
+  -relwidth 0.12
+ttk::label .nut.vf.fslabel \
+  -text "Food Search" \
+  -style vfright.TLabel
+place .nut.vf.fslabel \
+  -relx 0.29 \
+  -rely 0.19629629  \
+  -relheight 0.044444444 \
+  -relwidth 0.1
+ttk::combobox .nut.vf.cb \
+  -textvariable Msre_Descvf \
+  -state readonly \
+  -style vf.TCombobox
+place .nut.vf.cb \
+  -relx 0.133 \
+  -rely 0.14722222  \
+  -relheight 0.044444444 \
+  -relwidth 0.717
+ttk::combobox .nut.vf.fsentry \
+  -textvariable like_this_vf \
+  -style vf.TCombobox
+place .nut.vf.fsentry \
+  -relx 0.4 \
+  -rely 0.19629629  \
+  -relheight 0.044444444 \
+  -relwidth 0.45
+
+ttk::frame .nut.vf.frlistbox \
+  -style vf.TFrame
+#place .nut.vf.frlistbox \
+  -relx 0.0 \
+  -rely 0.25 \
+  -relheight 0.75 \
+  -relwidth 1.0
 grid propagate .nut.vf.frlistbox 0
-grid [tk::listbox .nut.vf.frlistbox.listbox -width 85 -height 22 -listvariable foodsvf -yscrollcommand ".nut.vf.frlistbox.scrollv set" -xscrollcommand ".nut.vf.frlistbox.scrollh set" -background "#00FF00" ] -row 0 -column 0 -sticky nsew
-grid [scrollbar .nut.vf.frlistbox.scrollv -width [expr {$::magnify * 5}] -relief sunken -orient vertical -command ".nut.vf.frlistbox.listbox yview"] -row 0 -column 1 -sticky nsew
-grid [scrollbar .nut.vf.frlistbox.scrollh -width [expr {$::magnify * 5}] -relief sunken -orient horizontal -command ".nut.vf.frlistbox.listbox xview"] -row 1 -column 0 -sticky nswe
-grid rowconfig .nut.vf.frlistbox 0 -weight 1 -minsize 0
-grid columnconfig .nut.vf.frlistbox 0 -weight 1 -minsize 0
+grid [tk::listbox .nut.vf.frlistbox.listbox \
+  -width 85 \
+  -height 22 \
+  -listvariable foodsvf \
+  -yscrollcommand ".nut.vf.frlistbox.scrollv set" \
+  -xscrollcommand ".nut.vf.frlistbox.scrollh set" \
+  -background "#00FF00" ] \
+  -row 0 \
+  -column 0 \
+  -sticky nsew
+grid [scrollbar .nut.vf.frlistbox.scrollv \
+  -width [expr {$::magnify * 5}] \
+  -relief sunken \
+  -orient vertical \
+  -command ".nut.vf.frlistbox.listbox yview"] \
+  -row 0 \
+  -column 1 \
+  -sticky nsew
+grid [scrollbar .nut.vf.frlistbox.scrollh \
+  -width [expr {$::magnify * 5}] \
+  -relief sunken \
+  -orient horizontal \
+  -command ".nut.vf.frlistbox.listbox xview"] \
+  -row 1 \
+  -column 0 \
+  -sticky nswe
+grid rowconfig .nut.vf.frlistbox 0 \
+  -weight 1 \
+  -minsize 0
+grid columnconfig .nut.vf.frlistbox 0 \
+  -weight 1 \
+  -minsize 0
 bind .nut.vf.frlistbox.listbox <<ListboxSelect>> FoodChoicevf
 
-label .nut.ar.name -text "Recipe Name" -background "#7FBF00" -anchor e
-place .nut.ar.name -relx 0.0 -rely 0.0046296296 -relheight 0.044444444 -relwidth 0.28
-ttk::entry .nut.ar.name_entry -textvariable ::RecipeName
-place .nut.ar.name_entry -relx 0.28 -rely 0.0046296296 -relheight 0.044444444 -relwidth 0.55
+label .nut.ar.name \
+  -text "Recipe Name" \
+  -background "#7FBF00" \
+  -anchor e
+place .nut.ar.name \
+  -relx 0.0 \
+  -rely 0.0046296296 \
+  -relheight 0.044444444 \
+  -relwidth 0.28
+ttk::entry .nut.ar.name_entry \
+  -textvariable ::RecipeName
+place .nut.ar.name_entry \
+  -relx 0.28 \
+  -rely 0.0046296296 \
+  -relheight 0.044444444 \
+  -relwidth 0.55
 
-label .nut.ar.numserv -text "Number of servings recipe makes" -background "#7FBF00" -anchor e
-place .nut.ar.numserv -relx 0.0 -rely 0.0490740736 -relheight 0.044444444 -relwidth 0.28
-ttk::entry .nut.ar.numserv_entry -textvariable ::RecipeServNum
-place .nut.ar.numserv_entry -relx 0.28 -rely 0.0490740736 -relheight 0.044444444 -relwidth 0.1 
+label .nut.ar.numserv \
+  -text "Number of servings recipe makes" \
+  -background "#7FBF00" \
+  -anchor e
+place .nut.ar.numserv \
+  -relx 0.0 \
+  -rely 0.0490740736 \
+  -relheight 0.044444444 \
+  -relwidth 0.28
+ttk::entry .nut.ar.numserv_entry \
+  -textvariable ::RecipeServNum
+place .nut.ar.numserv_entry \
+  -relx 0.28 \
+  -rely 0.0490740736 \
+  -relheight 0.044444444 \
+  -relwidth 0.1
+label .nut.ar.servunit \
+  -text "Serving Unit (cup, piece, tbsp, etc.)" \
+  -background "#7FBF00" \
+  -anchor e
+place .nut.ar.servunit \
+  -relx 0.0 \
+  -rely 0.098148146  \
+  -relheight 0.044444444 \
+  -relwidth 0.28
+ttk::entry .nut.ar.servunit_entry \
+  -textvariable ::RecipeServUnit
+place .nut.ar.servunit_entry \
+  -relx 0.28 \
+  -rely 0.098148146  \
+  -relheight 0.044444444 \
+  -relwidth 0.2
 
-label .nut.ar.servunit -text "Serving Unit (cup, piece, tbsp, etc.)" -background "#7FBF00" -anchor e
-place .nut.ar.servunit -relx 0.0 -rely 0.098148146  -relheight 0.044444444 -relwidth 0.28
-ttk::entry .nut.ar.servunit_entry -textvariable ::RecipeServUnit
-place .nut.ar.servunit_entry -relx 0.28 -rely 0.098148146  -relheight 0.044444444 -relwidth 0.2
+label .nut.ar.servnum \
+  -text "Number of units in one serving" \
+  -background "#7FBF00" \
+  -anchor e
+place .nut.ar.servnum \
+  -relx 0.0 \
+  -rely 0.14722222 \
+  -relheight 0.044444444 \
+  -relwidth 0.28
+ttk::entry .nut.ar.servnum_entry \
+  -textvariable ::RecipeServUnitNum
+place .nut.ar.servnum_entry \
+  -relx 0.28 \
+  -rely 0.14722222 \
+  -relheight 0.044444444 \
+  -relwidth 0.1
 
-label .nut.ar.servnum -text "Number of units in one serving" -background "#7FBF00" -anchor e
-place .nut.ar.servnum -relx 0.0 -rely 0.14722222 -relheight 0.044444444 -relwidth 0.28
-ttk::entry .nut.ar.servnum_entry -textvariable ::RecipeServUnitNum
-place .nut.ar.servnum_entry -relx 0.28 -rely 0.14722222 -relheight 0.044444444 -relwidth 0.1
+label .nut.ar.weight \
+  -text "Weight of one serving (if known)" \
+  -background "#7FBF00" \
+  -anchor e
+place .nut.ar.weight \
+  -relx 0.0 \
+  -rely 0.19629629 \
+  -relheight 0.044444444 \
+  -relwidth 0.27
+ttk::entry .nut.ar.weight_entry \
+  -textvariable ::RecipeServWeight
+place .nut.ar.weight_entry \
+  -relx 0.28 \
+  -rely 0.19629629 \
+  -relheight 0.044444444 \
+  -relwidth 0.1
 
-label .nut.ar.weight -text "Weight of one serving (if known)" -background "#7FBF00" -anchor e
-place .nut.ar.weight -relx 0.0 -rely 0.19629629 -relheight 0.044444444 -relwidth 0.27
-ttk::entry .nut.ar.weight_entry -textvariable ::RecipeServWeight
-place .nut.ar.weight_entry -relx 0.28 -rely 0.19629629 -relheight 0.044444444 -relwidth 0.1
+button .nut.ar.save \
+  -text "Save" \
+  -command RecipeDone \
+  -background "#00FF00"
+place .nut.ar.save \
+  -relx 0.87 \
+  -rely 0.14722222 \
+  -relheight 0.044444444 \
+  -relwidth 0.11
+button .nut.ar.cancel \
+  -text "Cancel" \
+  -command RecipeCancel \
+  -background "#BFD780"
+place .nut.ar.cancel \
+  -relx 0.87 \
+  -rely 0.19629629  \
+  -relheight 0.044444444 \
+  -relwidth 0.11
 
-button .nut.ar.save -text "Save" -command RecipeDone -background "#00FF00"
-place .nut.ar.save -relx 0.87 -rely 0.14722222 -relheight 0.044444444 -relwidth 0.11
-button .nut.ar.cancel -text "Cancel" -command RecipeCancel -background "#BFD780"
-place .nut.ar.cancel -relx 0.87 -rely 0.19629629  -relheight 0.044444444 -relwidth 0.11
+ttk::radiobutton .nut.ar.grams \
+  -text "Grams" \
+  -width 6 \
+  -variable ::GRAMSopt \
+  -value 1 \
+  -style ar.TRadiobutton
+ttk::radiobutton .nut.ar.ounces \
+  -text "Ounces" \
+  -width 6 \
+  -variable ::GRAMSopt \
+  -value 0 \
+  -style ar.TRadiobutton
+place .nut.ar.grams \
+  -relx 0.87 \
+  -rely 0.0046296296 \
+  -relheight 0.044444444 \
+  -relwidth 0.11
+place .nut.ar.ounces \
+  -relx 0.87 \
+  -rely 0.0490740736 \
+  -relheight 0.044444444 \
+  -relwidth 0.11
 
-ttk::radiobutton .nut.ar.grams -text "Grams" -width 6 -variable ::GRAMSopt -value 1 -style ar.TRadiobutton
-ttk::radiobutton .nut.ar.ounces -text "Ounces" -width 6 -variable ::GRAMSopt -value 0 -style ar.TRadiobutton
-place .nut.ar.grams -relx 0.87 -rely 0.0046296296 -relheight 0.044444444 -relwidth 0.11
-place .nut.ar.ounces -relx 0.87 -rely 0.0490740736 -relheight 0.044444444 -relwidth 0.11
+ttk::frame .nut.po.pane \
+  -style po.TFrame
+place .nut.po.pane \
+  -relx 0.0 \
+  -rely 0.0 \
+  -relheight 1.0 \
+  -relwidth 1.0
+ttk::frame .nut.po.pane.optframe \
+  -style po.TFrame
+place .nut.po.pane.optframe \
+  -relx 0.0 \
+  -rely 0.0 \
+  -relheight 1.0 \
+  -relwidth 0.75
+ttk::frame .nut.po.pane.wlogframe \
+  -style po.TFrame
+place .nut.po.pane.wlogframe \
+  -relx 0.75 \
+  -rely 0.0 \
+  -relheight 1.0 \
+  -relwidth 0.25
+label .nut.po.pane.wlogframe.weight_l \
+  -text "Weight" \
+  -anchor e \
+  -background "#5454FF" \
+  -foreground "#FFFF00"
+place .nut.po.pane.wlogframe.weight_l \
+  -relx 0.0 \
+  -rely 0.03 \
+  -relheight 0.04444444 \
+  -relwidth 0.45
+tk::spinbox .nut.po.pane.wlogframe.weight_s \
+  -width 7 \
+  -justify right \
+  -from 1 \
+  -to 9999 \
+  -increment 0.1 \
+  -textvariable ::weightyintercept \
+  -disabledforeground "#000000"
+place .nut.po.pane.wlogframe.weight_s \
+  -relx 0.5 \
+  -rely 0.03 \
+  -relheight 0.04444444 \
+  -relwidth 0.4
 
-ttk::frame .nut.po.pane -style po.TFrame
-place .nut.po.pane -relx 0.0 -rely 0.0 -relheight 1.0 -relwidth 1.0
-ttk::frame .nut.po.pane.optframe -style po.TFrame
-place .nut.po.pane.optframe -relx 0.0 -rely 0.0 -relheight 1.0 -relwidth 0.75
-ttk::frame .nut.po.pane.wlogframe -style po.TFrame
-place .nut.po.pane.wlogframe -relx 0.75 -rely 0.0 -relheight 1.0 -relwidth 0.25
- 
-label .nut.po.pane.wlogframe.weight_l -text "Weight" -anchor e -background "#5454FF" -foreground "#FFFF00"
-place .nut.po.pane.wlogframe.weight_l -relx 0.0 -rely 0.03 -relheight 0.04444444 -relwidth 0.45
-tk::spinbox .nut.po.pane.wlogframe.weight_s -width 7 -justify right -from 1 -to 9999 -increment 0.1 -textvariable ::weightyintercept -disabledforeground "#000000"
-place .nut.po.pane.wlogframe.weight_s -relx 0.5 -rely 0.03 -relheight 0.04444444 -relwidth 0.4
+label .nut.po.pane.wlogframe.bf_l \
+  -text "Body Fat %" \
+  -anchor e \
+  -background "#5454FF" \
+  -foreground "#FFFF00"
+place .nut.po.pane.wlogframe.bf_l \
+  -relx 0.0 \
+  -rely 0.11 \
+  -relheight 0.04444444 \
+  -relwidth 0.45
+tk::spinbox .nut.po.pane.wlogframe.bf_s \
+  -width 7 \
+  -justify right \
+  -from 1 \
+  -to 9999 \
+  -increment 0.1 \
+  -textvariable ::currentbfp \
+  -disabledforeground "#000000"
+place .nut.po.pane.wlogframe.bf_s \
+  -relx 0.5 \
+  -rely 0.11 \
+  -relheight 0.04444444 \
+  -relwidth 0.4
 
-label .nut.po.pane.wlogframe.bf_l -text "Body Fat %" -anchor e -background "#5454FF" -foreground "#FFFF00"
-place .nut.po.pane.wlogframe.bf_l -relx 0.0 -rely 0.11 -relheight 0.04444444 -relwidth 0.45
-tk::spinbox .nut.po.pane.wlogframe.bf_s -width 7 -justify right -from 1 -to 9999 -increment 0.1 -textvariable ::currentbfp -disabledforeground "#000000"
-place .nut.po.pane.wlogframe.bf_s -relx 0.5 -rely 0.11 -relheight 0.04444444 -relwidth 0.4
+button .nut.po.pane.wlogframe.accept \
+  -text "Accept New\nMeasurements" \
+  -command AcceptNewMeasurements
+place .nut.po.pane.wlogframe.accept \
+  -relx 0.36 \
+  -rely 0.2 \
+  -relheight 0.1 \
+  -relwidth 0.55
 
-button .nut.po.pane.wlogframe.accept -text "Accept New\nMeasurements" -command AcceptNewMeasurements
-place .nut.po.pane.wlogframe.accept -relx 0.36 -rely 0.2 -relheight 0.1 -relwidth 0.55
+label .nut.po.pane.wlogframe.summary \
+  -wraplength [expr {$::magnify * 150}] \
+  -textvariable ::wlogsummary \
+  -justify right \
+  -anchor ne \
+  -background "#5454FF" \
+  -foreground "#FFFF00"
+place .nut.po.pane.wlogframe.summary \
+  -relx 0.0 \
+  -rely 0.34 \
+  -relheight 0.6 \
+  -relwidth 0.93
 
-label .nut.po.pane.wlogframe.summary -wraplength [expr {$::magnify * 150}] -textvariable ::wlogsummary -justify right -anchor ne -background "#5454FF" -foreground "#FFFF00"
-place .nut.po.pane.wlogframe.summary -relx 0.0 -rely 0.34 -relheight 0.6 -relwidth 0.93
+button .nut.po.pane.wlogframe.clear \
+  -text "Clear Weight Log" \
+  -command ClearWeightLog
+#place .nut.po.pane.wlogframe.clear \
+  -relx 0.3 \
+  -rely 0.89 \
+  -relheight 0.06 \
+  -relwidth 0.63
 
-button .nut.po.pane.wlogframe.clear -text "Clear Weight Log" -command ClearWeightLog
-#place .nut.po.pane.wlogframe.clear -relx 0.3 -rely 0.89 -relheight 0.06 -relwidth 0.63
 
-
-label .nut.po.pane.optframe.cal_l -text "Calories kc" -anchor e -background "#5454FF" -foreground "#FFFF00"
-place .nut.po.pane.optframe.cal_l -relx 0.0 -rely 0.03 -relheight 0.04444444 -relwidth 0.25
-tk::spinbox .nut.po.pane.optframe.cal_s -width 7 -justify right -from 1 -to 9999 -increment 0.1 -textvariable ::ENERC_KCALopt -disabledforeground "#000000"
-place .nut.po.pane.optframe.cal_s -relx 0.265 -rely 0.03 -relheight 0.04444444 -relwidth 0.14
-set ::ENERC_KCALpo 0
-ttk::checkbutton .nut.po.pane.optframe.cal_cb1 -text "Adjust to my meals" -variable ::ENERC_KCALpo -onvalue -1 -style po.TCheckbutton -command [list ChangePersonalOptions ENERC_KCAL]
-place .nut.po.pane.optframe.cal_cb1 -relx 0.44 -rely 0.03 -relheight 0.04444444 -relwidth 0.23
-ttk::checkbutton .nut.po.pane.optframe.cal_cb2 -text "Auto-Set" -variable ::ENERC_KCALpo -onvalue 2 -style po.TCheckbutton -command [list ChangePersonalOptions ENERC_KCAL]
-place .nut.po.pane.optframe.cal_cb2 -relx 0.69 -rely 0.03 -relheight 0.04444444 -relwidth 0.23
- 
-label .nut.po.pane.optframe.fat_l -text "Total Fat g" -anchor e -background "#5454FF" -foreground "#FFFF00"
-place .nut.po.pane.optframe.fat_l -relx 0.0 -rely 0.11 -relheight 0.04444444 -relwidth 0.25
-tk::spinbox .nut.po.pane.optframe.fat_s -width 7 -justify right -from 1 -to 9999 -increment 0.1 -textvariable ::FATopt -disabledforeground "#000000"
-place .nut.po.pane.optframe.fat_s -relx 0.265 -rely 0.11 -relheight 0.04444444 -relwidth 0.14
-ttk::checkbutton .nut.po.pane.optframe.fat_cb1 -text "Adjust to my meals" -variable ::FATpo -onvalue -1 -style po.TCheckbutton -command [list ChangePersonalOptions FAT]
-place .nut.po.pane.optframe.fat_cb1 -relx 0.44 -rely 0.11 -relheight 0.04444444 -relwidth 0.23
-ttk::checkbutton .nut.po.pane.optframe.fat_cb2 -text "DV 36% of Calories" -variable ::FATpo -onvalue 2 -style po.TCheckbutton -command [list ChangePersonalOptions FAT]
-place .nut.po.pane.optframe.fat_cb2 -relx 0.69 -rely 0.11 -relheight 0.04444444 -relwidth 0.23
- 
-label .nut.po.pane.optframe.prot_l -text "Protein g" -anchor e -background "#5454FF" -foreground "#FFFF00"
-place .nut.po.pane.optframe.prot_l -relx 0.0 -rely 0.19 -relheight 0.04444444 -relwidth 0.25
-tk::spinbox .nut.po.pane.optframe.prot_s -width 7 -justify right -from 1 -to 9999 -increment 0.1 -textvariable ::PROCNTopt -disabledforeground "#000000"
-place .nut.po.pane.optframe.prot_s -relx 0.265 -rely 0.19 -relheight 0.04444444 -relwidth 0.14
-ttk::checkbutton .nut.po.pane.optframe.prot_cb1 -text "Adjust to my meals" -variable ::PROCNTpo -onvalue -1 -style po.TCheckbutton -command [list ChangePersonalOptions PROCNT]
-place .nut.po.pane.optframe.prot_cb1 -relx 0.44 -rely 0.19 -relheight 0.04444444 -relwidth 0.23
-ttk::checkbutton .nut.po.pane.optframe.prot_cb2 -text "DV 10% of Calories" -variable ::PROCNTpo -onvalue 2 -style po.TCheckbutton -command [list ChangePersonalOptions PROCNT]
-place .nut.po.pane.optframe.prot_cb2 -relx 0.69 -rely 0.19 -relheight 0.04444444 -relwidth 0.23
- 
-label .nut.po.pane.optframe.nfc_l -text "Non-Fiber Carb g" -anchor e -background "#5454FF" -foreground "#FFFF00"
-place .nut.po.pane.optframe.nfc_l -relx 0.0 -rely 0.27 -relheight 0.04444444 -relwidth 0.25
-tk::spinbox .nut.po.pane.optframe.nfc_s -width 7 -justify right -from 1 -to 9999 -increment 0.1 -textvariable ::CHO_NONFIBopt -disabledforeground "#000000"
-place .nut.po.pane.optframe.nfc_s -relx 0.265 -rely 0.27 -relheight 0.04444444 -relwidth 0.14
-ttk::checkbutton .nut.po.pane.optframe.nfc_cb1 -text "Adjust to my meals" -variable ::CHO_NONFIBpo -onvalue -1 -style po.TCheckbutton -command [list ChangePersonalOptions CHO_NONFIB]
-place .nut.po.pane.optframe.nfc_cb1 -relx 0.44 -rely 0.27 -relheight 0.04444444 -relwidth 0.23
-ttk::checkbutton .nut.po.pane.optframe.nfc_cb2 -text "Balance of Calories" -variable ::CHO_NONFIBpo -onvalue 2 -style po.TCheckbutton -command [list ChangePersonalOptions CHO_NONFIB]
-place .nut.po.pane.optframe.nfc_cb2 -relx 0.69 -rely 0.27 -relheight 0.04444444 -relwidth 0.23
- 
-label .nut.po.pane.optframe.fiber_l -text "Fiber g" -anchor e -background "#5454FF" -foreground "#FFFF00"
-place .nut.po.pane.optframe.fiber_l -relx 0.0 -rely 0.35 -relheight 0.04444444 -relwidth 0.25
-tk::spinbox .nut.po.pane.optframe.fiber_s -width 7 -justify right -from 1 -to 9999 -increment 0.1 -textvariable ::FIBTGopt -disabledforeground "#000000"
-place .nut.po.pane.optframe.fiber_s -relx 0.265 -rely 0.35 -relheight 0.04444444 -relwidth 0.14
-ttk::checkbutton .nut.po.pane.optframe.fiber_cb1 -text "Adjust to my meals" -variable ::FIBTGpo -onvalue -1 -style po.TCheckbutton -command [list ChangePersonalOptions FIBTG]
-place .nut.po.pane.optframe.fiber_cb1 -relx 0.44 -rely 0.35 -relheight 0.04444444 -relwidth 0.23
-ttk::checkbutton .nut.po.pane.optframe.fiber_cb2 -text "Daily Value Default" -variable ::FIBTGpo -onvalue 2 -style po.TCheckbutton -command [list ChangePersonalOptions FIBTG]
-place .nut.po.pane.optframe.fiber_cb2 -relx 0.69 -rely 0.35 -relheight 0.04444444 -relwidth 0.23
- 
-label .nut.po.pane.optframe.sat_l -text "Saturated Fat g" -anchor e -background "#5454FF" -foreground "#FFFF00"
-place .nut.po.pane.optframe.sat_l -relx 0.0 -rely 0.43 -relheight 0.04444444 -relwidth 0.25
-tk::spinbox .nut.po.pane.optframe.sat_s -width 7 -justify right -from 1 -to 9999 -increment 0.1 -textvariable ::FASATopt -disabledforeground "#000000"
-place .nut.po.pane.optframe.sat_s -relx 0.265 -rely 0.43 -relheight 0.04444444 -relwidth 0.14
-ttk::checkbutton .nut.po.pane.optframe.sat_cb1 -text "Adjust to my meals" -variable ::FASATpo -onvalue -1 -style po.TCheckbutton -command [list ChangePersonalOptions FASAT]
-place .nut.po.pane.optframe.sat_cb1 -relx 0.44 -rely 0.43 -relheight 0.04444444 -relwidth 0.23
-ttk::checkbutton .nut.po.pane.optframe.sat_cb2 -text "DV 10% of Calories" -variable ::FASATpo -onvalue 2 -style po.TCheckbutton -command [list ChangePersonalOptions FASAT]
-place .nut.po.pane.optframe.sat_cb2 -relx 0.69 -rely 0.43 -relheight 0.04444444 -relwidth 0.23
- 
-label .nut.po.pane.optframe.efa_l -text "Essential Fatty Acids g" -anchor e -background "#5454FF" -foreground "#FFFF00"
-place .nut.po.pane.optframe.efa_l -relx 0.0 -rely 0.51 -relheight 0.04444444 -relwidth 0.25
-tk::spinbox .nut.po.pane.optframe.efa_s -width 7 -justify right -from 1 -to 9999 -increment 0.1 -textvariable ::FAPUopt -disabledforeground "#000000"
-place .nut.po.pane.optframe.efa_s -relx 0.265 -rely 0.51 -relheight 0.04444444 -relwidth 0.14
-ttk::checkbutton .nut.po.pane.optframe.efa_cb1 -text "Adjust to my meals" -variable ::FAPUpo -onvalue -1 -style po.TCheckbutton -command [list ChangePersonalOptions FAPU]
-place .nut.po.pane.optframe.efa_cb1 -relx 0.44 -rely 0.51 -relheight 0.04444444 -relwidth 0.23
-ttk::checkbutton .nut.po.pane.optframe.efa_cb2 -text "4% of Calories" -variable ::FAPUpo -onvalue 2 -style po.TCheckbutton -command [list ChangePersonalOptions FAPU]
-place .nut.po.pane.optframe.efa_cb2 -relx 0.69 -rely 0.51 -relheight 0.04444444 -relwidth 0.23
- 
-label .nut.po.pane.optframe.fish_l -text "Omega-6/3 Balance" -anchor e -background "#5454FF" -foreground "#FFFF00"
-place .nut.po.pane.optframe.fish_l -relx 0.0 -rely 0.59 -relheight 0.04444444 -relwidth 0.25
-set ::balvals {}
+label .nut.po.pane.optframe.cal_l \
+  -text "Calories kc" \
+  -anchor e \
+  -background "#5454FF" \
+  -foreground "#FFFF00"
+place .nut.po.pane.optframe.cal_l \
+  -relx 0.0 \
+  -rely 0.03 \
+  -relheight 0.04444444 \
+  -relwidth 0.25
+tk::spinbox .nut.po.pane.optframe.cal_s \
+  -width 7 \
+  -justify right \
+  -from 1 \
+  -to 9999 \
+  -increment 0.1 \
+  -textvariable ::ENERC_KCALopt \
+  -disabledforeground "#000000"
+place .nut.po.pane.optframe.cal_s \
+  -relx 0.265 \
+  -rely 0.03 \
+  -relheight 0.04444444 \
+  -relwidth 0.14
+ttk::checkbutton .nut.po.pane.optframe.cal_cb1 \
+  -text "Adjust to my meals" \
+  -variable ::ENERC_KCALpo \
+  -onvalue \
+  -1 \
+  -style po.TCheckbutton \
+  -command [list ChangePersonalOptions ENERC_KCAL]
+place .nut.po.pane.optframe.cal_cb1 \
+  -relx 0.44 \
+  -rely 0.03 \
+  -relheight 0.04444444 \
+  -relwidth 0.23
+ttk::checkbutton .nut.po.pane.optframe.cal_cb2 \
+  -text "Auto-Set" \
+  -variable ::ENERC_KCALpo \
+  -onvalue 2 \
+  -style po.TCheckbutton \
+  -command [list ChangePersonalOptions ENERC_KCAL]
+place .nut.po.pane.optframe.cal_cb2 \
+  -relx 0.69 \
+  -rely 0.03 \
+  -relheight 0.04444444 \
+  -relwidth 0.23
+label .nut.po.pane.optframe.fat_l \
+  -text "Total Fat g" \
+  -anchor e \
+  -background "#5454FF" \
+  -foreground "#FFFF00"
+place .nut.po.pane.optframe.fat_l \
+  -relx 0.0 \
+  -rely 0.11 \
+  -relheight 0.04444444 \
+  -relwidth 0.25
+tk::spinbox .nut.po.pane.optframe.fat_s \
+  -width 7 \
+  -justify right \
+  -from 1 \
+  -to 9999 \
+  -increment 0.1 \
+  -textvariable ::FATopt \
+  -disabledforeground "#000000"
+place .nut.po.pane.optframe.fat_s \
+  -relx 0.265 \
+  -rely 0.11 \
+  -relheight 0.04444444 \
+  -relwidth 0.14
+ttk::checkbutton .nut.po.pane.optframe.fat_cb1 \
+  -text "Adjust to my meals" \
+  -variable ::FATpo \
+  -onvalue \
+  -1 \
+  -style po.TCheckbutton \
+  -command [list ChangePersonalOptions FAT]
+place .nut.po.pane.optframe.fat_cb1 \
+  -relx 0.44 \
+  -rely 0.11 \
+  -relheight 0.04444444 \
+  -relwidth 0.23
+ttk::checkbutton .nut.po.pane.optframe.fat_cb2 \
+  -text "DV 36% of Calories" \
+  -variable ::FATpo \
+  -onvalue 2 \
+  -style po.TCheckbutton \
+  -command [list ChangePersonalOptions FAT]
+place .nut.po.pane.optframe.fat_cb2 \
+  -relx 0.69 \
+  -rely 0.11 \
+  -relheight 0.04444444 \
+  -relwidth 0.23
+label .nut.po.pane.optframe.prot_l \
+  -text "Protein g" \
+  -anchor e \
+  -background "#5454FF" \
+  -foreground "#FFFF00"
+place .nut.po.pane.optframe.prot_l \
+  -relx 0.0 \
+  -rely 0.19 \
+  -relheight 0.04444444 \
+  -relwidth 0.25
+tk::spinbox .nut.po.pane.optframe.prot_s \
+  -width 7 \
+  -justify right \
+  -from 1 \
+  -to 9999 \
+  -increment 0.1 \
+  -textvariable ::PROCNTopt \
+  -disabledforeground "#000000"
+place .nut.po.pane.optframe.prot_s \
+  -relx 0.265 \
+  -rely 0.19 \
+  -relheight 0.04444444 \
+  -relwidth 0.14
+ttk::checkbutton .nut.po.pane.optframe.prot_cb1 \
+  -text "Adjust to my meals" \
+  -variable ::PROCNTpo \
+  -onvalue \
+  -1 \
+  -style po.TCheckbutton \
+  -command [list ChangePersonalOptions PROCNT]
+place .nut.po.pane.optframe.prot_cb1 \
+  -relx 0.44 \
+  -rely 0.19 \
+  -relheight 0.04444444 \
+  -relwidth 0.23
+ttk::checkbutton .nut.po.pane.optframe.prot_cb2 \
+  -text "DV 10% of Calories" \
+  -variable ::PROCNTpo \
+  -onvalue 2 \
+  -style po.TCheckbutton \
+  -command [list ChangePersonalOptions PROCNT]
+place .nut.po.pane.optframe.prot_cb2 \
+  -relx 0.69 \
+  -rely 0.19 \
+  -relheight 0.04444444 \
+  -relwidth 0.23
+label .nut.po.pane.optframe.nfc_l \
+  -text "Non-Fiber Carb g" \
+  -anchor e \
+  -background "#5454FF" \
+  -foreground "#FFFF00"
+place .nut.po.pane.optframe.nfc_l \
+  -relx 0.0 \
+  -rely 0.27 \
+  -relheight 0.04444444 \
+  -relwidth 0.25
+tk::spinbox .nut.po.pane.optframe.nfc_s \
+  -width 7 \
+  -justify right \
+  -from 1 \
+  -to 9999 \
+  -increment 0.1 \
+  -textvariable ::CHO_NONFIBopt \
+  -disabledforeground "#000000"
+place .nut.po.pane.optframe.nfc_s \
+  -relx 0.265 \
+  -rely 0.27 \
+  -relheight 0.04444444 \
+  -relwidth 0.14
+ttk::checkbutton .nut.po.pane.optframe.nfc_cb1 \
+  -text "Adjust to my meals" \
+  -variable ::CHO_NONFIBpo \
+  -onvalue \
+  -1 \
+  -style po.TCheckbutton \
+  -command [list ChangePersonalOptions CHO_NONFIB]
+place .nut.po.pane.optframe.nfc_cb1 \
+  -relx 0.44 \
+  -rely 0.27 \
+  -relheight 0.04444444 \
+  -relwidth 0.23
+ttk::checkbutton .nut.po.pane.optframe.nfc_cb2 \
+  -text "Balance of Calories" \
+  -variable ::CHO_NONFIBpo \
+  -onvalue 2 \
+  -style po.TCheckbutton \
+  -command [list ChangePersonalOptions CHO_NONFIB]
+place .nut.po.pane.optframe.nfc_cb2 \
+  -relx 0.69 \
+  -rely 0.27 \
+  -relheight 0.04444444 \
+  -relwidth 0.23
+label .nut.po.pane.optframe.fiber_l \
+  -text "Fiber g" \
+  -anchor e \
+  -background "#5454FF" \
+  -foreground "#FFFF00"
+place .nut.po.pane.optframe.fiber_l \
+  -relx 0.0 \
+  -rely 0.35 \
+  -relheight 0.04444444 \
+  -relwidth 0.25
+tk::spinbox .nut.po.pane.optframe.fiber_s \
+  -width 7 \
+  -justify right \
+  -from 1 \
+  -to 9999 \
+  -increment 0.1 \
+  -textvariable ::FIBTGopt \
+  -disabledforeground "#000000"
+place .nut.po.pane.optframe.fiber_s \
+  -relx 0.265 \
+  -rely 0.35 \
+  -relheight 0.04444444 \
+  -relwidth 0.14
+ttk::checkbutton .nut.po.pane.optframe.fiber_cb1 \
+  -text "Adjust to my meals" \
+  -variable ::FIBTGpo \
+  -onvalue \
+  -1 \
+  -style po.TCheckbutton \
+  -command [list ChangePersonalOptions FIBTG]
+place .nut.po.pane.optframe.fiber_cb1 \
+  -relx 0.44 \
+  -rely 0.35 \
+  -relheight 0.04444444 \
+  -relwidth 0.23
+ttk::checkbutton .nut.po.pane.optframe.fiber_cb2 \
+  -text "Daily Value Default" \
+  -variable ::FIBTGpo \
+  -onvalue 2 \
+  -style po.TCheckbutton \
+  -command [list ChangePersonalOptions FIBTG]
+place .nut.po.pane.optframe.fiber_cb2 \
+  -relx 0.69 \
+  -rely 0.35 \
+  -relheight 0.04444444 \
+  -relwidth 0.23
+label .nut.po.pane.optframe.sat_l \
+  -text "Saturated Fat g" \
+  -anchor e \
+  -background "#5454FF" \
+  -foreground "#FFFF00"
+place .nut.po.pane.optframe.sat_l \
+  -relx 0.0 \
+  -rely 0.43 \
+  -relheight 0.04444444 \
+  -relwidth 0.25
+tk::spinbox .nut.po.pane.optframe.sat_s \
+  -width 7 \
+  -justify right \
+  -from 1 \
+  -to 9999 \
+  -increment 0.1 \
+  -textvariable ::FASATopt \
+  -disabledforeground "#000000"
+place .nut.po.pane.optframe.sat_s \
+  -relx 0.265 \
+  -rely 0.43 \
+  -relheight 0.04444444 \
+  -relwidth 0.14
+ttk::checkbutton .nut.po.pane.optframe.sat_cb1 \
+  -text "Adjust to my meals" \
+  -variable ::FASATpo \
+  -onvalue \
+  -1 \
+  -style po.TCheckbutton \
+  -command [list ChangePersonalOptions FASAT]
+place .nut.po.pane.optframe.sat_cb1 \
+  -relx 0.44 \
+  -rely 0.43 \
+  -relheight 0.04444444 \
+  -relwidth 0.23
+ttk::checkbutton .nut.po.pane.optframe.sat_cb2 \
+  -text "DV 10% of Calories" \
+  -variable ::FASATpo \
+  -onvalue 2 \
+  -style po.TCheckbutton \
+  -command [list ChangePersonalOptions FASAT]
+place .nut.po.pane.optframe.sat_cb2 \
+  -relx 0.69 \
+  -rely 0.43 \
+  -relheight 0.04444444 \
+  -relwidth 0.23
+label .nut.po.pane.optframe.efa_l \
+  -text "Essential Fatty Acids g" \
+  -anchor e \
+  -background "#5454FF" \
+  -foreground "#FFFF00"
+place .nut.po.pane.optframe.efa_l \
+  -relx 0.0 \
+  -rely 0.51 \
+  -relheight 0.04444444 \
+  -relwidth 0.25
+tk::spinbox .nut.po.pane.optframe.efa_s \
+  -width 7 \
+  -justify right \
+  -from 1 \
+  -to 9999 \
+  -increment 0.1 \
+  -textvariable ::FAPUopt \
+  -disabledforeground "#000000"
+place .nut.po.pane.optframe.efa_s \
+  -relx 0.265 \
+  -rely 0.51 \
+  -relheight 0.04444444 \
+  -relwidth 0.14
+ttk::checkbutton .nut.po.pane.optframe.efa_cb1 \
+  -text "Adjust to my meals" \
+  -variable ::FAPUpo \
+  -onvalue \
+  -1 \
+  -style po.TCheckbutton \
+  -command [list ChangePersonalOptions FAPU]
+place .nut.po.pane.optframe.efa_cb1 \
+  -relx 0.44 \
+  -rely 0.51 \
+  -relheight 0.04444444 \
+  -relwidth 0.23
+ttk::checkbutton .nut.po.pane.optframe.efa_cb2 \
+  -text "4% of Calories" \
+  -variable ::FAPUpo \
+  -onvalue 2 \
+  -style po.TCheckbutton \
+  -command [list ChangePersonalOptions FAPU]
+place .nut.po.pane.optframe.efa_cb2 \
+  -relx 0.69 \
+  -rely 0.51 \
+  -relheight 0.04444444 \
+  -relwidth 0.23
+label .nut.po.pane.optframe.fish_l \
+  -text "Omega-6/3 Balance" \
+  -anchor e \
+  -background "#5454FF" \
+  -foreground "#FFFF00"
+place .nut.po.pane.optframe.fish_l \
+  -relx 0.0 \
+  -rely 0.59 \
+  -relheight 0.04444444 \
+  -relwidth 0.25
 for {set i 15} {$i < 91} {incr i} {
  lappend ::balvals "$i / [expr {100 - $i}]"
  }
-ttk::combobox .nut.po.pane.optframe.fish_s -width 7 -justify right -textvariable ::FAPU1po -values $::balvals -state readonly -style po.TCombobox
-trace add variable ::FAPU1po write [list ChangePersonalOptions FAPU1] 
-place .nut.po.pane.optframe.fish_s -relx 0.265 -rely 0.59 -relheight 0.04444444 -relwidth 0.14
- 
-menubutton .nut.po.pane.optframe.dv_mb -background "#5454FF" -foreground "#FFFF00" -relief raised -text "Daily Values for Individual Micronutrients" -direction right -menu .nut.po.pane.optframe.dv_mb.m
-menu .nut.po.pane.optframe.dv_mb.m -tearoff 0 
+ttk::combobox .nut.po.pane.optframe.fish_s \
+  -width 7 \
+  -justify right \
+  -textvariable ::FAPU1po \
+  -values $::balvals \
+  -state readonly \
+  -style po.TCombobox
+trace add variable ::FAPU1po write [list ChangePersonalOptions FAPU1]
+place .nut.po.pane.optframe.fish_s \
+  -relx 0.265 \
+  -rely 0.59 \
+  -relheight 0.04444444 \
+  -relwidth 0.14
+menubutton .nut.po.pane.optframe.dv_mb \
+  -background "#5454FF" \
+  -foreground "#FFFF00" \
+  -relief raised \
+  -text "Daily Values for Individual Micronutrients" \
+  -direction right \
+  -menu .nut.po.pane.optframe.dv_mb.m
+menu .nut.po.pane.optframe.dv_mb.m \
+  -tearoff 0
 foreach nut {{Vitamin A} Thiamin Riboflavin Niacin {Panto. Acid} {Vitamin B6} Folate {Vitamin B12} {Choline} {Vitamin C} {Vitamin D} {Vitamin E} {Vitamin K1} Calcium Copper Iron Magnesium Manganese Phosphorus Potassium Selenium Sodium Zinc Glycine Retinol} {
- .nut.po.pane.optframe.dv_mb.m add command -label $nut -command [list changedv_vitmin $nut]
+ .nut.po.pane.optframe.dv_mb.m add command \
+  -label $nut \
+  -command [list changedv_vitmin $nut]
  }
-place .nut.po.pane.optframe.dv_mb -relx 0.02 -rely 0.67 -relheight 0.04444444 -relwidth 0.55
- 
-label .nut.po.pane.optframe.vite_l -text "vite" -anchor e -background "#5454FF" -foreground "#FFFF00"
-#place .nut.po.pane.optframe.vite_l -relx 0.0 -rely 0.75 -relheight 0.04444444 -relwidth 0.25
-tk::spinbox .nut.po.pane.optframe.vite_s -width 7 -justify right -from 1 -to 9999 -increment 0.1 -textvariable ::NULLopt -disabledforeground "#000000"
-#place .nut.po.pane.optframe.vite_s -relx 0.265 -rely 0.75 -relheight 0.04444444 -relwidth 0.14
-ttk::checkbutton .nut.po.pane.optframe.vite_cb1 -text "Adjust to my meals" -variable ::vitminpo -onvalue -1 -style po.TCheckbutton
-#place .nut.po.pane.optframe.vite_cb1 -relx 0.44 -rely 0.75 -relheight 0.04444444 -relwidth 0.23
-ttk::checkbutton .nut.po.pane.optframe.vite_cb2 -text "Daily Value Default" -variable ::vitminpo -onvalue 2 -style po.TCheckbutton
-#place .nut.po.pane.optframe.vite_cb2 -relx 0.69 -rely 0.75 -relheight 0.04444444 -relwidth 0.23
- 
-ttk::frame .nut.ts.frranking -style vf.TFrame
-place .nut.ts.frranking -relx 0.0 -rely 0.05 -relheight 0.7 -relwidth 1.0
+place .nut.po.pane.optframe.dv_mb \
+  -relx 0.02 \
+  -rely 0.67 \
+  -relheight 0.04444444 \
+  -relwidth 0.55
+label .nut.po.pane.optframe.vite_l \
+  -text "vite" \
+  -anchor e \
+  -background "#5454FF" \
+  -foreground "#FFFF00"
+#place .nut.po.pane.optframe.vite_l \
+  -relx 0.0 \
+  -rely 0.75 \
+  -relheight 0.04444444 \
+  -relwidth 0.25
+tk::spinbox .nut.po.pane.optframe.vite_s \
+  -width 7 \
+  -justify right \
+  -from 1 \
+  -to 9999 \
+  -increment 0.1 \
+  -textvariable ::NULLopt \
+  -disabledforeground "#000000"
+#place .nut.po.pane.optframe.vite_s \
+  -relx 0.265 \
+  -rely 0.75 \
+  -relheight 0.04444444 \
+  -relwidth 0.14
+ttk::checkbutton .nut.po.pane.optframe.vite_cb1 \
+  -text "Adjust to my meals" \
+  -variable ::vitminpo \
+  -onvalue \
+  -1 \
+  -style po.TCheckbutton
+#place .nut.po.pane.optframe.vite_cb1 \
+  -relx 0.44 \
+  -rely 0.75 \
+  -relheight 0.04444444 \
+  -relwidth 0.23
+ttk::checkbutton .nut.po.pane.optframe.vite_cb2 \
+  -text "Daily Value Default" \
+  -variable ::vitminpo \
+  -onvalue 2 \
+  -style po.TCheckbutton
+#place .nut.po.pane.optframe.vite_cb2 \
+  -relx 0.69 \
+  -rely 0.75 \
+  -relheight 0.04444444 \
+  -relwidth 0.23
+ttk::frame .nut.ts.frranking \
+  -style vf.TFrame
+place .nut.ts.frranking \
+  -relx 0.0 \
+  -rely 0.05 \
+  -relheight 0.7 \
+  -relwidth 1.0
 grid propagate .nut.ts.frranking 0
- 
-ttk::combobox .nut.ts.rankchoice -state readonly -justify center -style ts.TCombobox
-place .nut.ts.rankchoice -relx 0.0 -rely 0.0 -relheight 0.05 -relwidth 0.5
-ttk::combobox .nut.ts.fdgroupchoice -textvariable ::fdgroupchoice -state readonly -justify center -style ts.TCombobox
-place .nut.ts.fdgroupchoice -relx 0.5 -rely 0.0 -relheight 0.05 -relwidth 0.5
+ttk::combobox .nut.ts.rankchoice \
+  -state readonly \
+  -justify center \
+  -style ts.TCombobox
+place .nut.ts.rankchoice \
+  -relx 0.0 \
+  -rely 0.0 \
+  -relheight 0.05 \
+  -relwidth 0.5
+ttk::combobox .nut.ts.fdgroupchoice \
+  -textvariable ::fdgroupchoice \
+  -state readonly \
+  -justify center \
+  -style ts.TCombobox
+place .nut.ts.fdgroupchoice \
+  -relx 0.5 \
+  -rely 0.0 \
+  -relheight 0.05 \
+  -relwidth 0.5
 
-labelframe .nut.ts.frgraph -background "#FFFF00"
-place .nut.ts.frgraph -relx 0.0 -rely 0.75 -relheight 0.25 -relwidth 1.0
+labelframe .nut.ts.frgraph \
+  -background "#FFFF00"
+place .nut.ts.frgraph \
+  -relx 0.0 \
+  -rely 0.75 \
+  -relheight 0.25 \
+  -relwidth 1.0
 
-canvas .nut.ts.frgraph.canvas -relief flat -background "#FFFF00" 
-place .nut.ts.frgraph.canvas -relx 0.0 -rely 0.0 -relheight 1.0 -relwidth 1.0
+canvas .nut.ts.frgraph.canvas \
+  -relief flat \
+  -background "#FFFF00"
+place .nut.ts.frgraph.canvas \
+  -relx 0.0 \
+  -rely 0.0 \
+  -relheight 1.0 \
+  -relwidth 1.0
 
-grid [ttk::treeview .nut.ts.frranking.ranking -yscrollcommand [list .nut.ts.frranking.vsb set] -style nut.Treeview -columns {food field1 field2} -show headings] -row 0 -column 0 -sticky nsew
-.nut.ts.frranking.ranking column 0 -minwidth [expr {int(10 * $vrootwGR * $appSize / 1.3 / 15)}]
-.nut.ts.frranking.ranking column 1 -minwidth [expr {int(2 * $vrootwGR * $appSize / 1.3 / 15)}]
-.nut.ts.frranking.ranking column 2 -minwidth [expr {int(3 * $vrootwGR * $appSize / 1.3 / 15)}]
-grid [scrollbar .nut.ts.frranking.vsb -width [expr {$::magnify * 5}] -relief sunken -orient vertical -command [list .nut.ts.frranking.ranking yview]] -row 0 -column 1 -sticky nsew
- 
-grid columnconfigure .nut.ts.frranking 0 -weight 1 -minsize 0
-grid rowconfigure .nut.ts.frranking 0 -weight 1 -minsize 0
+grid [ttk::treeview .nut.ts.frranking.ranking \
+  -yscrollcommand [list .nut.ts.frranking.vsb set] \
+  -style nut.Treeview \
+  -columns {food field1 field2} \
+  -show headings] \
+  -row 0 \
+  -column 0 \
+  -sticky nsew
+.nut.ts.frranking.ranking column 0 \
+  -minwidth [expr {int(10 * $vrootwGR * $appSize / 1.3 / 15)}]
+.nut.ts.frranking.ranking column 1 \
+  -minwidth [expr {int(2 * $vrootwGR * $appSize / 1.3 / 15)}]
+.nut.ts.frranking.ranking column 2 \
+  -minwidth [expr {int(3 * $vrootwGR * $appSize / 1.3 / 15)}]
+grid [scrollbar .nut.ts.frranking.vsb \
+  -width [expr {$::magnify * 5}] \
+  -relief sunken \
+  -orient vertical \
+  -command [list .nut.ts.frranking.ranking yview]] \
+  -row 0 \
+  -column 1 \
+  -sticky nsew
+grid columnconfigure .nut.ts.frranking 0 \
+  -weight 1 \
+  -minsize 0
+grid rowconfigure .nut.ts.frranking 0 \
+  -weight 1 \
+  -minsize 0
 
 bind .nut.ts.frranking.ranking <<TreeviewSelect>> rank2vf
 
@@ -1270,415 +4266,1069 @@ trace add variable like_this_vf write FindFoodvf
 bind .nut.vf.fsentry <FocusIn> FoodSearchvf
 
 foreach x {am rm vf ar} {
- ttk::notebook .nut.${x}.nbw -style ${x}.TNotebook
- ttk::frame .nut.${x}.nbw.screen0 -style ${x}.TFrame
- ttk::frame .nut.${x}.nbw.screen1 -style ${x}.TFrame
- ttk::frame .nut.${x}.nbw.screen2 -style ${x}.TFrame
- ttk::frame .nut.${x}.nbw.screen3 -style ${x}.TFrame
- ttk::frame .nut.${x}.nbw.screen4 -style ${x}.TFrame
- ttk::frame .nut.${x}.nbw.screen5 -style ${x}.TFrame
- .nut.${x}.nbw add .nut.${x}.nbw.screen0 -text "Daily Value %"
- .nut.${x}.nbw add .nut.${x}.nbw.screen1 -text "DV Amounts"
- .nut.${x}.nbw add .nut.${x}.nbw.screen2 -text "Carbs & Amino Acids"
- .nut.${x}.nbw add .nut.${x}.nbw.screen3 -text "Miscellaneous"
- .nut.${x}.nbw add .nut.${x}.nbw.screen4 -text "Sat & Mono Fatty Acids"
- .nut.${x}.nbw add .nut.${x}.nbw.screen5 -text "Poly & Trans Fatty Acids"
- place .nut.${x}.nbw -relx 0.0 -rely 0.25 -relheight 0.75 -relwidth 1.0
+ ttk::notebook .nut.${x}.nbw \
+  -style ${x}.TNotebook
+ ttk::frame .nut.${x}.nbw.screen0 \
+  -style ${x}.TFrame
+ ttk::frame .nut.${x}.nbw.screen1 \
+  -style ${x}.TFrame
+ ttk::frame .nut.${x}.nbw.screen2 \
+  -style ${x}.TFrame
+ ttk::frame .nut.${x}.nbw.screen3 \
+  -style ${x}.TFrame
+ ttk::frame .nut.${x}.nbw.screen4 \
+  -style ${x}.TFrame
+ ttk::frame .nut.${x}.nbw.screen5 \
+  -style ${x}.TFrame
+ .nut.${x}.nbw add .nut.${x}.nbw.screen0 \
+  -text "Daily Value %"
+ .nut.${x}.nbw add .nut.${x}.nbw.screen1 \
+  -text "DV Amounts"
+ .nut.${x}.nbw add .nut.${x}.nbw.screen2 \
+  -text "Carbs & Amino Acids"
+ .nut.${x}.nbw add .nut.${x}.nbw.screen3 \
+  -text "Miscellaneous"
+ .nut.${x}.nbw add .nut.${x}.nbw.screen4 \
+  -text "Sat & Mono Fatty Acids"
+ .nut.${x}.nbw add .nut.${x}.nbw.screen5 \
+  -text "Poly & Trans Fatty Acids"
+ place .nut.${x}.nbw \
+  -relx 0.0 \
+  -rely 0.25 \
+  -relheight 0.75 \
+  -relwidth 1.0
 
  set screen 0
  foreach nut {ENERC_KCAL} {
   if {$x != "ar"} {
-   button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::caloriebutton -command "NewStory $nut $screen" -background "#FFFF00" 
-   } else {
-   button .nut.${x}.nbw.screen${screen}.b${nut} -text "Calories (2000)" -command "NewStory $nut $screen" -background "#FFFF00"  
-   }
+   button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::caloriebutton \
+  -command "NewStory $nut $screen" \
+  -background "#FFFF00"   } else {
+   button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -text "Calories (2000)" \
+  -command "NewStory $nut $screen" \
+  -background "#FFFF00"    }
   if {$x == "ar"} {
-   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}dv -justify right
+   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}dv \
+  -justify right
    } else {
-   label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}dv -background $background($x) -anchor e
+   label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}dv \
+  -background $background($x) \
+  -anchor e
    }
-  label .nut.${x}.nbw.screen${screen}.lu${nut} -text "%" -background $background($x) -anchor w
-  place .nut.${x}.nbw.screen${screen}.b${nut} -relx 0.005 -rely 0.00625 -relheight 0.06 -relwidth 0.165
-  place .nut.${x}.nbw.screen${screen}.l${nut} -relx 0.18 -rely 0.00625 -relheight 0.06 -relwidth 0.1
-  place .nut.${x}.nbw.screen${screen}.lu${nut} -relx 0.28 -rely 0.00625 -relheight 0.06 -relwidth 0.055
+  label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -text "%" \
+  -background $background($x) \
+  -anchor w
+  place .nut.${x}.nbw.screen${screen}.b${nut} \
+  -relx 0.005 \
+  -rely 0.00625 \
+  -relheight 0.06 \
+  -relwidth 0.165
+  place .nut.${x}.nbw.screen${screen}.l${nut} \
+  -relx 0.18 \
+  -rely 0.00625 \
+  -relheight 0.06 \
+  -relwidth 0.1
+  place .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -relx 0.28 \
+  -rely 0.00625 \
+  -relheight 0.06 \
+  -relwidth 0.055
   }
  foreach nut {ENERC_KCAL1} {
-  button .nut.${x}.nbw.screen${screen}.b${nut} -text "Prot / Carb / Fat" -command "NewStory ENERC_KCAL $x" -background "#FFFF00"
-  label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -background $background($x) -anchor center
-  place .nut.${x}.nbw.screen${screen}.b${nut} -relx 0.005 -rely 0.0725 -relheight 0.06 -relwidth 0.165
-  place .nut.${x}.nbw.screen${screen}.l${nut} -relx 0.18 -rely 0.0725 -relheight 0.06 -relwidth 0.165
+  button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -text "Prot / Carb / Fat" \
+  -command "NewStory ENERC_KCAL $x" \
+  -background "#FFFF00"
+  label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -background $background($x) \
+  -anchor center
+  place .nut.${x}.nbw.screen${screen}.b${nut} \
+  -relx 0.005 \
+  -rely 0.0725 \
+  -relheight 0.06 \
+  -relwidth 0.165
+  place .nut.${x}.nbw.screen${screen}.l${nut} \
+  -relx 0.18 \
+  -rely 0.0725 \
+  -relheight 0.06 \
+  -relwidth 0.165
   }
- set rely 0.252109375
 #set rely 0.205
  foreach nut {FAT FASAT FAMS FAPU OMEGA6 LA AA OMEGA3 ALA EPA DHA CHOLE} {
-  button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -background "#FFFF00" 
+  button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -background "#FFFF00"
   if {$x == "ar"} {
-   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}dv -justify right
+   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}dv \
+  -justify right
    } else {
-   label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}dv -background $background($x) -anchor e
+   label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}dv \
+  -background $background($x) \
+  -anchor e
    }
-  label .nut.${x}.nbw.screen${screen}.lu${nut} -text "%" -background $background($x) -anchor w
-  place .nut.${x}.nbw.screen${screen}.b${nut} -relx 0.005 -rely $rely -relheight 0.06 -relwidth 0.165
-  place .nut.${x}.nbw.screen${screen}.l${nut} -relx 0.18 -rely $rely -relheight 0.06 -relwidth 0.1
-  place .nut.${x}.nbw.screen${screen}.lu${nut} -relx 0.28 -rely $rely -relheight 0.06 -relwidth 0.055
+  label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -text "%" \
+  -background $background($x) \
+  -anchor w
+  place .nut.${x}.nbw.screen${screen}.b${nut} \
+  -relx 0.005 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.165
+  place .nut.${x}.nbw.screen${screen}.l${nut} \
+  -relx 0.18 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.1
+  place .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -relx 0.28 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.055
   set rely [expr {$rely + 0.062109375}]
   }
  set rely 0.00625
  foreach nut {CHOCDF FIBTG} {
-  button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -background "#FFFF00" 
+  button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -background "#FFFF00"
   if {$x == "ar"} {
-   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}dv -justify right
+   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}dv \
+  -justify right
    } else {
-   label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}dv -background $background($x) -anchor e
+   label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}dv \
+  -background $background($x) \
+  -anchor e
    }
-  label .nut.${x}.nbw.screen${screen}.lu${nut} -text "%" -background $background($x) -anchor w
-  place .nut.${x}.nbw.screen${screen}.b${nut} -relx 0.335 -rely $rely -relheight 0.06 -relwidth 0.165
-  place .nut.${x}.nbw.screen${screen}.l${nut} -relx 0.51 -rely $rely -relheight 0.06 -relwidth 0.1
-  place .nut.${x}.nbw.screen${screen}.lu${nut} -relx 0.61 -rely $rely -relheight 0.06 -relwidth 0.055
+  label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -text "%" \
+  -background $background($x) \
+  -anchor w
+  place .nut.${x}.nbw.screen${screen}.b${nut} \
+  -relx 0.335 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.165
+  place .nut.${x}.nbw.screen${screen}.l${nut} \
+  -relx 0.51 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.1
+  place .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -relx 0.61 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.055
   set rely [expr {$rely + 0.062109375}]
   }
  set rely 0.19
 #set rely 0.205
  foreach nut {VITA_RAE THIA RIBF NIA PANTAC VITB6A FOL VITB12 CHOLN VITC VITD_BOTH VITE VITK1} {
-  button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -background "#FFFF00" 
+  button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -background "#FFFF00"
   if {$x == "ar"} {
-   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}dv -justify right
+   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}dv \
+  -justify right
    } else {
-   label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}dv -background $background($x) -anchor e
+   label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}dv \
+  -background $background($x) \
+  -anchor e
    }
-  label .nut.${x}.nbw.screen${screen}.lu${nut} -text "%" -background $background($x) -anchor w
-  place .nut.${x}.nbw.screen${screen}.b${nut} -relx 0.335 -rely $rely -relheight 0.06 -relwidth 0.165
-  place .nut.${x}.nbw.screen${screen}.l${nut} -relx 0.51 -rely $rely -relheight 0.06 -relwidth 0.1
-  place .nut.${x}.nbw.screen${screen}.lu${nut} -relx 0.61 -rely $rely -relheight 0.06 -relwidth 0.055
+  label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -text "%" \
+  -background $background($x) \
+  -anchor w
+  place .nut.${x}.nbw.screen${screen}.b${nut} \
+  -relx 0.335 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.165
+  place .nut.${x}.nbw.screen${screen}.l${nut} \
+  -relx 0.51 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.1
+  place .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -relx 0.61 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.055
   set rely [expr {$rely + 0.062109375}]
   }
  set rely 0.00625
  foreach nut {PROCNT} {
-  button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -background "#FFFF00" 
+  button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -background "#FFFF00"
   if {$x == "ar"} {
-   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}dv -justify right
+   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}dv \
+  -justify right
    } else {
-   label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}dv -background $background($x) -anchor e
+   label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}dv \
+  -background $background($x) \
+  -anchor e
    }
-  label .nut.${x}.nbw.screen${screen}.lu${nut} -text "%" -background $background($x) -anchor w
-  place .nut.${x}.nbw.screen${screen}.b${nut} -relx 0.665 -rely $rely -relheight 0.06 -relwidth 0.165
-  place .nut.${x}.nbw.screen${screen}.l${nut} -relx 0.84 -rely $rely -relheight 0.06 -relwidth 0.1
-  place .nut.${x}.nbw.screen${screen}.lu${nut} -relx 0.94 -rely $rely -relheight 0.06 -relwidth 0.055
+  label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -text "%" \
+  -background $background($x) \
+  -anchor w
+  place .nut.${x}.nbw.screen${screen}.b${nut} \
+  -relx 0.665 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.165
+  place .nut.${x}.nbw.screen${screen}.l${nut} \
+  -relx 0.84 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.1
+  place .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -relx 0.94 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.055
   set rely [expr {$rely + 0.062109375}]
   }
  foreach nut {CHO_NONFIB} {
-  button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -background "#FFFF00" 
+  button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -background "#FFFF00"
   if {$x == "ar"} {
-   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}1 -justify right
+   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}1 \
+  -justify right
    } else {
-    label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}1 -background $background($x) -anchor e
+    label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}1 \
+  -background $background($x) \
+  -anchor e
 
 #uncomment this line and comment out the previous if user insists he
 #must see CHO_NONFIB percentage of DV instead of grams
 
-#    label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}dv -background $background($x) -anchor e
+#    label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}dv \
+  -background $background($x) \
+  -anchor e
    }
-   label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -background $background($x) -anchor w
+   label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -background $background($x) \
+  -anchor w
 
 #uncomment this line and comment out the previous if user insists he
 #must see CHO_NONFIB percentage of DV instead of grams
 
-#   label .nut.${x}.nbw.screen${screen}.lu${nut} -text "%" -background $background($x) -anchor w
-  place .nut.${x}.nbw.screen${screen}.b${nut} -relx 0.665 -rely $rely -relheight 0.06 -relwidth 0.165
-  place .nut.${x}.nbw.screen${screen}.l${nut} -relx 0.84 -rely $rely -relheight 0.06 -relwidth 0.1
-  place .nut.${x}.nbw.screen${screen}.lu${nut} -relx 0.94 -rely $rely -relheight 0.06 -relwidth 0.055
+#   label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -text "%" \
+  -background $background($x) \
+  -anchor w
+  place .nut.${x}.nbw.screen${screen}.b${nut} \
+  -relx 0.665 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.165
+  place .nut.${x}.nbw.screen${screen}.l${nut} \
+  -relx 0.84 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.1
+  place .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -relx 0.94 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.055
   set rely [expr {$rely + 0.062109375}]
   }
  set rely 0.252109375
 #set rely [expr {$rely + 0.062109375}]
  foreach nut {CA CU FE MG MN P K SE NA ZN} {
-  button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -background "#FFFF00" 
+  button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -background "#FFFF00"
   if {$x == "ar"} {
-   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}dv -justify right
+   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}dv \
+  -justify right
    } else {
-   label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x}dv -background $background($x) -anchor e
+   label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x}dv \
+  -background $background($x) \
+  -anchor e
    }
-  label .nut.${x}.nbw.screen${screen}.lu${nut} -text "%" -background $background($x) -anchor w
-  place .nut.${x}.nbw.screen${screen}.b${nut} -relx 0.665 -rely $rely -relheight 0.06 -relwidth 0.165
-  place .nut.${x}.nbw.screen${screen}.l${nut} -relx 0.84 -rely $rely -relheight 0.06 -relwidth 0.1
-  place .nut.${x}.nbw.screen${screen}.lu${nut} -relx 0.94 -rely $rely -relheight 0.06 -relwidth 0.055
+  label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -text "%" \
+  -background $background($x) \
+  -anchor w
+  place .nut.${x}.nbw.screen${screen}.b${nut} \
+  -relx 0.665 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.165
+  place .nut.${x}.nbw.screen${screen}.l${nut} \
+  -relx 0.84 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.1
+  place .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -relx 0.94 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.055
   set rely [expr {$rely + 0.062109375}]
   }
  set rely [expr {$rely + 0.062109375}]
  foreach nut {FAPU1} {
-  button .nut.${x}.nbw.screen${screen}.b${nut} -text "Omega-6/3 Balance" -command "NewStory FAPU $x" -background "#FFFF00"
-  label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -background $background($x) -anchor e
-  place .nut.${x}.nbw.screen${screen}.b${nut} -relx 0.665 -rely $rely -relheight 0.06 -relwidth 0.165
-  place .nut.${x}.nbw.screen${screen}.l${nut} -relx 0.84 -rely $rely -relheight 0.06 -relwidth 0.1
+  button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -text "Omega-6/3 Balance" \
+  -command "NewStory FAPU $x" \
+  -background "#FFFF00"
+  label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -background $background($x) \
+  -anchor e
+  place .nut.${x}.nbw.screen${screen}.b${nut} \
+  -relx 0.665 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.165
+  place .nut.${x}.nbw.screen${screen}.l${nut} \
+  -relx 0.84 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.1
   }
  set screen 1
  foreach nut {ENERC_KCAL} {
-  button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -background "#FFFF00" 
+  button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -background "#FFFF00"
   if {$x == "ar"} {
-   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right
+   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right
    } else {
-   label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -background $background($x) -anchor e
+   label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -background $background($x) \
+  -anchor e
    }
-  label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -background $background($x) -anchor w
-  place .nut.${x}.nbw.screen${screen}.b${nut} -relx 0.005 -rely 0.00625 -relheight 0.06 -relwidth 0.165
-  place .nut.${x}.nbw.screen${screen}.l${nut} -relx 0.18 -rely 0.00625 -relheight 0.06 -relwidth 0.1
-  place .nut.${x}.nbw.screen${screen}.lu${nut} -relx 0.28 -rely 0.00625 -relheight 0.06 -relwidth 0.055
+  label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -background $background($x) \
+  -anchor w
+  place .nut.${x}.nbw.screen${screen}.b${nut} \
+  -relx 0.005 \
+  -rely 0.00625 \
+  -relheight 0.06 \
+  -relwidth 0.165
+  place .nut.${x}.nbw.screen${screen}.l${nut} \
+  -relx 0.18 \
+  -rely 0.00625 \
+  -relheight 0.06 \
+  -relwidth 0.1
+  place .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -relx 0.28 \
+  -rely 0.00625 \
+  -relheight 0.06 \
+  -relwidth 0.055
   }
  foreach nut {ENERC_KCAL1} {
-  button .nut.${x}.nbw.screen${screen}.b${nut} -text "Prot / Carb / Fat" -command "NewStory ENERC_KCAL $x" -background "#FFFF00"
-  label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -background $background($x) -anchor center
-  place .nut.${x}.nbw.screen${screen}.b${nut} -relx 0.005 -rely 0.0725 -relheight 0.06 -relwidth 0.165
-  place .nut.${x}.nbw.screen${screen}.l${nut} -relx 0.18 -rely 0.0725 -relheight 0.06 -relwidth 0.165
+  button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -text "Prot / Carb / Fat" \
+  -command "NewStory ENERC_KCAL $x" \
+  -background "#FFFF00"
+  label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -background $background($x) \
+  -anchor center
+  place .nut.${x}.nbw.screen${screen}.b${nut} \
+  -relx 0.005 \
+  -rely 0.0725 \
+  -relheight 0.06 \
+  -relwidth 0.165
+  place .nut.${x}.nbw.screen${screen}.l${nut} \
+  -relx 0.18 \
+  -rely 0.0725 \
+  -relheight 0.06 \
+  -relwidth 0.165
   }
  set rely 0.252109375
 #set rely 0.205
  foreach nut {FAT FASAT FAMS FAPU OMEGA6 LA AA OMEGA3 ALA EPA DHA CHOLE} {
-  button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -background "#FFFF00" 
+  button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -background "#FFFF00"
   if {$x == "ar"} {
-   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right
+   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right
    } else {
-   label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -background $background($x) -anchor e
+   label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -background $background($x) \
+  -anchor e
    }
-  label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -background $background($x) -anchor w
-  place .nut.${x}.nbw.screen${screen}.b${nut} -relx 0.005 -rely $rely -relheight 0.06 -relwidth 0.165
-  place .nut.${x}.nbw.screen${screen}.l${nut} -relx 0.18 -rely $rely -relheight 0.06 -relwidth 0.1
-  place .nut.${x}.nbw.screen${screen}.lu${nut} -relx 0.28 -rely $rely -relheight 0.06 -relwidth 0.055
+  label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -background $background($x) \
+  -anchor w
+  place .nut.${x}.nbw.screen${screen}.b${nut} \
+  -relx 0.005 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.165
+  place .nut.${x}.nbw.screen${screen}.l${nut} \
+  -relx 0.18 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.1
+  place .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -relx 0.28 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.055
   set rely [expr {$rely + 0.062109375}]
   }
  set rely 0.00625
  foreach nut {CHOCDF FIBTG} {
-  button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -background "#FFFF00" 
+  button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -background "#FFFF00"
   if {$x == "ar"} {
-   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right
+   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right
    } else {
-   label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -background $background($x) -anchor e
+   label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -background $background($x) \
+  -anchor e
    }
-  label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -background $background($x) -anchor w
-  place .nut.${x}.nbw.screen${screen}.b${nut} -relx 0.335 -rely $rely -relheight 0.06 -relwidth 0.165
-  place .nut.${x}.nbw.screen${screen}.l${nut} -relx 0.51 -rely $rely -relheight 0.06 -relwidth 0.1
-  place .nut.${x}.nbw.screen${screen}.lu${nut} -relx 0.61 -rely $rely -relheight 0.06 -relwidth 0.055
+  label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -background $background($x) \
+  -anchor w
+  place .nut.${x}.nbw.screen${screen}.b${nut} \
+  -relx 0.335 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.165
+  place .nut.${x}.nbw.screen${screen}.l${nut} \
+  -relx 0.51 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.1
+  place .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -relx 0.61 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.055
   set rely [expr {$rely + 0.062109375}]
   }
  set rely 0.19
 #set rely 0.205
  foreach nut {VITA_RAE THIA RIBF NIA PANTAC VITB6A FOL VITB12 CHOLN VITC VITD_BOTH VITE VITK1} {
-  button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -background "#FFFF00" 
+  button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -background "#FFFF00"
   if {$x == "ar"} {
-   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right
+   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right
    } else {
-   label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -background $background($x) -anchor e
+   label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -background $background($x) \
+  -anchor e
    }
-  label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -background $background($x) -anchor w
-  place .nut.${x}.nbw.screen${screen}.b${nut} -relx 0.335 -rely $rely -relheight 0.06 -relwidth 0.165
-  place .nut.${x}.nbw.screen${screen}.l${nut} -relx 0.51 -rely $rely -relheight 0.06 -relwidth 0.1
-  place .nut.${x}.nbw.screen${screen}.lu${nut} -relx 0.61 -rely $rely -relheight 0.06 -relwidth 0.055
+  label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -background $background($x) \
+  -anchor w
+  place .nut.${x}.nbw.screen${screen}.b${nut} \
+  -relx 0.335 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.165
+  place .nut.${x}.nbw.screen${screen}.l${nut} \
+  -relx 0.51 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.1
+  place .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -relx 0.61 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.055
   set rely [expr {$rely + 0.062109375}]
   }
  set rely 0.00625
  foreach nut {PROCNT} {
-  button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -background "#FFFF00" 
+  button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -background "#FFFF00"
   if {$x == "ar"} {
-   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right
+   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right
    } else {
-   label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -background $background($x) -anchor e
+   label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -background $background($x) \
+  -anchor e
    }
-  label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -background $background($x) -anchor w
-  place .nut.${x}.nbw.screen${screen}.b${nut} -relx 0.665 -rely $rely -relheight 0.06 -relwidth 0.165
-  place .nut.${x}.nbw.screen${screen}.l${nut} -relx 0.84 -rely $rely -relheight 0.06 -relwidth 0.1
-  place .nut.${x}.nbw.screen${screen}.lu${nut} -relx 0.94 -rely $rely -relheight 0.06 -relwidth 0.055
+  label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -background $background($x) \
+  -anchor w
+  place .nut.${x}.nbw.screen${screen}.b${nut} \
+  -relx 0.665 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.165
+  place .nut.${x}.nbw.screen${screen}.l${nut} \
+  -relx 0.84 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.1
+  place .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -relx 0.94 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.055
   set rely [expr {$rely + 0.062109375}]
   }
  foreach nut {CHO_NONFIB} {
-  button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -background "#FFFF00" 
+  button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -background "#FFFF00"
   if {$x == "ar"} {
-   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right
+   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right
    } else {
-   label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -background $background($x) -anchor e
+   label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -background $background($x) \
+  -anchor e
    }
-  label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -background $background($x) -anchor w
-  place .nut.${x}.nbw.screen${screen}.b${nut} -relx 0.665 -rely $rely -relheight 0.06 -relwidth 0.165
-  place .nut.${x}.nbw.screen${screen}.l${nut} -relx 0.84 -rely $rely -relheight 0.06 -relwidth 0.1
-  place .nut.${x}.nbw.screen${screen}.lu${nut} -relx 0.94 -rely $rely -relheight 0.06 -relwidth 0.055
+  label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -background $background($x) \
+  -anchor w
+  place .nut.${x}.nbw.screen${screen}.b${nut} \
+  -relx 0.665 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.165
+  place .nut.${x}.nbw.screen${screen}.l${nut} \
+  -relx 0.84 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.1
+  place .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -relx 0.94 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.055
   set rely [expr {$rely + 0.062109375}]
   }
  set rely 0.252109375
 #set rely [expr {$rely + 0.062109375}]
  foreach nut {CA CU FE MG MN P K SE NA ZN} {
-  button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -background "#FFFF00" 
+  button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -background "#FFFF00"
   if {$x == "ar"} {
-   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right
+   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right
    } else {
-   label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -background $background($x) -anchor e
+   label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -background $background($x) \
+  -anchor e
    }
-  label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -background $background($x) -anchor w
-  place .nut.${x}.nbw.screen${screen}.b${nut} -relx 0.665 -rely $rely -relheight 0.06 -relwidth 0.165
-  place .nut.${x}.nbw.screen${screen}.l${nut} -relx 0.84 -rely $rely -relheight 0.06 -relwidth 0.1
-  place .nut.${x}.nbw.screen${screen}.lu${nut} -relx 0.94 -rely $rely -relheight 0.06 -relwidth 0.055
+  label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -background $background($x) \
+  -anchor w
+  place .nut.${x}.nbw.screen${screen}.b${nut} \
+  -relx 0.665 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.165
+  place .nut.${x}.nbw.screen${screen}.l${nut} \
+  -relx 0.84 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.1
+  place .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -relx 0.94 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.055
   set rely [expr {$rely + 0.062109375}]
   }
  set rely [expr {$rely + 0.062109375}]
  foreach nut {FAPU1} {
-  button .nut.${x}.nbw.screen${screen}.b${nut} -text "Omega-6/3 Balance" -command "NewStory FAPU $x" -background "#FFFF00"
-  label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -background $background($x) -anchor center
-  place .nut.${x}.nbw.screen${screen}.b${nut} -relx 0.665 -rely $rely -relheight 0.06 -relwidth 0.165
-  place .nut.${x}.nbw.screen${screen}.l${nut} -relx 0.84 -rely $rely -relheight 0.06 -relwidth 0.165
+  button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -text "Omega-6/3 Balance" \
+  -command "NewStory FAPU $x" \
+  -background "#FFFF00"
+  label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -background $background($x) \
+  -anchor center
+  place .nut.${x}.nbw.screen${screen}.b${nut} \
+  -relx 0.665 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.165
+  place .nut.${x}.nbw.screen${screen}.l${nut} \
+  -relx 0.84 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.165
   }
  set screen 2
  set rely 0.13875
  foreach nut {CHOCDF FIBTG STARCH SUGAR FRUS GALS GLUS LACS MALS SUCS} {
-  button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -background "#FFFF00" 
+  button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -background "#FFFF00"
   if {$x == "ar"} {
-   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right
+   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right
    } else {
-   label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -background $background($x) -anchor e
+   label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -background $background($x) \
+  -anchor e
    }
-  label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -background $background($x) -anchor w
-  place .nut.${x}.nbw.screen${screen}.b${nut} -relx 0.005 -rely $rely -relheight 0.06 -relwidth 0.165
-  place .nut.${x}.nbw.screen${screen}.l${nut} -relx 0.18 -rely $rely -relheight 0.06 -relwidth 0.1
-  place .nut.${x}.nbw.screen${screen}.lu${nut} -relx 0.28 -rely $rely -relheight 0.06 -relwidth 0.055
+  label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -background $background($x) \
+  -anchor w
+  place .nut.${x}.nbw.screen${screen}.b${nut} \
+  -relx 0.005 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.165
+  place .nut.${x}.nbw.screen${screen}.l${nut} \
+  -relx 0.18 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.1
+  place .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -relx 0.28 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.055
   set rely [expr {$rely + 0.062109375}]
   }
  set rely 0.13875
  foreach nut {PROCNT ADPROT ALA_G ARG_G ASP_G CYS_G GLU_G GLY_G HISTN_G HYP ILE_G} {
-  button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -background "#FFFF00" 
+  button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -background "#FFFF00"
   if {$x == "ar"} {
-   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right
+   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right
    } else {
-   label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -background $background($x) -anchor e
+   label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -background $background($x) \
+  -anchor e
    }
-  label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -background $background($x) -anchor w
-  place .nut.${x}.nbw.screen${screen}.b${nut} -relx 0.335 -rely $rely -relheight 0.06 -relwidth 0.165
-  place .nut.${x}.nbw.screen${screen}.l${nut} -relx 0.51 -rely $rely -relheight 0.06 -relwidth 0.1
-  place .nut.${x}.nbw.screen${screen}.lu${nut} -relx 0.61 -rely $rely -relheight 0.06 -relwidth 0.055
+  label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -background $background($x) \
+  -anchor w
+  place .nut.${x}.nbw.screen${screen}.b${nut} \
+  -relx 0.335 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.165
+  place .nut.${x}.nbw.screen${screen}.l${nut} \
+  -relx 0.51 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.1
+  place .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -relx 0.61 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.055
   set rely [expr {$rely + 0.062109375}]
   }
  set rely 0.13875
  foreach nut {LEU_G LYS_G MET_G PHE_G PRO_G SER_G THR_G TRP_G TYR_G VAL_G} {
-  button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -background "#FFFF00" 
+  button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -background "#FFFF00"
   if {$x == "ar"} {
-   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right
+   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right
    } else {
-   label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -background $background($x) -anchor e
+   label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -background $background($x) \
+  -anchor e
    }
-  label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -background $background($x) -anchor w
-  place .nut.${x}.nbw.screen${screen}.b${nut} -relx 0.665 -rely $rely -relheight 0.06 -relwidth 0.165
-  place .nut.${x}.nbw.screen${screen}.l${nut} -relx 0.84 -rely $rely -relheight 0.06 -relwidth 0.1
-  place .nut.${x}.nbw.screen${screen}.lu${nut} -relx 0.94 -rely $rely -relheight 0.06 -relwidth 0.055
+  label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -background $background($x) \
+  -anchor w
+  place .nut.${x}.nbw.screen${screen}.b${nut} \
+  -relx 0.665 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.165
+  place .nut.${x}.nbw.screen${screen}.l${nut} \
+  -relx 0.84 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.1
+  place .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -relx 0.94 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.055
   set rely [expr {$rely + 0.062109375}]
   }
  set screen 3
  set rely 0.0725
  foreach nut {ENERC_KJ ASH WATER CAFFN THEBRN ALC FLD BETN CHOLN FOLAC FOLFD FOLDFE RETOL} {
-  button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -background "#FFFF00" 
+  button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -background "#FFFF00"
   if {$x == "ar"} {
-   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right
+   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right
    } else {
-   label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -background $background($x) -anchor e
+   label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -background $background($x) \
+  -anchor e
    }
-  label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -background $background($x) -anchor w
-  place .nut.${x}.nbw.screen${screen}.b${nut} -relx 0.005 -rely $rely -relheight 0.06 -relwidth 0.165
-  place .nut.${x}.nbw.screen${screen}.l${nut} -relx 0.18 -rely $rely -relheight 0.06 -relwidth 0.1
-  place .nut.${x}.nbw.screen${screen}.lu${nut} -relx 0.28 -rely $rely -relheight 0.06 -relwidth 0.055
+  label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -background $background($x) \
+  -anchor w
+  place .nut.${x}.nbw.screen${screen}.b${nut} \
+  -relx 0.005 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.165
+  place .nut.${x}.nbw.screen${screen}.l${nut} \
+  -relx 0.18 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.1
+  place .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -relx 0.28 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.055
   set rely [expr {$rely + 0.062109375}]
   }
  set rely 0.0725
  foreach nut {VITA_IU ERGCAL CHOCAL VITD VITB12_ADDED VITE_ADDED VITK1D MK4 TOCPHA TOCPHB TOCPHG TOCPHD TOCTRA} {
-  button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -background "#FFFF00" 
+  button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -background "#FFFF00"
   if {$x == "ar"} {
-   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right
+   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right
    } else {
-   label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -background $background($x) -anchor e
+   label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -background $background($x) \
+  -anchor e
    }
-  label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -background $background($x) -anchor w
-  place .nut.${x}.nbw.screen${screen}.b${nut} -relx 0.335 -rely $rely -relheight 0.06 -relwidth 0.165
-  place .nut.${x}.nbw.screen${screen}.l${nut} -relx 0.51 -rely $rely -relheight 0.06 -relwidth 0.1
-  place .nut.${x}.nbw.screen${screen}.lu${nut} -relx 0.61 -rely $rely -relheight 0.06 -relwidth 0.055
+  label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -background $background($x) \
+  -anchor w
+  place .nut.${x}.nbw.screen${screen}.b${nut} \
+  -relx 0.335 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.165
+  place .nut.${x}.nbw.screen${screen}.l${nut} \
+  -relx 0.51 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.1
+  place .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -relx 0.61 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.055
   set rely [expr {$rely + 0.062109375}]
   }
  set rely 0.0725
  foreach nut {TOCTRB TOCTRG TOCTRD CARTA CARTB CRYPX LUT_ZEA LYCPN CHOLE PHYSTR SITSTR CAMD5 STID7} {
-  button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -background "#FFFF00" 
+  button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -background "#FFFF00"
   if {$x == "ar"} {
-   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right
+   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right
    } else {
-   label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -background $background($x) -anchor e
+   label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -background $background($x) \
+  -anchor e
    }
-  label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -background $background($x) -anchor w
-  place .nut.${x}.nbw.screen${screen}.b${nut} -relx 0.665 -rely $rely -relheight 0.06 -relwidth 0.165
-  place .nut.${x}.nbw.screen${screen}.l${nut} -relx 0.84 -rely $rely -relheight 0.06 -relwidth 0.1
-  place .nut.${x}.nbw.screen${screen}.lu${nut} -relx 0.94 -rely $rely -relheight 0.06 -relwidth 0.055
+  label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -background $background($x) \
+  -anchor w
+  place .nut.${x}.nbw.screen${screen}.b${nut} \
+  -relx 0.665 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.165
+  place .nut.${x}.nbw.screen${screen}.l${nut} \
+  -relx 0.84 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.1
+  place .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -relx 0.94 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.055
   set rely [expr {$rely + 0.062109375}]
   }
  set screen 4
  set rely 0.00625
  foreach nut {FASAT F4D0 F6D0 F8D0 F10D0 F12D0 F13D0 F14D0 F15D0 F16D0 F17D0 F18D0 F20D0 F22D0 F24D0} {
-  button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -background "#FFFF00" 
+  button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -background "#FFFF00"
   if {$x == "ar"} {
-   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right
+   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right
    } else {
-   label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -background $background($x) -anchor e
+   label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -background $background($x) \
+  -anchor e
    }
-  label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -background $background($x) -anchor w
-  place .nut.${x}.nbw.screen${screen}.b${nut} -relx 0.17 -rely $rely -relheight 0.06 -relwidth 0.165
-  place .nut.${x}.nbw.screen${screen}.l${nut} -relx 0.345 -rely $rely -relheight 0.06 -relwidth 0.1
-  place .nut.${x}.nbw.screen${screen}.lu${nut} -relx 0.445 -rely $rely -relheight 0.06 -relwidth 0.055
+  label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -background $background($x) \
+  -anchor w
+  place .nut.${x}.nbw.screen${screen}.b${nut} \
+  -relx 0.17 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.165
+  place .nut.${x}.nbw.screen${screen}.l${nut} \
+  -relx 0.345 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.1
+  place .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -relx 0.445 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.055
   set rely [expr {$rely + 0.062109375}]
   }
  set rely 0.0725
  foreach nut {FAMS F14D1 F15D1 F16D1 F16D1C F17D1 F18D1 F18D1C F20D1 F22D1 F22D1C F24D1C} {
-  button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -background "#FFFF00" 
+  button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -background "#FFFF00"
   if {$x == "ar"} {
-   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right
+   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right
    } else {
-   label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -background $background($x) -anchor e
+   label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -background $background($x) \
+  -anchor e
    }
-  label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -background $background($x) -anchor w
-  place .nut.${x}.nbw.screen${screen}.b${nut} -relx 0.5 -rely $rely -relheight 0.06 -relwidth 0.165
-  place .nut.${x}.nbw.screen${screen}.l${nut} -relx 0.675 -rely $rely -relheight 0.06 -relwidth 0.1
-  place .nut.${x}.nbw.screen${screen}.lu${nut} -relx 0.775 -rely $rely -relheight 0.06 -relwidth 0.055
+  label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -background $background($x) \
+  -anchor w
+  place .nut.${x}.nbw.screen${screen}.b${nut} \
+  -relx 0.5 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.165
+  place .nut.${x}.nbw.screen${screen}.l${nut} \
+  -relx 0.675 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.1
+  place .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -relx 0.775 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.055
   set rely [expr {$rely + 0.062109375}]
   }
  set screen 5
  set rely 0.205
  foreach nut {FAPU F18D2 F18D2CN6 F18D3 F18D3CN3 F18D3CN6 F18D4 F20D2CN6} {
-  button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -background "#FFFF00" 
+  button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -background "#FFFF00"
   if {$x == "ar"} {
-   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right
+   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right
    } else {
-   label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -background $background($x) -anchor e
+   label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -background $background($x) \
+  -anchor e
    }
-  label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -background $background($x) -anchor w
-  place .nut.${x}.nbw.screen${screen}.b${nut} -relx 0.005 -rely $rely -relheight 0.06 -relwidth 0.165
-  place .nut.${x}.nbw.screen${screen}.l${nut} -relx 0.18 -rely $rely -relheight 0.06 -relwidth 0.1
-  place .nut.${x}.nbw.screen${screen}.lu${nut} -relx 0.28 -rely $rely -relheight 0.06 -relwidth 0.055
+  label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -background $background($x) \
+  -anchor w
+  place .nut.${x}.nbw.screen${screen}.b${nut} \
+  -relx 0.005 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.165
+  place .nut.${x}.nbw.screen${screen}.l${nut} \
+  -relx 0.18 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.1
+  place .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -relx 0.28 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.055
   set rely [expr {$rely + 0.062109375}]
   }
  set rely 0.13875
  foreach nut {F20D3 F20D3N3 F20D3N6 F20D4 F20D4N6 F20D5 F21D5 F22D4 F22D5 F22D6} {
-  button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -background "#FFFF00" 
+  button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -background "#FFFF00"
   if {$x == "ar"} {
-   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right
+   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right
    } else {
-   label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -background $background($x) -anchor e
+   label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -background $background($x) \
+  -anchor e
    }
-  label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -background $background($x) -anchor w
-  place .nut.${x}.nbw.screen${screen}.b${nut} -relx 0.335 -rely $rely -relheight 0.06 -relwidth 0.165
-  place .nut.${x}.nbw.screen${screen}.l${nut} -relx 0.51 -rely $rely -relheight 0.06 -relwidth 0.1
-  place .nut.${x}.nbw.screen${screen}.lu${nut} -relx 0.61 -rely $rely -relheight 0.06 -relwidth 0.055
+  label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -background $background($x) \
+  -anchor w
+  place .nut.${x}.nbw.screen${screen}.b${nut} \
+  -relx 0.335 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.165
+  place .nut.${x}.nbw.screen${screen}.l${nut} \
+  -relx 0.51 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.1
+  place .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -relx 0.61 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.055
   set rely [expr {$rely + 0.062109375}]
   }
  set rely 0.0725
  foreach nut {FATRN FATRNM F16D1T F18D1T F18D1TN7 F22D1T FATRNP F18D2I F18D2T F18D2TT F18D2CLA F18D3I} {
-  button .nut.${x}.nbw.screen${screen}.b${nut} -textvariable ::${nut}b -command "NewStory $nut $screen" -background "#FFFF00" 
+  button .nut.${x}.nbw.screen${screen}.b${nut} \
+  -textvariable ::${nut}b \
+  -command "NewStory $nut $screen" \
+  -background "#FFFF00"
   if {$x == "ar"} {
-   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -justify right
+   ttk::entry .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -justify right
    } else {
-   label .nut.${x}.nbw.screen${screen}.l${nut} -textvariable ::${nut}${x} -background $background($x) -anchor e
+   label .nut.${x}.nbw.screen${screen}.l${nut} \
+  -textvariable ::${nut}${x} \
+  -background $background($x) \
+  -anchor e
    }
-  label .nut.${x}.nbw.screen${screen}.lu${nut} -textvariable ::${nut}u -background $background($x) -anchor w
-  place .nut.${x}.nbw.screen${screen}.b${nut} -relx 0.665 -rely $rely -relheight 0.06 -relwidth 0.165
-  place .nut.${x}.nbw.screen${screen}.l${nut} -relx 0.84 -rely $rely -relheight 0.06 -relwidth 0.1
-  place .nut.${x}.nbw.screen${screen}.lu${nut} -relx 0.94 -rely $rely -relheight 0.06 -relwidth 0.055
+  label .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -textvariable ::${nut}u \
+  -background $background($x) \
+  -anchor w
+  place .nut.${x}.nbw.screen${screen}.b${nut} \
+  -relx 0.665 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.165
+  place .nut.${x}.nbw.screen${screen}.l${nut} \
+  -relx 0.84 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.1
+  place .nut.${x}.nbw.screen${screen}.lu${nut} \
+  -relx 0.94 \
+  -rely $rely \
+  -relheight 0.06 \
+  -relwidth 0.055
   set rely [expr {$rely + 0.062109375}]
   }
  }
@@ -1693,48 +5343,77 @@ if {$need_load == 1} {
  toplevel .loadframe
  wm title .loadframe $::version
  wm withdraw .
- 
 # modified from the artistic analog clock by Wolf-Dieter Busch at http://wiki.tcl.tk/1011
- set ::clockscale [expr {$::magnify * 0.42}] 
+ set ::clockscale [expr {$::magnify * 0.42}]
  set cheight 350
  set cwidth  650
-grid [canvas .loadframe.c -width [expr {$::magnify * $cwidth}] -height [expr {$::magnify * $cheight}] -highlightthickness 0] -padx [expr {$::clockscale * 20}] -pady [expr {$::clockscale * 20}]
- 
+grid [canvas .loadframe.c \
+  -width [expr {$::magnify * $cwidth}] \
+  -height [expr {$::magnify * $cheight}] \
+  -highlightthickness 0] \
+  -padx [expr {$::clockscale * 20}] \
+  -pady [expr {$::clockscale * 20}]
  set PI [expr {asin(1)*2}]
  set sekundenzeigerlaenge [expr {$::clockscale * 85}]
  set minutenzeigerlaenge  [expr {$::clockscale * 75}]
  set stundenzeigerlaenge  [expr {$::clockscale * 60}]
- 
  drawClock
  showTime
- 
- .loadframe.c create text [expr {$::magnify * $cwidth / 2}] [expr {$::clockscale * 100}] -anchor center -text "Updating USDA Nutrient Database"
- 
- ttk::style configure lf.Horizontal.TProgressbar -background "#006400"
+ .loadframe.c create text [expr {$::magnify * $cwidth / 2}] [expr {$::clockscale * 100}] \
+  -anchor center \
+  -text "Updating USDA Nutrient Database"
+ ttk::style configure lf.Horizontal.TProgressbar \
+  -background "#006400"
  for {set i 1} {$i < 9} {incr i} {
   set ::pbar($i) 0.0
-  ttk::progressbar .loadframe.pbar${i} -style lf.Horizontal.TProgressbar -variable pbar($i) -orient horizontal -length [expr {$::magnify * 100}] -mode determinate 
-  .loadframe.c create window [expr {$::clockscale * 150 + 0.38 * $i * $::clockscale * 200}] [expr {$::clockscale * 160 + 0.38 * $i * $::clockscale * 200}] -anchor w -height [expr {18.0 * $::magnify}] -window .loadframe.pbar${i}
+  ttk::progressbar .loadframe.pbar${i} \
+  -style lf.Horizontal.TProgressbar \
+  -variable pbar($i) \
+  -orient horizontal \
+  -length [expr {$::magnify * 100}] \
+  -mode determinate  .loadframe.c create window [expr {$::clockscale * 150 + 0.38 * $i * $::clockscale * 200}] [expr {$::clockscale * 160 + 0.38 * $i * $::clockscale * 200}] \
+  -anchor w \
+  -height [expr {18.0 * $::magnify}] \
+  -window .loadframe.pbar${i}
   set p_label_x($i) [expr {$::clockscale * 150 + 0.38 * $i * $::clockscale * 200 + $::magnify * 100 + $::clockscale * 20}]
   set p_label_y($i) [expr {$::clockscale * 160 + 0.38 * $i * $::clockscale * 200}]
   }
- 
- .loadframe.c create text $p_label_x(1) $p_label_y(1) -anchor w -text "Load Nutrient Definitions"
- .loadframe.c create text $p_label_x(2) $p_label_y(2) -anchor w -text "Load Food Groups"
- .loadframe.c create text $p_label_x(3) $p_label_y(3) -anchor w -text "Load Foods"
- .loadframe.c create text $p_label_x(4) $p_label_y(4) -anchor w -text "Load Serving Sizes"
- .loadframe.c create text $p_label_x(5) $p_label_y(5) -anchor w -text "Load Nutrient Values"
- .loadframe.c create text $p_label_x(6) $p_label_y(6) -anchor w -text "Compute Derived Nutrient Values"
- .loadframe.c create text $p_label_x(7) $p_label_y(7) -anchor w -text "Load NUT Logic"
- .loadframe.c create text $p_label_x(8) $p_label_y(8) -anchor w -text "Load Legacy Database if it exists"
+ .loadframe.c create text $p_label_x(1) $p_label_y(1) \
+  -anchor w \
+  -text "Load Nutrient Definitions"
+ .loadframe.c create text $p_label_x(2) $p_label_y(2) \
+  -anchor w \
+  -text "Load Food Groups"
+ .loadframe.c create text $p_label_x(3) $p_label_y(3) \
+  -anchor w \
+  -text "Load Foods"
+ .loadframe.c create text $p_label_x(4) $p_label_y(4) \
+  -anchor w \
+  -text "Load Serving Sizes"
+ .loadframe.c create text $p_label_x(5) $p_label_y(5) \
+  -anchor w \
+  -text "Load Nutrient Values"
+ .loadframe.c create text $p_label_x(6) $p_label_y(6) \
+  -anchor w \
+  -text "Compute Derived Nutrient Values"
+ .loadframe.c create text $p_label_x(7) $p_label_y(7) \
+  -anchor w \
+  -text "Load NUT Logic"
+ .loadframe.c create text $p_label_x(8) $p_label_y(8) \
+  -anchor w \
+  -text "Load Legacy Database if it exists"
  update
- 
- thread::send -async $::SQL_THREAD {db eval {select code from z_tcl_code where name = 'InitialLoad_alt_GUI'} { } ; eval $code}
+ thread::send \
+  -async $::SQL_THREAD {db eval {select code from z_tcl_code where name = 'InitialLoad_alt_GUI'} { } ; eval $code}
  } else {
  set tablename [db eval {select name from sqlite_master where type='table' and name = "nutr_def"}]
  if { $tablename == "" } {
   set ::meals_to_analyze_am 0
-  tk_messageBox -type ok -title $::version -message "NUT requires the USDA Nutrient Database to be present initially in order to be loaded into SQLite.  Download it in the full ascii version from \"https://data.nal.usda.gov/dataset/composition-foods-raw-processed-prepared-usda-national-nutrient-database-standard-referen-11\" or from \"http://nut.sourceforge.net\" and unzip it in this directory, [pwd]." -detail "Follow this same procedure later when you want to upgrade the USDA database yet retain your personal data.  After USDA files have been loaded into NUT they can be deleted.\n\nIf you really do want to reload a USDA database that you have already loaded, rename the file \"NUTR_DEF.txt.loaded\" to \"NUTR_DEF.txt\"."
+  tk_messageBox \
+  -type ok \
+  -title $::version \
+  -message "NUT requires the USDA Nutrient Database to be present initially in order to be loaded into SQLite.  Download it in the full ascii version from \"https://data.nal.usda.gov/dataset/composition-foods-raw-processed-prepared-usda-national-nutrient-database-standard-referen-11\" or from \"http://nut.sourceforge.net\" and unzip it in this directory, [pwd]." \
+  -detail "Follow this same procedure later when you want to upgrade the USDA database yet retain your personal data.  After USDA files have been loaded into NUT they can be deleted.\n\nIf you really do want to reload a USDA database that you have already loaded, rename the file \"NUTR_DEF.txt.loaded\" to \"NUTR_DEF.txt\"."
   rename unknown ""
   rename _original_unknown unknown
   destroy .
@@ -1759,59 +5438,43 @@ dbmem eval {
 
   --insert VITE records into nut_data
 insert or replace into nut_data select f.NDB_No, 2008,  ifnull(vite_added.Nutr_Val, 0.0) + ifnull(tocpha.Nutr_Val, 0.0) from food_des f left join nut_data tocpha on f.NDB_No = tocpha.NDB_No and tocpha.Nutr_No = 323 left join nut_data vite_added on f.NDB_No = vite_added.NDB_No and vite_added.Nutr_No = 573 where tocpha.Nutr_Val is not null or vite_added.Nutr_Val is not null;
-  
-  --insert LA records into nut_data
+   --insert LA records into nut_data
 insert or replace into nut_data select f.NDB_No, 2001, case when f18d2cn6.Nutr_Val is not null then f18d2cn6.Nutr_Val when f18d2.Nutr_Val is not null then f18d2.Nutr_Val - ifnull(f18d2t.Nutr_Val, 0.0) - ifnull(f18d2tt.Nutr_Val, 0.0) - ifnull(f18d2i.Nutr_Val, 0.0) - ifnull(f18d2cla.Nutr_Val, 0.0) end from food_des f left join nut_data f18d2 on f.NDB_No = f18d2.NDB_No and f18d2.Nutr_No = 618 left join nut_data f18d2cn6 on f.NDB_No = f18d2cn6.NDB_No and f18d2cn6.Nutr_No = 675 left join nut_data f18d2t on f.NDB_No = f18d2t.NDB_No and f18d2t.Nutr_No = 665 left join nut_data f18d2tt on f.NDB_No = f18d2tt.NDB_No and f18d2tt.Nutr_No = 669 left join nut_data f18d2i on f.NDB_No = f18d2i.NDB_No and f18d2i.Nutr_No = 666 left join nut_data f18d2cla on f.NDB_No = f18d2cla.NDB_No and f18d2cla.Nutr_No = 670 where f18d2.Nutr_Val is not null or f18d2cn6.Nutr_Val is not null or f18d2t.Nutr_Val is not null or f18d2tt.Nutr_Val is not null or f18d2i.Nutr_Val is not null or f18d2cla.Nutr_Val is not null;
-  
-  --insert ALA records into nut_data
+   --insert ALA records into nut_data
 insert or replace into nut_data select f.NDB_No, 2003, case when f18d3cn3.Nutr_Val is not null then f18d3cn3.Nutr_Val when f18d3.Nutr_Val is not null then f18d3.Nutr_Val - ifnull(f18d3cn6.Nutr_Val, 0.0) - ifnull(f18d3i.Nutr_Val, 0.0) end from food_des f left join nut_data f18d3 on f.NDB_No = f18d3.NDB_No and f18d3.Nutr_No = 619 left join nut_data f18d3cn3 on f.NDB_No = f18d3cn3.NDB_No and f18d3cn3.Nutr_No = 851 left join nut_data f18d3cn6 on f.NDB_No = f18d3cn6.NDB_No and f18d3cn6.Nutr_No = 685 left join nut_data f18d3i on f.NDB_No = f18d3i.NDB_No and f18d3i.Nutr_No = 856 where f18d3.Nutr_Val is not null or f18d3cn3.Nutr_Val is not null or f18d3cn6.Nutr_Val is not null or f18d3i.Nutr_Val is not null;
-  
-  --insert SHORT6 records into nut_data
+   --insert SHORT6 records into nut_data
 insert or replace into nut_data select f.NDB_No, 3003, ifnull(la.Nutr_Val, 0.0) + ifnull(f18d3cn6.Nutr_Val, 0.0) from food_des f left join nut_data la on f.NDB_No = la.NDB_No and la.Nutr_No = 2001 left join nut_data f18d3cn6 on f.NDB_No = f18d3cn6.NDB_No and f18d3cn6.Nutr_No = 685 where la.Nutr_Val is not null or f18d3cn6.Nutr_Val is not null;
-  
-  --insert SHORT3 records into nut_data
+   --insert SHORT3 records into nut_data
 insert or replace into nut_data select f.NDB_No, 3005, ifnull(ala.Nutr_Val, 0.0) + ifnull(f18d4.Nutr_Val, 0.0) from food_des f left join nut_data ala on f.NDB_No = ala.NDB_No and ala.Nutr_No = 2003 left join nut_data f18d4 on f.NDB_No = f18d4.NDB_No and f18d4.Nutr_No = 627 where ala.Nutr_Val is not null or f18d4.Nutr_Val is not null;
-  
-  --insert AA records into nut_data
+   --insert AA records into nut_data
 insert or replace into nut_data select f.NDB_No, 2002, case when f20d4n6.Nutr_Val is not null then f20d4n6.Nutr_Val else f20d4.Nutr_Val end from food_des f left join nut_data f20d4 on f.NDB_No = f20d4.NDB_No and f20d4.Nutr_No = 620 left join nut_data f20d4n6 on f.NDB_No = f20d4n6.NDB_No and f20d4n6.Nutr_No = 855 where f20d4.Nutr_Val is not null or f20d4n6.Nutr_Val is not null;
-  
-  --insert LONG6 records into nut_data
+   --insert LONG6 records into nut_data
 insert or replace into nut_data select f.NDB_No, 3004, case when f20d3n6.Nutr_Val is not null then ifnull(aa.Nutr_Val,0.0) + f20d3n6.Nutr_Val + ifnull(f22d4.Nutr_Val,0.0) else ifnull(aa.Nutr_Val,0.0) + ifnull(f20d3.Nutr_Val,0.0) + ifnull(f22d4.Nutr_Val, 0.0) end from food_des f left join nut_data aa on f.NDB_No = aa.NDB_No and aa.Nutr_No = 2002 left join nut_data f20d3n6 on f.NDB_No = f20d3n6.NDB_No and f20d3n6.Nutr_No = 853 left join nut_data f20d3 on f.NDB_No = f20d3.NDB_No and f20d3.Nutr_No = 689 left join nut_data f22d4 on f.NDB_No = f22d4.NDB_No and f22d4.Nutr_No = 858 where aa.Nutr_Val is not null or f20d3n6.Nutr_Val is not null or f20d3.Nutr_Val is not null or f22d4.Nutr_Val is not null;
-  
-  --insert EPA records into nut_data
+   --insert EPA records into nut_data
 insert or replace into nut_data select f.NDB_No, 2004, f20d5.Nutr_Val from food_des f left join nut_data f20d5 on f.NDB_No = f20d5.NDB_No and f20d5.Nutr_No = 629 where f20d5.Nutr_Val is not null;
-  
-  --insert DHA records into nut_data
+   --insert DHA records into nut_data
 insert or replace into nut_data select f.NDB_No, 2005, f22d6.Nutr_Val from food_des f left join nut_data f22d6 on f.NDB_No = f22d6.NDB_No and f22d6.Nutr_No = 621 where f22d6.Nutr_Val is not null;
-  
-  --insert LONG3 records into nut_data
+   --insert LONG3 records into nut_data
 insert or replace into nut_data select f.NDB_No, 3006, ifnull(epa.Nutr_Val, 0.0) + ifnull(dha.Nutr_Val, 0.0) + ifnull(f20d3n3.Nutr_Val, 0.0) + ifnull(f22d5.Nutr_Val, 0.0) from food_des f left join nut_data epa on f.NDB_No = epa.NDB_No and epa.Nutr_No = 2004 left join nut_data dha on f.NDB_No = dha.NDB_No and dha.Nutr_No = 2005 left join nut_data f20d3n3 on f.NDB_No = f20d3n3.NDB_No and f20d3n3.Nutr_No = 852 left join nut_data f22d5 on f.NDB_No = f22d5.NDB_No and f22d5.Nutr_No = 631 where epa.Nutr_Val is not null or dha.Nutr_Val is not null or f20d3n3.Nutr_Val is not null or f22d5.Nutr_Val is not null;
-  
-  --insert OMEGA6 records into nut_data
+   --insert OMEGA6 records into nut_data
 insert or replace into nut_data select f.NDB_No, 2006, ifnull(short6.Nutr_Val, 0.0) + ifnull(long6.Nutr_Val, 0.0) from food_des f left join nut_data short6 on f.NDB_No = short6.NDB_No and short6.Nutr_No = 3003 left join nut_data long6 on f.NDB_No = long6.NDB_No and long6.Nutr_No = 3004 where short6.Nutr_Val is not null or long6.Nutr_Val is not null;
-  
-  --insert OMEGA3 records into nut_data
+   --insert OMEGA3 records into nut_data
 insert or replace into nut_data select f.NDB_No, 2007, ifnull(short3.Nutr_Val, 0.0) + ifnull(long3.Nutr_Val, 0.0) from food_des f left join nut_data short3 on f.NDB_No = short3.NDB_No and short3.Nutr_No = 3005 left join nut_data long3 on f.NDB_No = long3.NDB_No and long3.Nutr_No = 3006 where short3.Nutr_Val is not null or long3.Nutr_Val is not null;
-  
-  --insert CHO_NONFIB records into nut_data
+   --insert CHO_NONFIB records into nut_data
 insert or replace into nut_data select f.NDB_No, 2000, case when chocdf.Nutr_Val - ifnull(fibtg.Nutr_Val, 0.0) < 0.0 then 0.0 else chocdf.Nutr_Val - ifnull(fibtg.Nutr_Val, 0.0) end from food_des f left join nut_data chocdf on f.NDB_No = chocdf.NDB_No and chocdf.Nutr_No = 205 left join nut_data fibtg on f.NDB_No = fibtg.NDB_No and fibtg.Nutr_No = 291 where chocdf.Nutr_Val is not null;
-  
-  --replace empty strings with values for macronutrient factors in food_des
+   --replace empty strings with values for macronutrient factors in food_des
 update food_des set Pro_Factor = 4.0 where Pro_Factor = '' or Pro_Factor is null;
 update food_des set Fat_Factor = 9.0 where Fat_Factor = '' or Fat_Factor is null;
 update food_des set CHO_Factor = 4.0 where CHO_Factor = '' or CHO_Factor is null;
-  
-  --insert calories from macronutrients into nut_data
+   --insert calories from macronutrients into nut_data
 insert or replace into nut_data select f.NDB_No, 3000, f.Pro_Factor * procnt.Nutr_Val from food_des f join nut_data procnt on f.NDB_No = procnt.NDB_No and procnt.Nutr_No = 203;
 insert or replace into nut_data select f.NDB_No, 3001, f.Fat_Factor * fat.Nutr_Val from food_des f join nut_data fat on f.NDB_No = fat.NDB_No and fat.Nutr_No = 204;
 insert or replace into nut_data select f.NDB_No, 3002, f.CHO_Factor * chocdf.Nutr_Val from food_des f join nut_data chocdf on f.NDB_No = chocdf.NDB_No and chocdf.Nutr_No = 205;
-  
-/* NUT needs some additional permanent tables for options, mealfoods, archive
+ /* NUT needs some additional permanent tables for options, mealfoods, archive
    of mealfoods if meals per day changes, customary meals (theusual), and
    the weight log */
 
-/* This table is global options:  
-    defanal_am    how many meals to analyze starting at the latest and going
+/* This table is global options:     defanal_am    how many meals to analyze starting at the latest and going
                   back in time
     FAPU1         the "target" for Omega-6/3 balance
     meals_per_day yes, meals per day
@@ -1840,14 +5503,10 @@ create table if not exists options(protect integer primary key, defanal_am integ
    for this single nutrient and then adjust the quantity of this particular
    food so that the daily value is exactly satisfied.
 */
- 
 create table if not exists mealfoods(meal_id int, NDB_No int, Gm_Wgt real, Nutr_No int, primary key(meal_id, NDB_No));
 
-/* 
-   There is no easy way to analyze a meal where each day can have a 
-   different number of meals per day because you have to do a lot of computation
-   to combine the meals, and for any particular meal, you cannot provide 
-   guidance because you don't know how many more meals are coming for the day.
+/*   There is no easy way to analyze a meal where each day can have a   different number of meals per day because you have to do a lot of computation
+   to combine the meals, and for any particular meal, you cannot provide   guidance because you don't know how many more meals are coming for the day.
    So, when the user changes meals_per_day we archive the non-compliant meals
    (different number of meals per day from new setting)  and restore the
    compliant ones (same number of meals per day as new setting).
@@ -1892,23 +5551,17 @@ set load_logic {
 proc load_logic {args} {
 
 dbmem eval {
-/* 
-   This begins the NUT application logic which is implemented as SQL
+/*   This begins the NUT application logic which is implemented as SQL
    tables and triggers in order that the NUT code be independent of the
    GUI and its language, be implemented in C for performance,
    and be implemented by SQLite for portability.
-*/ 
-
+*/
 begin;
-    
-/* 
-   First we create various tables just for internal computation
-  
-   The following tables are for intermediate values in the computation
+   /*   First we create various tables just for internal computation
+    The following tables are for intermediate values in the computation
    of Daily Values
 */
-  
-DROP TABLE if exists z_vars1;
+ DROP TABLE if exists z_vars1;
 CREATE TABLE z_vars1 (am_cals2gram_pro real, am_cals2gram_fat real, am_cals2gram_cho real, am_alccals real, am_fa2fat real, balance_of_calories int);
 
 DROP TABLE if exists z_vars2;
@@ -1919,17 +5572,14 @@ CREATE TABLE z_vars3 (am_fat_dv_boc real, am_chocdf_dv_boc real, am_cho_nonfib_d
 
 DROP TABLE if exists z_vars4;
 CREATE TABLE z_vars4 (Nutr_No int, dv real, Nutr_Val real);
-  
-/*
+ /*
   The following table is used in conjunction with recursive triggers to
   compute essential fatty acid reference values
-*/  
-
+*/ 
 DROP TABLE if exists z_n6;
 CREATE TABLE z_n6 (n6hufa real, FAPU1 real, pufa_reduction real, iter int, reduce int, p3 real, p6 real, h3 real, h6 real, o real);
 
-/*  
-   The following table is the am analysis minus the currentmeal.  That way,
+/*    The following table is the am analysis minus the currentmeal.  That way,
    we avoid the overhead of reanalyzing everything while we are
    doing automatic portion control.  The "am_analysis" view is the
    sum of the analyses in this table and those in the "rm_analysis"
@@ -1938,17 +5588,14 @@ CREATE TABLE z_n6 (n6hufa real, FAPU1 real, pufa_reduction real, iter int, reduc
    different meal, and we always need to have a good rm_analysis
    before we can see a good am_analysis.
 */
-  
-drop table if exists z_anal;
+ drop table if exists z_anal;
 create table z_anal (Nutr_No int primary key, null_value int, Nutr_Val real);
 
-/*    
-   The following tables and views are intermediates for functions in NUT.
+/*      The following tables and views are intermediates for functions in NUT.
    The prefixes are:
 	am	Analyze meals
 	rm	Record meals aka currentmeal
-*/    
-
+*/   
 /* An "analysis header" is various info that is not specifically nutrient
    values:
    maxmeal is maximum number of meals the user can get no matter how many he
@@ -1974,14 +5621,14 @@ create table am_analysis_header (maxmeal int, mealcount int, meals_per_day int, 
 /* This table lists the nutrient and its computed Daily Value or dv.  It also
    has the cryptically named dvpct_offset which is the percentage by which the
    actual nutrient value is off from 100% of the DV.  So if you have 99% of the
-   DV for potassium the dvpct_offset is -1.0, if you have 103% the dvpct_offset
+   DV for potassium the dvpct_offset is \
+  -1.0, if you have 103% the dvpct_offset
    is 3.0.  So, you get the % of the DV by adding 100.0 to the dvpct_offset.
 */
 
 drop table if exists am_dv;
 create table am_dv (Nutr_No int primary key asc, dv real, dvpct_offset real);
-    
-drop table if exists rm_analysis_header;
+   drop table if exists rm_analysis_header;
 create table rm_analysis_header (maxmeal int, mealcount int, meals_per_day int, firstmeal integer, lastmeal integer, currentmeal integer, caloriebutton text, macropct text, n6balance text);
 
 drop table if exists rm_analysis;
@@ -1992,8 +5639,7 @@ create table rm_dv (Nutr_No int primary key asc, dv real, dvpct_offset real);
 
 drop view if exists am_analysis;
 create view am_analysis as select am.Nutr_No as Nutr_No, case when currentmeal between firstmeal and lastmeal and am.null_value = 1 and rm.null_value = 1 then 1 when currentmeal not between firstmeal and lastmeal and am.null_value = 1 then 1 else 0 end as null_value, case when currentmeal between firstmeal and lastmeal then ifnull(am.Nutr_Val,0.0) + 1.0 / mealcount * ifnull(rm.Nutr_Val, 0.0) else am.Nutr_Val end as Nutr_Val from z_anal am left join rm_analysis rm on am.Nutr_No = rm.Nutr_No join am_analysis_header;
-    
-/*
+   /*
    PCF is automatic portion control; aka protein/carb/fat which was extended
    to include all DV nutrients.  The idea is you can control macronutrients
    per meal, but also include a modicum of micronutrients for which
@@ -2013,60 +5659,47 @@ create view am_analysis as select am.Nutr_No as Nutr_No, case when currentmeal b
    to start triggers so we can use the same code in different
    triggers without literally repeating it in every trigger that
    needs it
-*/  
-
+*/ 
 drop table if exists z_trig_ctl;
 CREATE TABLE z_trig_ctl(am_analysis_header integer default 0, rm_analysis_header integer default 0, am_analysis_minus_currentmeal integer default 0, am_analysis_null integer default 0, am_analysis integer default 0, rm_analysis integer default 0, rm_analysis_null integer default 0, am_dv integer default 0, PCF_processing integer default 0, block_setting_preferred_weight integer default 0, block_mealfoods_insert_trigger default 0, block_mealfoods_delete_trigger integer default 0);
 insert into z_trig_ctl default values;
-  
-/*
+ /*
    Procedures implemented as triggers started by a true bool in z_trig_ctl
-*/  
-
+*/ 
 drop trigger if exists am_analysis_header_trigger;
-CREATE TRIGGER am_analysis_header_trigger after update of am_analysis_header on z_trig_ctl when NEW.am_analysis_header = 1 begin 
-update z_trig_ctl set am_analysis_header = 0;
+CREATE TRIGGER am_analysis_header_trigger after update of am_analysis_header on z_trig_ctl when NEW.am_analysis_header = 1 begin update z_trig_ctl set am_analysis_header = 0;
 delete from am_analysis_header;
 insert into am_analysis_header select (select count(distinct meal_id) from mealfoods) as maxmeal, count(meal_id) as mealcount, meals_per_day, ifnull(min(meal_id),0) as firstmeal, ifnull(max(meal_id),0) as lastmeal, currentmeal, NULL as caloriebutton, NULL as macropct, NULL as n6balance from options left join (select distinct meal_id from mealfoods order by meal_id desc limit (select defanal_am from options));
 end;
-  
-drop trigger if exists rm_analysis_header_trigger;
-CREATE TRIGGER rm_analysis_header_trigger after update of rm_analysis_header on z_trig_ctl when NEW.rm_analysis_header = 1 begin 
-update z_trig_ctl set rm_analysis_header = 0;
+ drop trigger if exists rm_analysis_header_trigger;
+CREATE TRIGGER rm_analysis_header_trigger after update of rm_analysis_header on z_trig_ctl when NEW.rm_analysis_header = 1 begin update z_trig_ctl set rm_analysis_header = 0;
 delete from rm_analysis_header;
 insert into rm_analysis_header select maxmeal, case when (select count(*) from mealfoods where meal_id = currentmeal) = 0 then 0 else 1 end as mealcount, meals_per_day, currentmeal as firstmeal, currentmeal as lastmeal, currentmeal as currentmeal, NULL as caloriebutton, '0 / 0 / 0' as macropct, '0 / 0' as n6balance from am_analysis_header;
 end;
-    
-drop trigger if exists am_analysis_minus_currentmeal_trigger;
-CREATE TRIGGER am_analysis_minus_currentmeal_trigger after update of am_analysis_minus_currentmeal on z_trig_ctl when NEW.am_analysis_minus_currentmeal = 1 begin 
-update z_trig_ctl set am_analysis_minus_currentmeal = 0;
+   drop trigger if exists am_analysis_minus_currentmeal_trigger;
+CREATE TRIGGER am_analysis_minus_currentmeal_trigger after update of am_analysis_minus_currentmeal on z_trig_ctl when NEW.am_analysis_minus_currentmeal = 1 begin update z_trig_ctl set am_analysis_minus_currentmeal = 0;
 delete from z_anal;
 insert into z_anal select Nutr_No, case when sum(mhectograms * Nutr_Val) is null then 1 else 0 end, ifnull(sum(mhectograms * Nutr_Val), 0.0) from (select NDB_No, total(Gm_Wgt / 100.0 / mealcount * meals_per_day) as mhectograms from mealfoods join am_analysis_header where meal_id between firstmeal and lastmeal and meal_id != currentmeal group by NDB_No) join nutr_def natural left join nut_data group by Nutr_No;
 end;
-  
-/*  We need null triggers because processing is so different when the analysis
+ /*  We need null triggers because processing is so different when the analysis
     is null; i.e. there is no food in the analysis.
 */
 
 drop trigger if exists am_analysis_null_trigger;
-CREATE TRIGGER am_analysis_null_trigger after update of am_analysis_null on z_trig_ctl when NEW.am_analysis_null = 1 begin 
-update z_trig_ctl set am_analysis_null = 0;
+CREATE TRIGGER am_analysis_null_trigger after update of am_analysis_null on z_trig_ctl when NEW.am_analysis_null = 1 begin update z_trig_ctl set am_analysis_null = 0;
 delete from z_anal;
 insert into z_anal select nutr_no, 1, 0.0 from nutr_def join am_analysis_header where firstmeal = currentmeal and lastmeal = currentmeal;
 insert into z_anal select nutr_no, 0, 0.0 from nutr_def join am_analysis_header where firstmeal != currentmeal or lastmeal != currentmeal;
 update am_analysis_header set macropct = '0 / 0 / 0', n6balance = '0 / 0';
 end;
-   
-drop trigger if exists rm_analysis_null_trigger;
-CREATE TRIGGER rm_analysis_null_trigger after update of rm_analysis_null on z_trig_ctl when NEW.rm_analysis_null = 1 begin 
-update z_trig_ctl set rm_analysis_null = 0;
+  drop trigger if exists rm_analysis_null_trigger;
+CREATE TRIGGER rm_analysis_null_trigger after update of rm_analysis_null on z_trig_ctl when NEW.rm_analysis_null = 1 begin update z_trig_ctl set rm_analysis_null = 0;
 delete from rm_analysis;
 insert into rm_analysis select Nutr_No, 0, 0.0 from nutr_def;
 update rm_analysis_header set caloriebutton = (select caloriebutton from am_analysis_header), macropct = '0 / 0 / 0', n6balance = '0 / 0';
 end;
 
-/* 
-   These triggers are gnarly because many DVs require the results of other DVs
+/*   These triggers are gnarly because many DVs require the results of other DVs
    so it takes many steps.  And also, figuring the omega-6/3 balance and
    the essential fatty acid DVs requires division; however, the values
    themselves are often the divisors so we get division by zero unless we fudge
@@ -2074,10 +5707,8 @@ end;
    we need a lot of joins to get all the necessary nutrient values together
    for computation.
 */
-  
-drop trigger if exists am_analysis_trigger;
-CREATE TRIGGER am_analysis_trigger after update of am_analysis on z_trig_ctl when NEW.am_analysis = 1 begin 
-update z_trig_ctl set am_analysis = 0;
+ drop trigger if exists am_analysis_trigger;
+CREATE TRIGGER am_analysis_trigger after update of am_analysis on z_trig_ctl when NEW.am_analysis = 1 begin update z_trig_ctl set am_analysis = 0;
 update am_analysis_header set macropct = (select cast (ifnull(round(100 * PROT_KCAL.Nutr_Val / ENERC_KCAL.Nutr_Val,0),0) as int) || ' / ' || cast (ifnull(round(100 * CHO_KCAL.Nutr_Val / ENERC_KCAL.Nutr_Val,0),0) as int) || ' / ' || cast (ifnull(round(100 * FAT_KCAL.Nutr_Val / ENERC_KCAL.Nutr_Val,0),0) as int) from am_analysis ENERC_KCAL join am_analysis PROT_KCAL on ENERC_KCAL.Nutr_No = 208 and PROT_KCAL.Nutr_No = 3000 join am_analysis CHO_KCAL on CHO_KCAL.Nutr_No = 3002 join am_analysis FAT_KCAL on FAT_KCAL.Nutr_No = 3001);
 delete from z_n6;
 insert into z_n6 select NULL, NULL, NULL, 1, 1, 900.0 * case when SHORT3.Nutr_Val > 0.0 then SHORT3.Nutr_Val else 0.000000001 end / case when ENERC_KCAL.Nutr_Val > 0.0 then ENERC_KCAL.Nutr_Val else 0.000000001 end, 900.0 * case when SHORT6.Nutr_Val > 0.0 then SHORT6.Nutr_Val else 0.000000001 end / case when ENERC_KCAL.Nutr_Val > 0.0 then ENERC_KCAL.Nutr_Val else 0.000000001 end, 900.0 * case when LONG3.Nutr_Val > 0.0 then LONG3.Nutr_Val else 0.000000001 end / case when ENERC_KCAL.Nutr_Val > 0.0 then ENERC_KCAL.Nutr_Val else 0.000000001 end, 900.0 * case when LONG6.Nutr_Val > 0.0 then LONG6.Nutr_Val else 0.000000001 end / case when ENERC_KCAL.Nutr_Val > 0.0 then ENERC_KCAL.Nutr_Val else 0.000000001 end, 900.0 * (FASAT.Nutr_Val + FAMS.Nutr_Val + FAPU.Nutr_Val - max(SHORT3.Nutr_Val,0.000000001) - max(SHORT6.Nutr_Val,0.000000001) - max(LONG3.Nutr_Val,0.000000001) - max(LONG6.Nutr_Val,0.000000001)) / case when ENERC_KCAL.Nutr_Val > 0.0 then ENERC_KCAL.Nutr_Val else 0.000000001 end from am_analysis SHORT3 join am_analysis SHORT6 on SHORT3.Nutr_No = 3005 and SHORT6.Nutr_No = 3003 join am_analysis LONG3 on LONG3.Nutr_No = 3006 join am_analysis LONG6 on LONG6.Nutr_No = 3004 join am_analysis FAPUval on FAPUval.Nutr_No = 646 join am_analysis FASAT on FASAT.Nutr_No = 606 join am_analysis FAMS on FAMS.Nutr_No = 645 join am_analysis FAPU on FAPU.Nutr_No = 646 join am_analysis ENERC_KCAL on ENERC_KCAL.Nutr_No = 208;
@@ -2086,8 +5717,7 @@ update am_analysis_header set n6balance = case when n6balance is null then '0 / 
 end;
 
 drop trigger if exists rm_analysis_trigger;
-CREATE TRIGGER rm_analysis_trigger after update of rm_analysis on z_trig_ctl when NEW.rm_analysis = 1 begin 
-update z_trig_ctl set rm_analysis = 0;
+CREATE TRIGGER rm_analysis_trigger after update of rm_analysis on z_trig_ctl when NEW.rm_analysis = 1 begin update z_trig_ctl set rm_analysis = 0;
 delete from rm_analysis;
 insert into rm_analysis select Nutr_No, case when sum(mhectograms * Nutr_Val) is null then 1 else 0 end, ifnull(sum(mhectograms * Nutr_Val), 0.0) from (select NDB_No, total(Gm_Wgt / 100.0 * meals_per_day) as mhectograms from mealfoods join am_analysis_header where meal_id = currentmeal group by NDB_No) join nutr_def natural left join nut_data group by Nutr_No;
 update rm_analysis_header set caloriebutton = (select caloriebutton from am_analysis_header), macropct = (select cast (ifnull(round(100 * PROT_KCAL.Nutr_Val / ENERC_KCAL.Nutr_Val,0),0) as int) || ' / ' || cast (ifnull(round(100 * CHO_KCAL.Nutr_Val / ENERC_KCAL.Nutr_Val,0),0) as int) || ' / ' || cast (ifnull(round(100 * FAT_KCAL.Nutr_Val / ENERC_KCAL.Nutr_Val,0),0) as int) from rm_analysis ENERC_KCAL join rm_analysis PROT_KCAL on ENERC_KCAL.Nutr_No = 208 and PROT_KCAL.Nutr_No = 3000 join rm_analysis CHO_KCAL on CHO_KCAL.Nutr_No = 3002 join rm_analysis FAT_KCAL on FAT_KCAL.Nutr_No = 3001);
@@ -2097,23 +5727,34 @@ update rm_analysis_header set n6balance = (select case when n6hufa_int = 0 or n6
 end;
 
 drop trigger if exists am_dv_trigger;
-CREATE TRIGGER am_dv_trigger after update of am_dv on z_trig_ctl when NEW.am_dv = 1 begin 
-update z_trig_ctl set am_dv = 0;
+CREATE TRIGGER am_dv_trigger after update of am_dv on z_trig_ctl when NEW.am_dv = 1 begin update z_trig_ctl set am_dv = 0;
 delete from am_dv;
-insert into am_dv select Nutr_No, dv, 100.0 * Nutr_Val / dv - 100.0 from (select Nutr_No, Nutr_Val, case when nutopt = 0.0 then dv_default when nutopt = -1.0 and Nutr_Val > 0.0 then Nutr_Val when nutopt = -1.0 and Nutr_Val <= 0.0 then dv_default else nutopt end as dv from nutr_def natural join am_analysis where dv_default > 0.0 and (Nutr_No = 208 or Nutr_No between 301 and 601 or Nutr_No = 2008));
-insert into am_dv select Nutr_No, dv, 100.0 * Nutr_Val / dv - 100.0 from (select Nutr_No, Nutr_Val, case when nutopt = 0.0 and (select dv from am_dv where Nutr_No = 208) > 0.0 then (select dv from am_dv where Nutr_No = 208) / 2000.0 * dv_default when nutopt = 0.0 then dv_default when nutopt = -1.0 and Nutr_Val > 0.0 then Nutr_Val when nutopt = -1.0 and Nutr_Val <= 0.0 then (select dv from am_dv where Nutr_No = 208) / 2000.0 * dv_default else nutopt end as dv from nutr_def natural join am_analysis where Nutr_No = 291);
+insert into am_dv select Nutr_No, dv, 100.0 * Nutr_Val / dv - 100.0 from (select Nutr_No, Nutr_Val, case when nutopt = 0.0 then dv_default when nutopt = \
+  -1.0 and Nutr_Val > 0.0 then Nutr_Val when nutopt = \
+  -1.0 and Nutr_Val <= 0.0 then dv_default else nutopt end as dv from nutr_def natural join am_analysis where dv_default > 0.0 and (Nutr_No = 208 or Nutr_No between 301 and 601 or Nutr_No = 2008));
+insert into am_dv select Nutr_No, dv, 100.0 * Nutr_Val / dv - 100.0 from (select Nutr_No, Nutr_Val, case when nutopt = 0.0 and (select dv from am_dv where Nutr_No = 208) > 0.0 then (select dv from am_dv where Nutr_No = 208) / 2000.0 * dv_default when nutopt = 0.0 then dv_default when nutopt = \
+  -1.0 and Nutr_Val > 0.0 then Nutr_Val when nutopt = \
+  -1.0 and Nutr_Val <= 0.0 then (select dv from am_dv where Nutr_No = 208) / 2000.0 * dv_default else nutopt end as dv from nutr_def natural join am_analysis where Nutr_No = 291);
 delete from z_vars1;
-insert into z_vars1 select ifnull(PROT_KCAL.Nutr_Val / PROCNT.Nutr_Val, 4.0), ifnull(FAT_KCAL.Nutr_Val / FAT.Nutr_Val, 9.0), ifnull(CHO_KCAL.Nutr_Val / CHOCDF.Nutr_Val, 4.0), ifnull(ALC.Nutr_Val * 6.93, 0.0), ifnull((FASAT.Nutr_Val + FAMS.Nutr_Val + FAPU.Nutr_Val) / FAT.Nutr_Val, 0.94615385), case when ENERC_KCALopt.nutopt = -1 then 208 when FATopt.nutopt <= 0.0 and CHO_NONFIBopt.nutopt = 0.0 then 2000 else 204 end from am_analysis PROT_KCAL join am_analysis PROCNT on PROT_KCAL.Nutr_No = 3000 and PROCNT.Nutr_No = 203 join am_analysis FAT_KCAL on FAT_KCAL.Nutr_No = 3001 join am_analysis FAT on FAT.Nutr_No = 204 join am_analysis CHO_KCAL on CHO_KCAL.Nutr_No = 3002 join am_analysis CHOCDF on CHOCDF.Nutr_No = 205 join am_analysis ALC on ALC.Nutr_No = 221 join am_analysis FASAT on FASAT.Nutr_No = 606 join am_analysis FAMS on FAMS.Nutr_No = 645 join am_analysis FAPU on FAPU.Nutr_No = 646 join nutr_def ENERC_KCALopt on ENERC_KCALopt.Nutr_No = 208 join nutr_def FATopt on FATopt.Nutr_No = 204 join nutr_def CHO_NONFIBopt on CHO_NONFIBopt.Nutr_No = 2000;
-insert into am_dv select Nutr_No, dv, 100.0 * Nutr_Val / dv - 100.0 from (select PROCNTnd.Nutr_No, case when (PROCNTnd.nutopt = 0.0 and ENERC_KCAL.dv > 0.0) or (PROCNTnd.nutopt = -1.0 and PROCNT.Nutr_Val <= 0.0) then PROCNTnd.dv_default * ENERC_KCAL.dv / 2000.0 when PROCNTnd.nutopt > 0.0 then PROCNTnd.nutopt else PROCNT.Nutr_Val end as dv, PROCNT.Nutr_Val from nutr_def PROCNTnd natural join am_analysis PROCNT join z_vars1 join am_dv ENERC_KCAL on ENERC_KCAL.Nutr_No = 208 where PROCNTnd.Nutr_No = 203);
+insert into z_vars1 select ifnull(PROT_KCAL.Nutr_Val / PROCNT.Nutr_Val, 4.0), ifnull(FAT_KCAL.Nutr_Val / FAT.Nutr_Val, 9.0), ifnull(CHO_KCAL.Nutr_Val / CHOCDF.Nutr_Val, 4.0), ifnull(ALC.Nutr_Val * 6.93, 0.0), ifnull((FASAT.Nutr_Val + FAMS.Nutr_Val + FAPU.Nutr_Val) / FAT.Nutr_Val, 0.94615385), case when ENERC_KCALopt.nutopt = \
+  -1 then 208 when FATopt.nutopt <= 0.0 and CHO_NONFIBopt.nutopt = 0.0 then 2000 else 204 end from am_analysis PROT_KCAL join am_analysis PROCNT on PROT_KCAL.Nutr_No = 3000 and PROCNT.Nutr_No = 203 join am_analysis FAT_KCAL on FAT_KCAL.Nutr_No = 3001 join am_analysis FAT on FAT.Nutr_No = 204 join am_analysis CHO_KCAL on CHO_KCAL.Nutr_No = 3002 join am_analysis CHOCDF on CHOCDF.Nutr_No = 205 join am_analysis ALC on ALC.Nutr_No = 221 join am_analysis FASAT on FASAT.Nutr_No = 606 join am_analysis FAMS on FAMS.Nutr_No = 645 join am_analysis FAPU on FAPU.Nutr_No = 646 join nutr_def ENERC_KCALopt on ENERC_KCALopt.Nutr_No = 208 join nutr_def FATopt on FATopt.Nutr_No = 204 join nutr_def CHO_NONFIBopt on CHO_NONFIBopt.Nutr_No = 2000;
+insert into am_dv select Nutr_No, dv, 100.0 * Nutr_Val / dv - 100.0 from (select PROCNTnd.Nutr_No, case when (PROCNTnd.nutopt = 0.0 and ENERC_KCAL.dv > 0.0) or (PROCNTnd.nutopt = \
+  -1.0 and PROCNT.Nutr_Val <= 0.0) then PROCNTnd.dv_default * ENERC_KCAL.dv / 2000.0 when PROCNTnd.nutopt > 0.0 then PROCNTnd.nutopt else PROCNT.Nutr_Val end as dv, PROCNT.Nutr_Val from nutr_def PROCNTnd natural join am_analysis PROCNT join z_vars1 join am_dv ENERC_KCAL on ENERC_KCAL.Nutr_No = 208 where PROCNTnd.Nutr_No = 203);
 delete from z_vars2;
-insert into z_vars2 select am_fat_dv_not_boc, am_cho_nonfib_dv_not_boc, am_cho_nonfib_dv_not_boc + FIBTGdv from (select case when FATnd.nutopt = -1 and FAT.Nutr_Val > 0.0 then FAT.Nutr_Val when FATnd.nutopt > 0.0 then FATnd.nutopt else FATnd.dv_default * ENERC_KCAL.dv / 2000.0 end as am_fat_dv_not_boc, case when CHO_NONFIBnd.nutopt = -1 and CHO_NONFIB.Nutr_Val > 0.0 then CHO_NONFIB.Nutr_Val when CHO_NONFIBnd.nutopt > 0.0 then CHO_NONFIBnd.nutopt else (CHOCDFnd.dv_default * ENERC_KCAL.dv / 2000.0) - FIBTG.dv end as am_cho_nonfib_dv_not_boc, FIBTG.dv as FIBTGdv from z_vars1 join am_analysis FAT on FAT.Nutr_No = 204 join am_dv ENERC_KCAL on ENERC_KCAL.Nutr_No = 208 join nutr_def FATnd on FATnd.Nutr_No = 204 join nutr_def CHOCDFnd on CHOCDFnd.Nutr_No = 205 join nutr_def CHO_NONFIBnd on CHO_NONFIBnd.Nutr_No = 2000 join am_analysis CHO_NONFIB on CHO_NONFIB.Nutr_No = 2000 join am_dv FIBTG on FIBTG.Nutr_No = 291);
+insert into z_vars2 select am_fat_dv_not_boc, am_cho_nonfib_dv_not_boc, am_cho_nonfib_dv_not_boc + FIBTGdv from (select case when FATnd.nutopt = \
+  -1 and FAT.Nutr_Val > 0.0 then FAT.Nutr_Val when FATnd.nutopt > 0.0 then FATnd.nutopt else FATnd.dv_default * ENERC_KCAL.dv / 2000.0 end as am_fat_dv_not_boc, case when CHO_NONFIBnd.nutopt = \
+  -1 and CHO_NONFIB.Nutr_Val > 0.0 then CHO_NONFIB.Nutr_Val when CHO_NONFIBnd.nutopt > 0.0 then CHO_NONFIBnd.nutopt else (CHOCDFnd.dv_default * ENERC_KCAL.dv / 2000.0) - FIBTG.dv end as am_cho_nonfib_dv_not_boc, FIBTG.dv as FIBTGdv from z_vars1 join am_analysis FAT on FAT.Nutr_No = 204 join am_dv ENERC_KCAL on ENERC_KCAL.Nutr_No = 208 join nutr_def FATnd on FATnd.Nutr_No = 204 join nutr_def CHOCDFnd on CHOCDFnd.Nutr_No = 205 join nutr_def CHO_NONFIBnd on CHO_NONFIBnd.Nutr_No = 2000 join am_analysis CHO_NONFIB on CHO_NONFIB.Nutr_No = 2000 join am_dv FIBTG on FIBTG.Nutr_No = 291);
 delete from z_vars3;
 insert into z_vars3 select am_fat_dv_boc, am_chocdf_dv_boc, am_chocdf_dv_boc - FIBTGdv from (select (ENERC_KCAL.dv - (PROCNT.dv * am_cals2gram_pro) - (am_chocdf_dv_not_boc * am_cals2gram_cho)) / am_cals2gram_fat as am_fat_dv_boc, (ENERC_KCAL.dv - (PROCNT.dv * am_cals2gram_pro) - (am_fat_dv_not_boc * am_cals2gram_fat)) / am_cals2gram_cho as am_chocdf_dv_boc, FIBTG.dv as FIBTGdv from z_vars1 join z_vars2 join am_dv ENERC_KCAL on ENERC_KCAL.Nutr_No = 208 join am_dv PROCNT on PROCNT.Nutr_No = 203 join am_dv FIBTG on FIBTG.Nutr_No = 291);
 insert into am_dv select Nutr_No, case when balance_of_calories = 204 then am_fat_dv_boc else am_fat_dv_not_boc end, case when balance_of_calories = 204 then 100.0 * Nutr_Val / am_fat_dv_boc - 100.0 else 100.0 * Nutr_Val / am_fat_dv_not_boc - 100.0 end from z_vars1 join z_vars2 join z_vars3 join nutr_def on Nutr_No = 204 natural join am_analysis;
 insert into am_dv select Nutr_No, case when balance_of_calories = 2000 then am_cho_nonfib_dv_boc else am_cho_nonfib_dv_not_boc end, case when balance_of_calories = 2000 then 100.0 * Nutr_Val / am_cho_nonfib_dv_boc - 100.0 else 100.0 * Nutr_Val / am_cho_nonfib_dv_not_boc - 100.0 end from z_vars1 join z_vars2 join z_vars3 join nutr_def on Nutr_No = 2000 natural join am_analysis;
 insert into am_dv select Nutr_No, case when balance_of_calories = 2000 then am_chocdf_dv_boc else am_chocdf_dv_not_boc end, case when balance_of_calories = 2000 then 100.0 * Nutr_Val / am_chocdf_dv_boc - 100.0 else 100.0 * Nutr_Val / am_chocdf_dv_not_boc - 100.0 end from z_vars1 join z_vars2 join z_vars3 join nutr_def on Nutr_No = 205 natural join am_analysis;
-insert into am_dv select FASATnd.Nutr_No, case when FASATnd.nutopt = -1.0 and FASAT.Nutr_Val > 0.0 then FASAT.Nutr_Val when FASATnd.nutopt > 0.0 then FASATnd.nutopt else ENERC_KCAL.dv / 2000.0 * FASATnd.dv_default end, case when FASATnd.nutopt = -1.0 and FASAT.Nutr_Val > 0.0 then 0.0 when FASATnd.nutopt > 0.0 then 100.0 * FASAT.Nutr_Val / FASATnd.nutopt - 100.0 else 100.0 * FASAT.Nutr_Val / (ENERC_KCAL.dv / 2000.0 * FASATnd.dv_default) - 100.0 end from z_vars1 join nutr_def FASATnd on FASATnd.Nutr_No = 606 join am_dv ENERC_KCAL on ENERC_KCAL.Nutr_No = 208 join am_analysis FASAT on FASAT.Nutr_No = 606;
-insert into am_dv select FAPUnd.Nutr_No, case when FAPUnd.nutopt = -1.0 and FAPU.Nutr_Val > 0.0 then FAPU.Nutr_Val when FAPUnd.nutopt > 0.0 then FAPUnd.nutopt else ENERC_KCAL.dv * 0.04 / am_cals2gram_fat end, case when FAPUnd.nutopt = -1.0 and FAPU.Nutr_Val > 0.0 then 0.0 when FAPUnd.nutopt > 0.0 then 100.0 * FAPU.Nutr_Val / FAPUnd.nutopt - 100.0 else 100.0 * FAPU.Nutr_Val / (ENERC_KCAL.dv * 0.04 / am_cals2gram_fat) - 100.0 end from z_vars1 join nutr_def FAPUnd on FAPUnd.Nutr_No = 646 join am_dv ENERC_KCAL on ENERC_KCAL.Nutr_No = 208 join am_analysis FAPU on FAPU.Nutr_No = 646;
+insert into am_dv select FASATnd.Nutr_No, case when FASATnd.nutopt = \
+  -1.0 and FASAT.Nutr_Val > 0.0 then FASAT.Nutr_Val when FASATnd.nutopt > 0.0 then FASATnd.nutopt else ENERC_KCAL.dv / 2000.0 * FASATnd.dv_default end, case when FASATnd.nutopt = \
+  -1.0 and FASAT.Nutr_Val > 0.0 then 0.0 when FASATnd.nutopt > 0.0 then 100.0 * FASAT.Nutr_Val / FASATnd.nutopt - 100.0 else 100.0 * FASAT.Nutr_Val / (ENERC_KCAL.dv / 2000.0 * FASATnd.dv_default) - 100.0 end from z_vars1 join nutr_def FASATnd on FASATnd.Nutr_No = 606 join am_dv ENERC_KCAL on ENERC_KCAL.Nutr_No = 208 join am_analysis FASAT on FASAT.Nutr_No = 606;
+insert into am_dv select FAPUnd.Nutr_No, case when FAPUnd.nutopt = \
+  -1.0 and FAPU.Nutr_Val > 0.0 then FAPU.Nutr_Val when FAPUnd.nutopt > 0.0 then FAPUnd.nutopt else ENERC_KCAL.dv * 0.04 / am_cals2gram_fat end, case when FAPUnd.nutopt = \
+  -1.0 and FAPU.Nutr_Val > 0.0 then 0.0 when FAPUnd.nutopt > 0.0 then 100.0 * FAPU.Nutr_Val / FAPUnd.nutopt - 100.0 else 100.0 * FAPU.Nutr_Val / (ENERC_KCAL.dv * 0.04 / am_cals2gram_fat) - 100.0 end from z_vars1 join nutr_def FAPUnd on FAPUnd.Nutr_No = 646 join am_dv ENERC_KCAL on ENERC_KCAL.Nutr_No = 208 join am_analysis FAPU on FAPU.Nutr_No = 646;
 insert into am_dv select FAMSnd.Nutr_No, (FAT.dv * am_fa2fat) - FASAT.dv - FAPU.dv, 100.0 * FAMS.Nutr_Val / ((FAT.dv * am_fa2fat) - FASAT.dv - FAPU.dv) - 100.0 from z_vars1 join am_dv FAT on FAT.Nutr_No = 204 join am_dv FASAT on FASAT.Nutr_No = 606 join am_dv FAPU on FAPU.Nutr_No = 646 join nutr_def FAMSnd on FAMSnd.Nutr_No = 645 join am_analysis FAMS on FAMS.Nutr_No = 645;
 delete from z_n6;
 insert into z_n6 select NULL, case when FAPU1 = 0.0 then 50.0 when FAPU1 < 15.0 then 15.0 when FAPU1 > 90.0 then 90.0 else FAPU1 end, case when FAPUval.Nutr_Val / FAPU.dv >= 1.0 then FAPUval.Nutr_Val / FAPU.dv else 1.0 end, 1, 0, 900.0 * case when SHORT3.Nutr_Val > 0.0 then SHORT3.Nutr_Val else 0.000000001 end / ENERC_KCAL.dv, 900.0 * case when SHORT6.Nutr_Val > 0.0 then SHORT6.Nutr_Val else 0.000000001 end / ENERC_KCAL.dv / case when FAPUval.Nutr_Val / FAPU.dv >= 1.0 then FAPUval.Nutr_Val / FAPU.dv else 1.0 end, 900.0 * case when LONG3.Nutr_Val > 0.0 then LONG3.Nutr_Val else 0.000000001 end / ENERC_KCAL.dv, 900.0 * case when LONG6.Nutr_Val > 0.0 then LONG6.Nutr_Val else 0.000000001 end / ENERC_KCAL.dv / case when FAPUval.Nutr_Val / FAPU.dv >= 1.0 then FAPUval.Nutr_Val / FAPU.dv else 1.0 end, 900.0 * (FASAT.dv + FAMS.dv + FAPU.dv - max(SHORT3.Nutr_Val,0.000000001) - max(SHORT6.Nutr_Val,0.000000001) - max(LONG3.Nutr_Val,0.000000001) - max(LONG6.Nutr_Val,0.000000001)) / ENERC_KCAL.dv from am_analysis SHORT3 join am_analysis SHORT6 on SHORT3.Nutr_No = 3005 and SHORT6.Nutr_No = 3003 join am_analysis LONG3 on LONG3.Nutr_No = 3006 join am_analysis LONG6 on LONG6.Nutr_No = 3004 join am_analysis FAPUval on FAPUval.Nutr_No = 646 join am_dv FASAT on FASAT.Nutr_No = 606 join am_dv FAMS on FAMS.Nutr_No = 645 join am_dv FAPU on FAPU.Nutr_No = 646 join am_dv ENERC_KCAL on ENERC_KCAL.Nutr_No = 208 join options;
@@ -2133,48 +5774,39 @@ end;
 */
 
 drop view if exists z_pcf;
-create view z_pcf as select meal_id, 
-NDB_No, Gm_Wgt + dv / meals_per_day * dvpct_offset / Nutr_Val * -1.0 as Gm_Wgt, Nutr_No
-from mealfoods natural join rm_dv natural join nut_data join options 
-where abs(dvpct_offset) >= 0.05 order by abs(dvpct_offset);
+create view z_pcf as select meal_id,NDB_No, Gm_Wgt + dv / meals_per_day * dvpct_offset / Nutr_Val * \
+  -1.0 as Gm_Wgt, Nutr_No
+from mealfoods natural join rm_dv natural join nut_data join optionswhere abs(dvpct_offset) >= 0.05 order by abs(dvpct_offset);
 
 drop trigger if exists PCF_processing;
-CREATE TRIGGER PCF_processing after update of PCF_processing on z_trig_ctl when NEW.PCF_processing = 1 begin 
-update z_trig_ctl set PCF_processing = 0;
+CREATE TRIGGER PCF_processing after update of PCF_processing on z_trig_ctl when NEW.PCF_processing = 1 begin update z_trig_ctl set PCF_processing = 0;
 replace into mealfoods select * from z_pcf limit 1;
 update z_trig_ctl set block_mealfoods_delete_trigger = 0;
 end;
-  
-/*
+ /*
    Now start the actual triggers that kick off when something happens.
    They replay the previous procedures as required by the different
    circumstances that update the appropriate column in z_trig_ctl to true.
-*/  
-
+*/ 
 /*
    Update to defanal_am in options (number of meals to analyze)
    so we need to rewrite the am_analysis and am_dv and thus practically
    everything
 */
-  
-drop trigger if exists defanal_am_trigger;
-CREATE TRIGGER defanal_am_trigger after update of defanal_am on options begin 
-update z_trig_ctl set am_analysis_header = 1;
+ drop trigger if exists defanal_am_trigger;
+CREATE TRIGGER defanal_am_trigger after update of defanal_am on options begin update z_trig_ctl set am_analysis_header = 1;
 update z_trig_ctl set am_analysis_minus_currentmeal = case when (select mealcount from am_analysis_header) > 1 then 1 when (select mealcount from am_analysis_header) = 1 and (select lastmeal from am_analysis_header) != (select currentmeal from am_analysis_header) then 1 else 0 end;
 update z_trig_ctl set am_analysis_null = case when (select mealcount from am_analysis_header) > 1 then 0 when (select mealcount from am_analysis_header) = 1 and (select lastmeal from am_analysis_header) != (select currentmeal from am_analysis_header) then 0 else 1 end;
 update z_trig_ctl set am_analysis = 1;
 update z_trig_ctl set am_dv = 1;
 update z_trig_ctl set PCF_processing = 1;
 end;
-  
-/*
+ /*
    Update to currentmeal in options
    so we need to rewrite practically everything
-*/  
-
+*/ 
 drop trigger if exists currentmeal_trigger;
-CREATE TRIGGER currentmeal_trigger after update of currentmeal on options begin 
-update mealfoods set Nutr_No = null where Nutr_No is not null;
+CREATE TRIGGER currentmeal_trigger after update of currentmeal on options begin update mealfoods set Nutr_No = null where Nutr_No is not null;
 update z_trig_ctl set am_analysis_header = 1;
 update z_trig_ctl set am_analysis_minus_currentmeal = case when (select mealcount from am_analysis_header) > 1 then 1 when (select mealcount from am_analysis_header) = 1 and (select lastmeal from am_analysis_header) != (select currentmeal from am_analysis_header) then 1 else 0 end;
 update z_trig_ctl set am_analysis_null = case when (select mealcount from am_analysis_header) > 1 then 0 when (select mealcount from am_analysis_header) = 1 and (select lastmeal from am_analysis_header) != (select currentmeal from am_analysis_header) then 0 else 1 end;
@@ -2184,21 +5816,17 @@ update z_trig_ctl set rm_analysis_null = case when (select mealcount from rm_ana
 update z_trig_ctl set am_analysis = 1;
 update z_trig_ctl set am_dv = 1;
 end;
-  
-/*
+ /*
    Input: table z_n6 to compute column n6hufa
    Output column:  n6hufa
    Purpose:  First step to set reference value for essential fatty acids
              Compute Lands' n6hufa % and set up for following triggers to
              determine reference values
 */
- 
 drop trigger if exists z_n6_insert_trigger;
-CREATE TRIGGER z_n6_insert_trigger after insert on z_n6 begin 
-update z_n6 set n6hufa = (select 100.0 / (1.0 + 0.0441 / p6 * (1.0 + p3 / 0.0555 + h3 / 0.005 + o / 5.0 + p6 / 0.175)) + 100.0 / (1.0 + 0.7 / h6 * (1.0 + h3 / 3.0))), reduce = 0, iter = 0;
+CREATE TRIGGER z_n6_insert_trigger after insert on z_n6 begin update z_n6 set n6hufa = (select 100.0 / (1.0 + 0.0441 / p6 * (1.0 + p3 / 0.0555 + h3 / 0.005 + o / 5.0 + p6 / 0.175)) + 100.0 / (1.0 + 0.7 / h6 * (1.0 + h3 / 3.0))), reduce = 0, iter = 0;
 end;
-    
-/*
+   /*
    Input:  If column "reduce" is set right, this trigger recursively
            subtracts omega-6 fatty acids to produce n6hufa numbers to match the
            option for Omega-6/3 balance
@@ -2208,11 +5836,9 @@ end;
 */
 
 drop trigger if exists z_n6_reduce6_trigger;
-CREATE TRIGGER z_n6_reduce6_trigger after update on z_n6 when NEW.n6hufa > OLD.FAPU1 and NEW.iter < 100 and NEW.reduce in (0, 6) begin 
-update z_n6 set iter = iter + 1, reduce = 6, n6hufa = (select 100.0 / (1.0 + 0.0441 / (p6 - iter * .01 * p6) * (1.0 + p3 / 0.0555 + h3 / 0.005 + o / 5.0 + p6 / 0.175)) + 100.0 / (1.0 + 0.7 / (h6 - iter * .01 * h6) * (1.0 + h3 / 3.0)));
+CREATE TRIGGER z_n6_reduce6_trigger after update on z_n6 when NEW.n6hufa > OLD.FAPU1 and NEW.iter < 100 and NEW.reduce in (0, 6) begin update z_n6 set iter = iter + 1, reduce = 6, n6hufa = (select 100.0 / (1.0 + 0.0441 / (p6 - iter * .01 * p6) * (1.0 + p3 / 0.0555 + h3 / 0.005 + o / 5.0 + p6 / 0.175)) + 100.0 / (1.0 + 0.7 / (h6 - iter * .01 * h6) * (1.0 + h3 / 3.0)));
 end;
-    
-/*
+   /*
    Input:  If column "reduce" is set right, this trigger recursively
            subtracts omega-3 fatty acids to produce n6hufa numbers to match the
            option for Omega-6/3 balance
@@ -2220,20 +5846,15 @@ end;
    Purpose:  determine daily values for n-3 when we know n-3 is excessive
              because n6hufa < target FAPU1
 */
-  
-drop trigger if exists z_n6_reduce3_trigger;
-CREATE TRIGGER z_n6_reduce3_trigger after update of n6hufa on z_n6 when NEW.n6hufa < OLD.FAPU1 and NEW.iter < 100 and NEW.reduce in (0, 3) begin 
-update z_n6 set iter = iter + 1, reduce = 3, n6hufa = (select 100.0 / (1.0 + 0.0441 / p6 * (1.0 + (p3 - iter * .01 * p3) / 0.0555 + (h3 - iter * .01 * h3) / 0.005 + o / 5.0 + p6 / 0.175)) + 100.0 / (1.0 + 0.7 / h6 * (1.0 + (h3 - iter * .01 * h3) / 3.0)));
+ drop trigger if exists z_n6_reduce3_trigger;
+CREATE TRIGGER z_n6_reduce3_trigger after update of n6hufa on z_n6 when NEW.n6hufa < OLD.FAPU1 and NEW.iter < 100 and NEW.reduce in (0, 3) begin update z_n6 set iter = iter + 1, reduce = 3, n6hufa = (select 100.0 / (1.0 + 0.0441 / p6 * (1.0 + (p3 - iter * .01 * p3) / 0.0555 + (h3 - iter * .01 * h3) / 0.005 + o / 5.0 + p6 / 0.175)) + 100.0 / (1.0 + 0.7 / h6 * (1.0 + (h3 - iter * .01 * h3) / 3.0)));
 end;
-    
-/*
+   /*
   First insert into currentmeal is special because it changes everything!
 */
 
 drop trigger if exists insert_mealfoods_trigger;
- 
-CREATE TRIGGER insert_mealfoods_trigger after insert on mealfoods when NEW.meal_id = (select currentmeal from options) and (select count(*) from mealfoods where meal_id = NEW.meal_id) = 1 begin 
-update z_trig_ctl set am_analysis_header = 1;
+CREATE TRIGGER insert_mealfoods_trigger after insert on mealfoods when NEW.meal_id = (select currentmeal from options) and (select count(*) from mealfoods where meal_id = NEW.meal_id) = 1 begin update z_trig_ctl set am_analysis_header = 1;
 update z_trig_ctl set am_analysis_minus_currentmeal = case when (select mealcount from am_analysis_header) > 1 then 1 when (select mealcount from am_analysis_header) = 1 and (select lastmeal from am_analysis_header) != (select currentmeal from am_analysis_header) then 1 else 0 end;
 update z_trig_ctl set am_analysis_null = case when (select mealcount from am_analysis_header) > 1 then 0 when (select mealcount from am_analysis_header) = 1 and (select lastmeal from am_analysis_header) != (select currentmeal from am_analysis_header) then 0 else 1 end;
 update z_trig_ctl set rm_analysis_header = 1;
@@ -2242,14 +5863,11 @@ update z_trig_ctl set rm_analysis_null = case when (select mealcount from rm_ana
 update z_trig_ctl set am_analysis = 1;
 update z_trig_ctl set am_dv = 1;
 end;
-  
-/*
+ /*
   Last delete from currentmeal is special because it changes everything!
 */
-  
-drop trigger if exists delete_mealfoods_trigger;
-CREATE TRIGGER delete_mealfoods_trigger after delete on mealfoods when OLD.meal_id = (select currentmeal from options) and (select count(*) from mealfoods where meal_id = OLD.meal_id) = 0 begin 
-update mealfoods set Nutr_No = null where Nutr_No is not null;
+ drop trigger if exists delete_mealfoods_trigger;
+CREATE TRIGGER delete_mealfoods_trigger after delete on mealfoods when OLD.meal_id = (select currentmeal from options) and (select count(*) from mealfoods where meal_id = OLD.meal_id) = 0 begin update mealfoods set Nutr_No = null where Nutr_No is not null;
 update z_trig_ctl set am_analysis_header = 1;
 update z_trig_ctl set am_analysis_minus_currentmeal = case when (select mealcount from am_analysis_header) > 1 then 1 when (select mealcount from am_analysis_header) = 1 and (select lastmeal from am_analysis_header) != (select currentmeal from am_analysis_header) then 1 else 0 end;
 update z_trig_ctl set am_analysis_null = case when (select mealcount from am_analysis_header) > 1 then 0 when (select mealcount from am_analysis_header) = 1 and (select lastmeal from am_analysis_header) != (select currentmeal from am_analysis_header) then 0 else 1 end;
@@ -2259,26 +5877,19 @@ update z_trig_ctl set rm_analysis_null = case when (select mealcount from rm_ana
 update z_trig_ctl set am_analysis = 1;
 update z_trig_ctl set am_dv = 1;
 end;
-  
-/*
+ /*
   Input: mealfoods modified Gm_Wgt
   Output: weight Gm_Wgt
   Purpose:  NUT remembers user serving size preference in first weight record
             when ordered by Seq (although origSeq is the actual key).
 */
-    
-drop trigger if exists update_mealfoods2weight_trigger;
-CREATE TRIGGER update_mealfoods2weight_trigger AFTER UPDATE ON mealfoods when NEW.Gm_Wgt > 0.0 and (select block_setting_preferred_weight from z_trig_ctl) = 0 BEGIN 
-update weight set Gm_Wgt = NEW.Gm_Wgt where NDB_No = NEW.NDB_No and Seq = (select min(Seq) from weight where NDB_No = NEW.NDB_No) ;
+   drop trigger if exists update_mealfoods2weight_trigger;
+CREATE TRIGGER update_mealfoods2weight_trigger AFTER UPDATE ON mealfoods when NEW.Gm_Wgt > 0.0 and (select block_setting_preferred_weight from z_trig_ctl) = 0 BEGINupdate weight set Gm_Wgt = NEW.Gm_Wgt where NDB_No = NEW.NDB_No and Seq = (select min(Seq) from weight where NDB_No = NEW.NDB_No) ;
 end;
-    
-drop trigger if exists insert_mealfoods2weight_trigger;
-CREATE TRIGGER insert_mealfoods2weight_trigger AFTER INSERT ON mealfoods when NEW.Gm_Wgt > 0.0 and (select block_setting_preferred_weight from z_trig_ctl) = 0 BEGIN 
-update weight set Gm_Wgt = NEW.Gm_Wgt where NDB_No = NEW.NDB_No and Seq = (select min(Seq) from weight where NDB_No = NEW.NDB_No) ;
+   drop trigger if exists insert_mealfoods2weight_trigger;
+CREATE TRIGGER insert_mealfoods2weight_trigger AFTER INSERT ON mealfoods when NEW.Gm_Wgt > 0.0 and (select block_setting_preferred_weight from z_trig_ctl) = 0 BEGINupdate weight set Gm_Wgt = NEW.Gm_Wgt where NDB_No = NEW.NDB_No and Seq = (select min(Seq) from weight where NDB_No = NEW.NDB_No) ;
 end;
-    
-    
-/*
+      /*
   If you follow the weight saga so far, you realize that if the user wants to
   always see a different serving unit, you have to change the Seq to 0 for that
   record.  Here are convenience triggers that change the current Seq = 0
@@ -2355,23 +5966,17 @@ CREATE VIEW wlview as select wldate, weight, bodyfat, round(weight - weight * bo
 */
 
 drop view if exists wlsummary;
-create view wlsummary as select case 
-when (select weightn from z_wslope) > 1 then
+create view wlsummary as select casewhen (select weightn from z_wslope) > 1 then
 'Weight:  ' || (select round(weightyintercept,1) from z_wslope) || char(13) || char(10) ||
 'Bodyfat:  ' || case when (select weightyintercept from z_wslope) > 0.0 then round(1000.0 * (select fatyintercept from z_fslope) / (select weightyintercept from z_wslope)) / 10.0 else 0.0 end || '%' || char(13) || char(10)
 when (select weightn from z_wslope) = 1 then
-'Weight:  ' || (select weight from z_wl where cleardate is null) || char(13) || char(10) || 
-'Bodyfat:  ' || (select bodyfat from z_wl where cleardate is null) || '%'
-else 
-'Weight:  0.0' || char(13) || char(10) || 
-'Bodyfat:  0.0%'
+'Weight:  ' || (select weight from z_wl where cleardate is null) || char(13) || char(10) ||'Bodyfat:  ' || (select bodyfat from z_wl where cleardate is null) || '%'
+else'Weight:  0.0' || char(13) || char(10) ||'Bodyfat:  0.0%'
 end || char(13) || char(10) ||
 'Today' || "'" || 's Calorie level = ' || (select cast(round(nutopt) as int) from nutr_def where Nutr_No = 208)
 || char(13) || char(10)
 || char(13) || char(10) ||
-case when (select weightn from z_wslope) = 0 then '0 data points so far...' 
-when (select weightn from z_wslope) = 1 then '1 data point so far...' 
-else
+case when (select weightn from z_wslope) = 0 then '0 data points so far...'when (select weightn from z_wslope) = 1 then '1 data point so far...'else
 'Based on the trend of ' || (select cast(cast(weightn as int) as text) from z_wslope) || ' data points so far...' || char(13) || char(10) || char(10) ||
 'Predicted lean mass today = ' ||
 (select cast(round(10.0 * (weightyintercept - fatyintercept)) / 10.0 as text) from z_wslope, z_fslope) || char(13) || char(10) ||
@@ -2381,8 +5986,7 @@ else
 case when (select weightslope - fatslope from z_wslope, z_fslope) >= 0.0 then 'gained ' else 'lost ' end ||
 (select cast(abs(round((weightslope - fatslope) * span * 1000.0) / 1000.0) as text) from z_wslope, z_fslope, z_span) ||
 ' lean mass over ' ||
-(select span from z_span) || 
-case when (select span from z_span) = 1 then ' day' else ' days' end || char(13) || char(10) ||
+(select span from z_span) ||case when (select span from z_span) = 1 then ' day' else ' days' end || char(13) || char(10) ||
 case when (select fatslope from z_fslope) > 0.0 then 'and gained ' else 'and lost ' end ||
 (select cast(abs(round(fatslope * span * 1000.0) / 1000.0) as text) from z_fslope, z_span) || ' fat mass.'
 
@@ -2443,13 +6047,10 @@ end;
   So, write the first analysis after a USDA load and initialize nutopts if
   necessary.
 */
-  
-update nutr_def set nutopt = 0.0 where nutopt is null;
+ update nutr_def set nutopt = 0.0 where nutopt is null;
 update options set currentmeal = case when currentmeal is null then 0 else currentmeal end;
 update options set defanal_am = case when defanal_am is null then 0 else defanal_am end;
-    
-/* 
-  SQLite supposedly performs better if it has analyzed how big the tables are
+   /*  SQLite supposedly performs better if it has analyzed how big the tables are
 */
 
 commit;
@@ -2476,8 +6077,16 @@ if {[catch {dbmem restore main $DiskDB}]} {
 
 # Duplicate the schema of appdata1.xyz into the in-memory db database
 
- db eval {SELECT sql FROM sqlite_master WHERE sql NOT NULL and type = 'table' and name not like '%sqlite_%'} {
-  dbmem eval $sql
+ db eval { } {
+	SELECT
+		sql
+	FROM
+		sqlite_master
+	WHERE
+		sql NOT NULL
+		and type = 'table'
+		and name not like '%sqlite_%'
+		dbmem eval $sql
   }
 
 # Copy data content from appdata1.xyz into memory
@@ -2531,13 +6140,15 @@ load_logic
 set ::pbar(7) 100.0
 dbmem progress 4000 {update}
 
-.loadframe.pbar8 configure -mode indeterminate
+.loadframe.pbar8 configure \
+  -mode indeterminate
 .loadframe.pbar8 start
 load_legacy
 
 dbmem progress 0 ""
 .loadframe.pbar8 stop
-.loadframe.pbar8 configure -mode determinate
+.loadframe.pbar8 configure \
+  -mode determinate
 set ::pbar(8) 80.0
 update
 dbmem eval {analyze main}
@@ -2567,12 +6178,12 @@ dbmem close
 set ::pbar(8) 90.0
 update
 db eval {vacuum}
-file rename -force "NUTR_DEF.txt" "NUTR_DEF.txt.loaded"
+file rename \
+  -force "NUTR_DEF.txt" "NUTR_DEF.txt.loaded"
 set ::pbar(8) 100.0
 update
 db eval {select code from z_tcl_code where name = 'Start_NUT'} { }
-eval $code 
-wm deiconify .
+eval $codewm deiconify .
 destroy .loadframe
 
 #end InitialLoad
@@ -2583,8 +6194,10 @@ set Start_NUT {
 db eval {select code from z_tcl_code where name = 'user_init'} {
  eval $code
  }
-thread::send -async $::SQL_THREAD "$code"
-thread::send -async $::SQL_THREAD {db eval {delete from z_tcl_jobqueue} ; db nullvalue "\[No Data\]"}
+thread::send \
+  -async $::SQL_THREAD "$code"
+thread::send \
+  -async $::SQL_THREAD {db eval {delete from z_tcl_jobqueue} ; db nullvalue "\[No Data\]"}
 
 
 db eval {select Tagname, NutrDesc, case when Units != X'B567' then Units else 'mcg' end as Units from nutr_def} {
@@ -2596,14 +6209,19 @@ db eval {select Tagname, NutrDesc, case when Units != X'B567' then Units else 'm
 db eval {select count(distinct meal_id) as "::mealcount", case when FAPU1 = 0.0 then 50.0 else FAPU1 end as "::FAPU1", defanal_am from mealfoods, options} {
  if {$defanal_am > 0} {
   set ::meals_to_analyze_am [expr {$defanal_am > $::mealcount ? $::mealcount : $defanal_am}]
-  .nut.am.mealsb configure -from 1
+  .nut.am.mealsb configure \
+  -from 1
   } else {
   set ::meals_to_analyze_am $::mealcount
-  if {$::mealcount > 0} {.nut.am.mealsb configure -from 1} else {
-   .nut.am.mealsb configure -from 0 -to 0
+  if {$::mealcount > 0} {.nut.am.mealsb configure \
+  -from 1} else {
+   .nut.am.mealsb configure \
+  -from 0 \
+  -to 0
    }
   }
- if {$::mealcount > 0} {.nut.am.mealsb configure -to $::mealcount}
+ if {$::mealcount > 0} {.nut.am.mealsb configure \
+  -to $::mealcount}
  }
 
 ::trace add variable ::meals_to_analyze_am write SetDefanal
@@ -2615,7 +6233,6 @@ db eval {select '::' || Tagname || 'opt' as tag, nutopt from nutr_def where dv_d
 db eval {select Tagname from nutr_def where dv_default > 0.0} {
  trace add variable ::${Tagname}opt write [list opt_change $Tagname]
  }
- 
 db eval {select "::" || Tagname || 'dv' as tag, round(dv, 1) as dv from am_dv natural join nutr_def} {
  set $tag $dv
  }
@@ -2666,40 +6283,65 @@ if {$::mealcount > 0} {
  set ::rankchoice {Foods Ranked per 100 Grams}
  }
 set ::fdgroupchoice {All Food Groups}
-.nut.ts.rankchoice configure -textvariable ::rankchoice -values $::rankchoices
+.nut.ts.rankchoice configure \
+  -textvariable ::rankchoice \
+  -values $::rankchoices
 
 db eval {select FdGrp_Desc as fg from fd_group order by FdGrp_Desc} {
  lappend ::fdgroupchoices $fg
  }
-.nut.ts.fdgroupchoice configure -values $::fdgroupchoices
+.nut.ts.fdgroupchoice configure \
+  -values $::fdgroupchoices
 trace add variable ::rankchoice write [list NewStoryLater NULL ts]
 trace add variable ::fdgroupchoice write [list NewStoryLater NULL ts]
 
-menu .nut.rm.setmpd.m -tearoff 0 -background "#FF9428"
+menu .nut.rm.setmpd.m \
+  -tearoff 0 \
+  -background "#FF9428"
 if {$::meals_per_day != 1} {
- .nut.rm.setmpd.m add command -label "Set 1 meal per day" -command [list SetMPD 1]
+ .nut.rm.setmpd.m add command \
+  -label "Set 1 meal per day" \
+  -command [list SetMPD 1]
  } else {
- .nut.rm.setmpd.m add command -label "Set 1 meal per day" -command [list SetMPD 1] -state disabled
+ .nut.rm.setmpd.m add command \
+  -label "Set 1 meal per day" \
+  -command [list SetMPD 1] \
+  -state disabled
  }
 for {set i 2} {$i < 20} {incr i} {
  if {$i != $::meals_per_day} {
-  .nut.rm.setmpd.m add command -label "Set $i meals per day" -command [list SetMPD $i]
+  .nut.rm.setmpd.m add command \
+  -label "Set $i meals per day" \
+  -command [list SetMPD $i]
   } else {
-  .nut.rm.setmpd.m add command -label "Set $i meals per day" -command [list SetMPD $i] -state disabled
+  .nut.rm.setmpd.m add command \
+  -label "Set $i meals per day" \
+  -command [list SetMPD $i] \
+  -state disabled
   }
  }
 
 if {!$::ALTGUI} {
- after 1000 {.nut.vf.frlistbox configure -height [winfo height .nut.vf.nbw]}
- after 1000 {.nut.vf.frlistbox configure -width [winfo width .nut.vf.nbw]}
- after 1000 {.nut.rm.frlistbox configure -height [winfo height .nut.rm.nbw]}
- after 1000 {.nut.rm.frlistbox configure -width [winfo width .nut.rm.nbw]}
- after 1000 {.nut.rm.frmenu configure -height [winfo height .nut.rm.nbw]}
- after 1000 {.nut.rm.frmenu configure -width [winfo width .nut.rm.nbw]}
- after 1000 {.nut.po.pane configure -handlepad [expr 8 * {[winfo height .nut] / 19}]}
- after 1000 {.nut.po.pane configure -height [expr {145 * [winfo height .nut] / 152}]}
- after 1000 {.nut.po.pane configure -width [winfo width .nut.rm.nbw]}
- after 1000 {.nut.po.pane paneconfigure .nut.po.pane.wlogframe -sticky ne}
+ after 1000 {.nut.vf.frlistbox configure \
+  -height [winfo height .nut.vf.nbw]}
+ after 1000 {.nut.vf.frlistbox configure \
+  -width [winfo width .nut.vf.nbw]}
+ after 1000 {.nut.rm.frlistbox configure \
+  -height [winfo height .nut.rm.nbw]}
+ after 1000 {.nut.rm.frlistbox configure \
+  -width [winfo width .nut.rm.nbw]}
+ after 1000 {.nut.rm.frmenu configure \
+  -height [winfo height .nut.rm.nbw]}
+ after 1000 {.nut.rm.frmenu configure \
+  -width [winfo width .nut.rm.nbw]}
+ after 1000 {.nut.po.pane configure \
+  -handlepad [expr 8 * {[winfo height .nut] / 19}]}
+ after 1000 {.nut.po.pane configure \
+  -height [expr {145 * [winfo height .nut] / 152}]}
+ after 1000 {.nut.po.pane configure \
+  -width [winfo width .nut.rm.nbw]}
+ after 1000 {.nut.po.pane paneconfigure .nut.po.pane.wlogframe \
+  -sticky ne}
  }
 
 if {$::mealcount == 0} {
@@ -2707,10 +6349,12 @@ if {$::mealcount == 0} {
  }
 after 2000 InitializePersonalOptions
 if {$::FAPU1rm == "\[No Data\]"} {
- thread::send -async $::GUI_THREAD [list set ::FAPU1rm "0 / 0"]
+ thread::send \
+  -async $::GUI_THREAD [list set ::FAPU1rm "0 / 0"]
  }
 if {$::ENERC_KCAL1rm == "\[No Data\]"} {
- thread::send -async $::GUI_THREAD [list set ::ENERC_KCAL1rm "0 / 0 / 0"]
+ thread::send \
+  -async $::GUI_THREAD [list set ::ENERC_KCAL1rm "0 / 0 / 0"]
  }
 
 #end Start_NUT
@@ -2722,8 +6366,7 @@ db eval {
 /*
   User initiated stuff goes here.  The following PRAGMA is essential at each
   invocation, but most of the stuff in this file isn't strictly necessary.  If it is
-  necessary, with the exception of automatic portion control and weight log, it should go into 
-  logic.sqlite3.  Just about everything in this init file is and should be "temp" so
+  necessary, with the exception of automatic portion control and weight log, it should go into  logic.sqlite3.  Just about everything in this init file is and should be "temp" so
   it goes away for you if you close the database connection, but it doesn't go away for the
   other connections that came in with the same user init.  The only exception is the
   shopping list which needs to be persistent.
@@ -2842,8 +6485,7 @@ when NEW.Gm_Wgt > 0.0 begin
 update weight set Gm_Wgt = NEW.Gm_Wgt where NDB_No = NEW.NDB_No and Seq =
 (select min(Seq) from weight where NDB_No = NEW.NDB_No);
 end;
-  
-/*
+ /*
   This is a variant of the previous trigger to change the preferred Gm_Wgt
   of a food by specifying the Amount of the serving unit, the Msre_Desc.
   In addition, it proffers an update to the Gm_Wgt of the food in the
@@ -2853,13 +6495,12 @@ end;
 drop trigger if exists pref_weight_Amount;
 create temp trigger pref_weight_Amount instead of update of Amount on pref_Gm_Wgt
 when NEW.Amount > 0.0 begin
-update weight set Gm_Wgt = origGm_Wgt * NEW.Amount / Amount 
-where NDB_No = NEW.NDB_No and 
+update weight set Gm_Wgt = origGm_Wgt * NEW.Amount / Amount
+where NDB_No = NEW.NDB_No and
 Seq = (select min(Seq) from weight where NDB_No = NEW.NDB_No);
 update currentmeal set Gm_Wgt = null where NDB_No = NEW.NDB_No;
 end;
-  
-/*
+ /*
   Using the preferred weight, we can View Foods in various ways.
 */
 
@@ -2874,8 +6515,7 @@ drop view if exists currentmeal;
 CREATE temp VIEW currentmeal as select mf.NDB_No as NDB_No, case when (select grams from options) then cast (cast (round(mf.Gm_Wgt) as int) as text) || ' g' else cast(round(mf.Gm_Wgt / 28.35 * 8.0) / 8.0 as text) || ' oz' end || ' (' || cast(round(case when mf.Gm_Wgt <= 0.0 or mf.Gm_Wgt != pGW.Gm_Wgt then mf.Gm_Wgt / origGm_Wgt * origAmount else Amount end * 8.0) / 8.0 as text) || ' ' || Msre_Desc || ') ' || Shrt_Desc || ' ' as Gm_Wgt, NutrDesc from mealfoods mf natural join food_des left join pref_Gm_Wgt pGW using (NDB_No) left join nutr_def using (Nutr_No) where meal_id = (select currentmeal from options) order by Shrt_Desc;
 
 /*
-  OK, now the INSTEAD OF trigger to simplify somewhat the insertion of a 
-  meal food:
+  OK, now the INSTEAD OF trigger to simplify somewhat the insertion of a  meal food:
 */
 
 drop trigger if exists currentmeal_insert;
@@ -2884,7 +6524,7 @@ update mealfoods set Nutr_No = null where Nutr_No = (select Nutr_No from
 nutr_def where NutrDesc = NEW.NutrDesc);
 insert or replace into mealfoods values ((select currentmeal from options),
 NEW.NDB_No, case when NEW.Gm_Wgt is null then (select Gm_Wgt from pref_Gm_Wgt
-where NDB_No = NEW.NDB_No) else NEW.Gm_Wgt end, case when NEW.NutrDesc is null 
+where NDB_No = NEW.NDB_No) else NEW.Gm_Wgt end, case when NEW.NutrDesc is null
 then null when (select count(*) from nutr_def where NutrDesc = NEW.NutrDesc
 and dv_default > 0.0) = 1 then (select Nutr_No from nutr_def where NutrDesc
 = NEW.NutrDesc) when (select count(*) from nutr_def where Nutr_No =
@@ -2921,7 +6561,7 @@ end;
 drop trigger if exists currentmeal_upd_pcf;
 create temp trigger currentmeal_upd_pcf instead of update of NutrDesc on
 currentmeal begin
-update mealfoods set Nutr_No = null 
+update mealfoods set Nutr_No = null
 where Nutr_No = (select Nutr_No from nutr_def where NutrDesc = NEW.NutrDesc);
 update mealfoods set Nutr_No = (select Nutr_No from nutr_def where NutrDesc =
 NEW.NutrDesc) where NDB_No = NEW.NDB_No and
@@ -2933,7 +6573,7 @@ end;
 */
 
 drop view if exists theusual;
-create temp view theusual as select meal_name, NDB_No, Gm_Wgt, NutrDesc from 
+create temp view theusual as select meal_name, NDB_No, Gm_Wgt, NutrDesc from
 z_tu natural join pref_Gm_Wgt left join nutr_def using (Nutr_No);
 
 /*
@@ -2979,11 +6619,9 @@ end;
 */
 
 drop view if exists nut_in_meals;
-create temp view nut_in_meals as select NutrDesc, round(sum(Gm_Wgt * Nutr_Val / 100.0 / (select mealcount from am_analysis_header) * (select meals_per_day from options)),1) as Nutr_Val, Units, Shrt_Desc from mealfoods mf join food_des using (NDB_No) join nutr_def nd join nut_data data on mf.NDB_No = data.NDB_No and nd.Nutr_No = data.Nutr_No where meal_id >= (select firstmeal from am_analysis_header) group by mf.NDB_No, NutrDesc order by Nutr_Val desc; 
-
+create temp view nut_in_meals as select NutrDesc, round(sum(Gm_Wgt * Nutr_Val / 100.0 / (select mealcount from am_analysis_header) * (select meals_per_day from options)),1) as Nutr_Val, Units, Shrt_Desc from mealfoods mf join food_des using (NDB_No) join nutr_def nd join nut_data data on mf.NDB_No = data.NDB_No and nd.Nutr_No = data.Nutr_No where meal_id >= (select firstmeal from am_analysis_header) group by mf.NDB_No, NutrDesc order by Nutr_Val desc;
 drop view if exists nutdv_in_meals;
-create temp view nutdv_in_meals as select NutrDesc, cast(cast(round(sum(Gm_Wgt * Nutr_Val / dv / (select mealcount from am_analysis_header) * (select meals_per_day from options))) as int) as text) || '%' as val, Shrt_Desc from mealfoods mf join food_des using (NDB_No) join nutr_def nd join nut_data data on mf.NDB_No = data.NDB_No and nd.Nutr_No = data.Nutr_No join am_dv on nd.Nutr_No = am_dv.Nutr_No where meal_id >= (select firstmeal from am_analysis_header) group by mf.NDB_No, NutrDesc order by cast(val as int) desc; 
-
+create temp view nutdv_in_meals as select NutrDesc, cast(cast(round(sum(Gm_Wgt * Nutr_Val / dv / (select mealcount from am_analysis_header) * (select meals_per_day from options))) as int) as text) || '%' as val, Shrt_Desc from mealfoods mf join food_des using (NDB_No) join nutr_def nd join nut_data data on mf.NDB_No = data.NDB_No and nd.Nutr_No = data.Nutr_No join am_dv on nd.Nutr_No = am_dv.Nutr_No where meal_id >= (select firstmeal from am_analysis_header) group by mf.NDB_No, NutrDesc order by cast(val as int) desc;
 drop view if exists daily_food;
 create temp view daily_food as select cast(round((sum(mf.Gm_Wgt) / mealcount * meals_per_day) / origGm_Wgt * origAmount * 8.0) / 8.0 as text) || ' ' || Msre_Desc || ' ' || Shrt_Desc as food from mealfoods mf natural join food_des join pref_Gm_Wgt using (NDB_No) join am_analysis_header where meal_id between firstmeal and lastmeal group by NDB_No order by Shrt_Desc;
 
@@ -3085,30 +6723,30 @@ CREATE temp VIEW max_chick as select NDB_No, Shrt_Desc, round(13.0 / Nutr_Val * 
 
 drop view if exists daily_macros;
 create temp view daily_macros as
-select day, round(sum(calories)) as calories, 
+select day, round(sum(calories)) as calories,
 cast(round(100.0 * sum(procals) / sum(calories)) as int) || '/' ||
 cast(round(100.0 * sum(chocals) / sum(calories)) as int) || '/' ||
 cast(round(100.0 * sum(fatcals) / sum(calories)) as int) as macropct,
 round(sum(protein)) as protein,
 round(sum(nfc)) as nfc, round(sum(fat)) as fat,
-bodycomp 
-from 
-(select meal_id / 100 as day, NDB_No, 
-sum(Gm_Wgt / 100.0 * cals.Nutr_Val) as calories, 
-sum(Gm_Wgt / 100.0 * pro.Nutr_Val) as protein, 
-sum(Gm_Wgt / 100.0 * crb.Nutr_Val) as nfc, 
+bodycomp
+from(
+select meal_id / 100 as day, NDB_No,
+sum(Gm_Wgt / 100.0 * cals.Nutr_Val) as calories,
+sum(Gm_Wgt / 100.0 * pro.Nutr_Val) as protein,
+sum(Gm_Wgt / 100.0 * crb.Nutr_Val) as nfc,
 sum(Gm_Wgt / 100.0 * totfat.Nutr_Val) as fat,
 sum(Gm_Wgt / 100.0 * pcals.Nutr_Val) as procals,
 sum(Gm_Wgt / 100.0 * ccals.Nutr_Val) as chocals,
 sum(Gm_Wgt / 100.0 * fcals.Nutr_Val) as fatcals,
 bodycomp
-from mealfoods join nut_data cals using (NDB_No) 
-join nut_data pro using (NDB_No) 
-join nut_data crb using (NDB_No) 
-join nut_data totfat using (NDB_No) 
-join nut_data pcals using (NDB_No) 
-join nut_data ccals using (NDB_No) 
-join nut_data fcals using (NDB_No) 
+from mealfoods join nut_data cals using (NDB_No)
+join nut_data pro using (NDB_No)
+join nut_data crb using (NDB_No)
+join nut_data totfat using (NDB_No)
+join nut_data pcals using (NDB_No)
+join nut_data ccals using (NDB_No)
+join nut_data fcals using (NDB_No)
 left join (select * from wlview group by wldate) on day = wldate
 where cals.Nutr_No = 208 and
 pro.Nutr_No = 203 and
@@ -3147,10 +6785,10 @@ set AmountChangevf {
 proc AmountChangevf {args} {
 
  uplevel #0 {
-  if {![string is double -strict $Amountvf]} { return }
+  if {![string is double \
+  -strict $Amountvf]} { return }
   set gramsvf [expr {$Amountvf * $Amount2gram}]
   }
- 
  }
 
 #end AmountChangevf
@@ -3161,10 +6799,10 @@ set CalChangevf {
 proc CalChangevf {args} {
 
  uplevel #0 {
-  if {![string is double -strict $caloriesvf]} { return }
+  if {![string is double \
+  -strict $caloriesvf]} { return }
   set gramsvf [expr {$caloriesvf * $cal2gram}]
   }
- 
  }
 
 #end CalChangevf
@@ -3183,14 +6821,25 @@ if {!$::ALTGUI} {
  } else {
  place forget .nut.rm.searchcancel
  place forget .nut.rm.frlistbox
- place .nut.rm.grams -relx 0.87 -rely 0.0046296296 -relheight 0.044444444 -relwidth 0.11
- place .nut.rm.ounces -relx 0.87 -rely 0.0490740736 -relheight 0.044444444 -relwidth 0.11
- place .nut.rm.analysismeal -relx 0.87 -rely 0.14722222 -relheight 0.044444444 -relwidth 0.11
+ place .nut.rm.grams \
+  -relx 0.87 \
+  -rely 0.0046296296 \
+  -relheight 0.044444444 \
+  -relwidth 0.11
+ place .nut.rm.ounces \
+  -relx 0.87 \
+  -rely 0.0490740736 \
+  -relheight 0.044444444 \
+  -relwidth 0.11
+ place .nut.rm.analysismeal \
+  -relx 0.87 \
+  -rely 0.14722222 \
+  -relheight 0.044444444 \
+  -relwidth 0.11
  }
  SwitchToMenu
  set ::like_this_rm ""
  focus .nut
- 
  }
 
 #end CancelSearch
@@ -3202,7 +6851,6 @@ proc FindFoodrm {args} {
 
  set ::needFindFoodrm 1
  after 350 FindFoodrm_later
- 
  }
 
 #end FindFoodrm
@@ -3216,8 +6864,10 @@ proc FindFoodrm_later {args} {
  set ::needFindFoodrm 0
  uplevel #0 {
   set query "select Long_Desc from food_des where "
-  regsub -all {"} "$::like_this_rm" " " ::like_this_rm1
-  regsub -all "\{" "$::like_this_rm1" " " ::like_this_rm1
+  regsub \
+  -all {"} "$::like_this_rm" " " ::like_this_rm1
+  regsub \
+  -all "\{" "$::like_this_rm1" " " ::like_this_rm1
   if { $::like_this_rm == ""} {
    set foodsrm ""
    return
@@ -3229,7 +6879,6 @@ proc FindFoodrm_later {args} {
   set foodsrm [db eval $query]
   .nut.rm.frlistbox.listbox xview 0
   }
- 
  }
 
 #end FindFoodrm_later
@@ -3241,7 +6890,6 @@ proc FindFoodvf {args} {
 
  set ::needFindFoodvf 1
  after 350 FindFoodvf_later
- 
  }
 
 #end FindFoodvf
@@ -3255,8 +6903,10 @@ proc FindFoodvf_later {args} {
  set ::needFindFoodvf 0
  uplevel #0 {
   set query "select Long_Desc from food_des where "
-  regsub -all {"} "$like_this_vf" " " like_this_vf1
-  regsub -all "\{" "$like_this_vf1" " " like_this_vf1
+  regsub \
+  -all {"} "$like_this_vf" " " like_this_vf1
+  regsub \
+  -all "\{" "$like_this_vf1" " " like_this_vf1
   if { $like_this_vf == ""} {
    set foodsvf ""
    return
@@ -3268,7 +6918,6 @@ proc FindFoodvf_later {args} {
   set foodsvf [db eval $query]
   .nut.vf.frlistbox.listbox xview 0
   }
- 
  }
 
 #end FindFoodvf_later
@@ -3296,16 +6945,24 @@ proc FoodChoicerm {args} {
    } else {
    place forget .nut.rm.frlistbox
    place forget .nut.rm.searchcancel
-   place .nut.rm.analysismeal -relx 0.87 -rely 0.14722222 -relheight 0.044444444 -relwidth 0.11
+   place .nut.rm.analysismeal \
+  -relx 0.87 \
+  -rely 0.14722222 \
+  -relheight 0.044444444 \
+  -relwidth 0.11
    }
   SwitchToMenu
-  if { $::like_this_rm ni [.nut.rm.fsentry cget -values]} {
-   .nut.rm.fsentry configure -values [linsert [.nut.rm.fsentry cget -values] 0 $::like_this_rm]
+  if { $::like_this_rm ni [.nut.rm.fsentry cget \
+  -values]} {
+   .nut.rm.fsentry configure \
+  -values [linsert [.nut.rm.fsentry cget \
+  -values] 0 $::like_this_rm]
    }
   set ::like_this_rm ""
   focus .nut
   }
- thread::send -async $::SQL_THREAD {job_daily_value_refresh}
+ thread::send \
+  -async $::SQL_THREAD {job_daily_value_refresh}
  }
 
 #end FoodChoicerm
@@ -3318,20 +6975,27 @@ proc vf2rm {args} {
 db eval {select Shrt_Desc, food_des.NDB_No as NDB_No, Gm_Wgt from food_des natural join pref_Gm_Wgt where food_des.NDB_No = $::NDB_Novf limit 1} {
  db eval {insert or replace into mealfoods values ($::currentmeal, $NDB_No, $Gm_Wgt, null)}
  set seq [MealfoodWidget $Shrt_Desc $NDB_No]
- ${::rmMenu}.menu.foodspin${seq} configure  -state readonly
+ ${::rmMenu}.menu.foodspin${seq} configure  \
+  -state readonly
  ${::rmMenu}.menu.foodPCF${seq} current 0
- ${::rmMenu}.menu.foodPCF${seq} configure  -style rm.TCombobox
+ ${::rmMenu}.menu.foodPCF${seq} configure  \
+  -style rm.TCombobox
  }
 if {!$::ALTGUI} {
  grid remove .nut.rm.setmpd
  grid .nut.rm.analysismeal
  } else {
  place forget .nut.rm.setmpd
- place .nut.rm.analysismeal -relx 0.87 -rely 0.14722222 -relheight 0.044444444 -relwidth 0.11
+ place .nut.rm.analysismeal \
+  -relx 0.87 \
+  -rely 0.14722222 \
+  -relheight 0.044444444 \
+  -relwidth 0.11
  }
 SwitchToMenu
 .nut select .nut.rm
-thread::send -async $::SQL_THREAD {job_daily_value_refresh}
+thread::send \
+  -async $::SQL_THREAD {job_daily_value_refresh}
 }
 
 #end vf2rm
@@ -3344,35 +7008,47 @@ proc FoodChoicevf {args} {
  uplevel #0 {
   set ld "[lindex $foodsvf [.nut.vf.frlistbox.listbox curselection]]"
   if {$ld == ""} {return}
-  .nut.vf.meal configure -state normal
-  .nut.vf.sb1 configure -format {%0.3f} 
-  .nut.vf.sb3 configure -format {%0.3f} 
-  dropoutvf
+  .nut.vf.meal configure \
+  -state normal
+  .nut.vf.sb1 configure \
+  -format {%0.3f}  .nut.vf.sb3 configure \
+  -format {%0.3f}  dropoutvf
   db eval {select NDB_No as NDB_Novf from food_des where Long_Desc = $ld limit 1} { }
   db eval {insert into z_tcl_jobqueue values (null, 'view_foods', $NDB_Novf, null, null)}
-  thread::send -async $::SQL_THREAD {job_view_foods}
+  thread::send \
+  -async $::SQL_THREAD {job_view_foods}
   set Long_Desc $ld
   db eval {select case when Refuse is not null then Refuse || "%" else Refuse end as Refusevf, setRefDesc(Ref_desc) from food_des where NDB_No = $NDB_Novf} { }
   db eval {select cast(round(Gm_Wgt) as int) as gramsvf, round(8.0 * Gm_Wgt / 28.35, 0) / 8.0 as ouncesvf, cast(round(Gm_Wgt * 0.01 * Nutr_Val) as int) as caloriesvf, round(8.0 * Amount, 0) / 8.0 as Amountvf, Msre_Desc as Msre_Descvf, 28.349523 as ounce2gram, case when Nutr_Val is null or Nutr_Val = 0.0 then 0.0 else 100.0/Nutr_Val end as cal2gram, origGm_Wgt/origAmount as Amount2gram from pref_Gm_Wgt join nut_data using (NDB_No) where NDB_No = $NDB_Novf and Nutr_No = 208} { }
   set servingsizes [db eval {select distinct Msre_Desc from weight where NDB_No = $NDB_Novf order by Seq limit 100 offset 1}]
-  .nut.vf.cb configure -values $servingsizes
+  .nut.vf.cb configure \
+  -values $servingsizes
   tuneinvf
   if {!$::ALTGUI} {
   grid remove .nut.vf.frlistbox
   grid .nut.vf.nbw
-  grid .nut.vf.meal      
-  } else {
+  grid .nut.vf.meal       } else {
   place forget .nut.vf.frlistbox
-  place .nut.vf.nbw -relx 0.0 -rely 0.25 -relheight 0.75 -relwidth 1.0
-  place .nut.vf.meal -relx 0.78 -rely 0.0490740736 -relheight 0.044444444 -relwidth 0.12
+  place .nut.vf.nbw \
+  -relx 0.0 \
+  -rely 0.25 \
+  -relheight 0.75 \
+  -relwidth 1.0
+  place .nut.vf.meal \
+  -relx 0.78 \
+  -rely 0.0490740736 \
+  -relheight 0.044444444 \
+  -relwidth 0.12
   }
-  if { $like_this_vf ni [.nut.vf.fsentry cget -values]} {
-   .nut.vf.fsentry configure -values [linsert [.nut.vf.fsentry cget -values] 0 $like_this_vf]
+  if { $like_this_vf ni [.nut.vf.fsentry cget \
+  -values]} {
+   .nut.vf.fsentry configure \
+  -values [linsert [.nut.vf.fsentry cget \
+  -values] 0 $like_this_vf]
    }
   set like_this_vf ""
   focus .nut
   }
- 
  }
 
 #end FoodChoicevf
@@ -3388,20 +7064,24 @@ if {$jobcount == 0} {return}
 db eval {select jobnum, jobint as "::NDB_Novf", case when jobreal is null then (select Gm_Wgt from pref_Gm_Wgt where NDB_No = jobint) else jobreal end as "::Gm_Wgtvf" from z_tcl_jobqueue where jobtype = 'view_foods' order by jobnum desc limit 1} { }
 
 db eval {select n6balance, macropct from z_tcl_n6hufa natural join z_tcl_macropct where NDB_No = $::NDB_Novf} {
- thread::send -async $::GUI_THREAD [list set ::FAPU1vf $n6balance]
- thread::send -async $::GUI_THREAD [list set ::ENERC_KCAL1vf $macropct]
+ thread::send \
+  -async $::GUI_THREAD [list set ::FAPU1vf $n6balance]
+ thread::send \
+  -async $::GUI_THREAD [list set ::ENERC_KCAL1vf $macropct]
  }
- 
 db eval {select '::' || Tagname || 'vfdv' as tag, cast(round($::Gm_Wgtvf * Nutr_Val / dv) as int) as val from nutr_def nd left join am_dv ad on nd.Nutr_No = ad.Nutr_No left join nut_data d on d.NDB_No = $::NDB_Novf and nd.Nutr_No = d.Nutr_No where dv_default > 0.0} {
- thread::send -async $::GUI_THREAD [list set $tag $val]
+ thread::send \
+  -async $::GUI_THREAD [list set $tag $val]
  }
 
 db eval {select '::' || Tagname || 'vf' as tag, round($::Gm_Wgtvf * 0.01 * Nutr_Val, 1) as val from nutr_def nd left join nut_data d on d.NDB_No = $::NDB_Novf and nd.Nutr_No = d.Nutr_No} {
- thread::send -async $::GUI_THREAD [list set $tag $val]
+ thread::send \
+  -async $::GUI_THREAD [list set $tag $val]
  }
 
 db eval {select cast(round($::Gm_Wgtvf * 0.01 * Nutr_Val) as int) as CHO_NONFIBvf1 from nut_data where NDB_No = $::NDB_Novf and Nutr_No = 2000} {
- thread::send -async $::GUI_THREAD [list set ::CHO_NONFIBvf1 $CHO_NONFIBvf1]
+ thread::send \
+  -async $::GUI_THREAD [list set ::CHO_NONFIBvf1 $CHO_NONFIBvf1]
  }
 
 }
@@ -3426,18 +7106,22 @@ if {$::Gm_Wgtvf > 0.0} {
  db eval {update pref_Gm_Wgt set Gm_Wgt = $::Gm_Wgtvf where NDB_No = $::NDB_Novf}
  }
 
-thread::send -async $::GUI_THREAD {GramChangevfResult}
+thread::send \
+  -async $::GUI_THREAD {GramChangevfResult}
 
 db eval {select '::' || Tagname || 'vfdv' as tag, cast(round($::Gm_Wgtvf * Nutr_Val / dv) as int) as val from nutr_def nd left join am_dv ad on nd.Nutr_No = ad.Nutr_No left join nut_data d on d.NDB_No = $::NDB_Novf and nd.Nutr_No = d.Nutr_No where dv_default > 0.0} {
- thread::send -async $::GUI_THREAD [list set $tag $val]
+ thread::send \
+  -async $::GUI_THREAD [list set $tag $val]
  }
 
 db eval {select '::' || Tagname || 'vf' as tag, round($::Gm_Wgtvf * 0.01 * Nutr_Val, 1) as val from nutr_def nd left join nut_data d on d.NDB_No = $::NDB_Novf and nd.Nutr_No = d.Nutr_No} {
- thread::send -async $::GUI_THREAD [list set $tag $val]
+ thread::send \
+  -async $::GUI_THREAD [list set $tag $val]
  }
 
 db eval {select cast(round($::Gm_Wgtvf * 0.01 * Nutr_Val) as int) as CHO_NONFIBvf1 from nut_data where NDB_No = $::NDB_Novf and Nutr_No = 2000} {
- thread::send -async $::GUI_THREAD [list set ::CHO_NONFIBvf1 $CHO_NONFIBvf1]
+ thread::send \
+  -async $::GUI_THREAD [list set ::CHO_NONFIBvf1 $CHO_NONFIBvf1]
  }
 
 }
@@ -3454,24 +7138,35 @@ set ::Gm_Wgtvf $grams
 uplevel #0 {
  set NDB_Novf $::NDB_Novf
  set ld {*}[db eval {select Long_Desc from food_des where NDB_No = $::NDB_Novf}]
- .nut.vf.meal configure -state normal
+ .nut.vf.meal configure \
+  -state normal
  dropoutvf
  db eval {insert into z_tcl_jobqueue values (null, 'view_foods', $::NDB_Novf, $::Gm_Wgtvf, null)}
- thread::send -async $::SQL_THREAD {job_view_foods}
+ thread::send \
+  -async $::SQL_THREAD {job_view_foods}
  db eval {select case when Refuse is not null then Refuse || "%" else Refuse end as Refusevf, setRefDesc(Ref_desc), Long_Desc from food_des where NDB_No = $::NDB_Novf} { }
  db eval {select cast(round($::Gm_Wgtvf) as int) as gramsvf, round(8.0 * $::Gm_Wgtvf / 28.35, 0) / 8.0 as ouncesvf, cast(round($::Gm_Wgtvf * 0.01 * Nutr_Val) as int) as caloriesvf, round(8.0 * $::Gm_Wgtvf / origGm_Wgt * origAmount, 0) / 8.0 as Amountvf, Msre_Desc as Msre_Descvf, 28.349523 as ounce2gram, case when Nutr_Val is null or Nutr_Val = 0.0 then 0.0 else 100.0/Nutr_Val end as cal2gram, origGm_Wgt/origAmount as Amount2gram from pref_Gm_Wgt join nut_data using (NDB_No) where NDB_No = $::NDB_Novf and Nutr_No = 208} { }
  set servingsizes [db eval {select distinct Msre_Desc from weight where NDB_No = $::NDB_Novf order by Seq limit 100 offset 1}]
- .nut.vf.cb configure -values $servingsizes
+ .nut.vf.cb configure \
+  -values $servingsizes
  tuneinvf
- .nut.vf.cb configure -values $servingsizes
+ .nut.vf.cb configure \
+  -values $servingsizes
  if {!$::ALTGUI} {
   grid remove .nut.vf.frlistbox
   grid .nut.vf.nbw
-  grid .nut.vf.meal      
-  } else {
+  grid .nut.vf.meal       } else {
   place forget .nut.vf.frlistbox
-  place .nut.vf.nbw -relx 0.0 -rely 0.25 -relheight 0.75 -relwidth 1.0
-  place .nut.vf.meal -relx 0.78 -rely 0.0490740736 -relheight 0.044444444 -relwidth 0.12
+  place .nut.vf.nbw \
+  -relx 0.0 \
+  -rely 0.25 \
+  -relheight 0.75 \
+  -relwidth 1.0
+  place .nut.vf.meal \
+  -relx 0.78 \
+  -rely 0.0490740736 \
+  -relheight 0.044444444 \
+  -relwidth 0.12
   }
  set like_this_vf ""
  .nut select .nut.vf
@@ -3506,12 +7201,19 @@ proc FoodSearchrm {args} {
    place forget .nut.rm.ounces
    set ::rmMainPane .nut.rm.frmenu
    focus .nut.rm.fsentry
-   place .nut.rm.frlistbox -relx 0.0 -rely 0.25 -relheight 0.75 -relwidth 1.0
-   place .nut.rm.searchcancel -relx 0.86 -rely 0.19629629  -relheight 0.044444444 -relwidth 0.09
+   place .nut.rm.frlistbox \
+  -relx 0.0 \
+  -rely 0.25 \
+  -relheight 0.75 \
+  -relwidth 1.0
+   place .nut.rm.searchcancel \
+  -relx 0.86 \
+  -rely 0.19629629  \
+  -relheight 0.044444444 \
+  -relwidth 0.09
    after 400 {focus .nut.rm.fsentry}
    }
   }
- 
  }
 
 #end FoodSearchrm
@@ -3529,7 +7231,11 @@ proc FoodSearchvf {args} {
    grid remove .nut.vf.meal
    } else {
    place forget .nut.vf.nbw
-   place .nut.vf.frlistbox -relx 0.0 -rely 0.25 -relheight 0.75 -relwidth 1.0
+   place .nut.vf.frlistbox \
+  -relx 0.0 \
+  -rely 0.25 \
+  -relheight 0.75 \
+  -relwidth 1.0
    place forget .nut.vf.meal
    }
 
@@ -3539,13 +7245,14 @@ proc FoodSearchvf {args} {
   .nut.vf.sb1 set ""
   .nut.vf.sb2 set ""
   .nut.vf.sb3 set ""
-  .nut.vf.cb configure -values ""
+  .nut.vf.cb configure \
+  -values ""
   set Refusevf ""
-  .nut.vf.refusemb.m entryconfigure 0 -label "No refuse description provided"
+  .nut.vf.refusemb.m entryconfigure 0 \
+  -label "No refuse description provided"
   tuneinvf
   after 400 {focus .nut.vf.fsentry}
   }
- 
  }
 
 #end FoodSearchvf
@@ -3555,10 +7262,11 @@ set GramChangevf {
 
 proc GramChangevf {args} {
 
- if {![string is double -strict $::gramsvf]} { return }
+ if {![string is double \
+  -strict $::gramsvf]} { return }
  db eval {insert into z_tcl_jobqueue values (null, 'view_foods_Gm_Wgt', null, $::gramsvf, null)}
- thread::send -async $::SQL_THREAD {job_view_foods_Gm_Wgt}
- 
+ thread::send \
+  -async $::SQL_THREAD {job_view_foods_Gm_Wgt}
  }
 
 #end GramChangevf
@@ -3573,7 +7281,6 @@ proc GramChangevfResult {args} {
   db eval {select round(8.0 * $gramsvf / 28.35, 0) / 8.0 as ouncesvf, ifnull(cast(round($gramsvf / $cal2gram) as int),0) as caloriesvf, round(8.0 * $gramsvf / $Amount2gram,0) / 8.0 as Amountvf, cast(round($gramsvf) as int) as gramsvf} { }
   tuneinvf
   }
- 
  }
 
 #end GramChangevfResult
@@ -3585,94 +7292,148 @@ proc InitializePersonalOptions {args} {
 
  db eval {select autocal, wltweak from options} { }
 
- if {$::ENERC_KCALopt == -1.0} {
-  .nut.po.pane.optframe.cal_s configure -state disabled -textvariable ::ENERC_KCALdv
-  set ::ENERC_KCALpo -1
+ if {$::ENERC_KCALopt == \
+  -1.0} {
+  .nut.po.pane.optframe.cal_s configure \
+  -state disabled \
+  -textvariable ::ENERC_KCALdv
+  set ::ENERC_KCALpo \
+  -1
   } elseif {$::ENERC_KCALopt == 0.0} {
-  .nut.po.pane.optframe.cal_s configure -state normal -textvariable ::ENERC_KCALopt
+  .nut.po.pane.optframe.cal_s configure \
+  -state normal \
+  -textvariable ::ENERC_KCALopt
   set ::ENERC_KCALopt 2000.0
   set ::ENERC_KCALpo 0
   } else {
-  .nut.po.pane.optframe.cal_s configure -state normal -textvariable ::ENERC_KCALopt
-  set ::ENERC_KCALpo 0 
-  }
+  .nut.po.pane.optframe.cal_s configure \
+  -state normal \
+  -textvariable ::ENERC_KCALopt
+  set ::ENERC_KCALpo 0  }
  if {$autocal == 2} {
   set ::ENERC_KCALpo 2
   }
 
- if {$::FATopt == -1.0} {
-  .nut.po.pane.optframe.fat_s configure -state disabled -textvariable ::FATdv
-  set ::FATpo -1
+ if {$::FATopt == \
+  -1.0} {
+  .nut.po.pane.optframe.fat_s configure \
+  -state disabled \
+  -textvariable ::FATdv
+  set ::FATpo \
+  -1
   } elseif {$::FATopt == 0.0} {
-  .nut.po.pane.optframe.fat_s configure -state disabled -textvariable ::FATdv
+  .nut.po.pane.optframe.fat_s configure \
+  -state disabled \
+  -textvariable ::FATdv
   set ::FATpo 2
   } else {
-  .nut.po.pane.optframe.fat_s configure -state normal -textvariable ::FATopt
-  set ::FATpo 0 
-  }
+  .nut.po.pane.optframe.fat_s configure \
+  -state normal \
+  -textvariable ::FATopt
+  set ::FATpo 0  }
 
- if {$::PROCNTopt == -1.0} {
-  .nut.po.pane.optframe.prot_s configure -state disabled -textvariable ::PROCNTdv
-  set ::PROCNTpo -1
+ if {$::PROCNTopt == \
+  -1.0} {
+  .nut.po.pane.optframe.prot_s configure \
+  -state disabled \
+  -textvariable ::PROCNTdv
+  set ::PROCNTpo \
+  -1
   } elseif {$::PROCNTopt == 0.0} {
-  .nut.po.pane.optframe.prot_s configure -state disabled -textvariable ::PROCNTdv
+  .nut.po.pane.optframe.prot_s configure \
+  -state disabled \
+  -textvariable ::PROCNTdv
   set ::PROCNTpo 2
   } else {
-  .nut.po.pane.optframe.prot_s configure -state normal -textvariable ::PROCNTopt
-  set ::PROCNTpo 0 
-  }
+  .nut.po.pane.optframe.prot_s configure \
+  -state normal \
+  -textvariable ::PROCNTopt
+  set ::PROCNTpo 0  }
 
- if {$::CHO_NONFIBopt == -1.0} {
-  .nut.po.pane.optframe.nfc_s configure -state disabled -textvariable ::CHO_NONFIBdv
-  set ::CHO_NONFIBpo -1
-  .nut.po.pane.optframe.fat_cb2 configure -text "Balance of Calories"
+ if {$::CHO_NONFIBopt == \
+  -1.0} {
+  .nut.po.pane.optframe.nfc_s configure \
+  -state disabled \
+  -textvariable ::CHO_NONFIBdv
+  set ::CHO_NONFIBpo \
+  -1
+  .nut.po.pane.optframe.fat_cb2 configure \
+  -text "Balance of Calories"
   } elseif {$::CHO_NONFIBopt == 0.0} {
-  .nut.po.pane.optframe.nfc_s configure -state disabled -textvariable ::CHO_NONFIBdv
+  .nut.po.pane.optframe.nfc_s configure \
+  -state disabled \
+  -textvariable ::CHO_NONFIBdv
   set ::CHO_NONFIBpo 2
-  .nut.po.pane.optframe.fat_cb2 configure -text "DV 36% of Calories"
+  .nut.po.pane.optframe.fat_cb2 configure \
+  -text "DV 36% of Calories"
   } else {
-  .nut.po.pane.optframe.nfc_s configure -state normal -textvariable ::CHO_NONFIBopt
-  set ::CHO_NONFIBpo 0 
-  .nut.po.pane.optframe.fat_cb2 configure -text "Balance of Calories"
+  .nut.po.pane.optframe.nfc_s configure \
+  -state normal \
+  -textvariable ::CHO_NONFIBopt
+  set ::CHO_NONFIBpo 0  .nut.po.pane.optframe.fat_cb2 configure \
+  -text "Balance of Calories"
   }
- if {$::ENERC_KCALopt == -1.0} {
-  .nut.po.pane.optframe.fat_cb2 configure -text "DV 36% of Calories"
-  .nut.po.pane.optframe.nfc_cb2 configure -text "DV 54% of Calories"
+ if {$::ENERC_KCALopt == \
+  -1.0} {
+  .nut.po.pane.optframe.fat_cb2 configure \
+  -text "DV 36% of Calories"
+  .nut.po.pane.optframe.nfc_cb2 configure \
+  -text "DV 54% of Calories"
   }
-  
-
- if {$::FIBTGopt == -1.0} {
-  .nut.po.pane.optframe.fiber_s configure -state disabled -textvariable ::FIBTGdv
-  set ::FIBTGpo -1
+ 
+ if {$::FIBTGopt == \
+  -1.0} {
+  .nut.po.pane.optframe.fiber_s configure \
+  -state disabled \
+  -textvariable ::FIBTGdv
+  set ::FIBTGpo \
+  -1
   } elseif {$::FIBTGopt == 0.0} {
-  .nut.po.pane.optframe.fiber_s configure -state disabled -textvariable ::FIBTGdv
+  .nut.po.pane.optframe.fiber_s configure \
+  -state disabled \
+  -textvariable ::FIBTGdv
   set ::FIBTGpo 2
   } else {
-  .nut.po.pane.optframe.fiber_s configure -state normal -textvariable ::FIBTGopt
-  set ::FIBTGpo 0 
-  }
+  .nut.po.pane.optframe.fiber_s configure \
+  -state normal \
+  -textvariable ::FIBTGopt
+  set ::FIBTGpo 0  }
 
- if {$::FASATopt == -1.0} {
-  .nut.po.pane.optframe.sat_s configure -state disabled -textvariable ::FASATdv
-  set ::FASATpo -1
+ if {$::FASATopt == \
+  -1.0} {
+  .nut.po.pane.optframe.sat_s configure \
+  -state disabled \
+  -textvariable ::FASATdv
+  set ::FASATpo \
+  -1
   } elseif {$::FASATopt == 0.0} {
-  .nut.po.pane.optframe.sat_s configure -state disabled -textvariable ::FASATdv
+  .nut.po.pane.optframe.sat_s configure \
+  -state disabled \
+  -textvariable ::FASATdv
   set ::FASATpo 2
   } else {
-  .nut.po.pane.optframe.sat_s configure -state normal -textvariable ::FASATopt
-  set ::FASATpo 0 
-  }
+  .nut.po.pane.optframe.sat_s configure \
+  -state normal \
+  -textvariable ::FASATopt
+  set ::FASATpo 0  }
 
- if {$::FAPUopt == -1.0} {
-  .nut.po.pane.optframe.efa_s configure -state disabled -textvariable ::FAPUdv
-  set ::FAPUpo -1
+ if {$::FAPUopt == \
+  -1.0} {
+  .nut.po.pane.optframe.efa_s configure \
+  -state disabled \
+  -textvariable ::FAPUdv
+  set ::FAPUpo \
+  -1
   } elseif {$::FAPUopt == 0.0} {
-  .nut.po.pane.optframe.efa_s configure -state disabled -textvariable ::FAPUdv
+  .nut.po.pane.optframe.efa_s configure \
+  -state disabled \
+  -textvariable ::FAPUdv
   set ::FAPUpo 2
   } else {
-  .nut.po.pane.optframe.efa_s configure -state normal -textvariable ::FAPUopt
-  set ::FAPUpo 0 
-  }
+  .nut.po.pane.optframe.efa_s configure \
+  -state normal \
+  -textvariable ::FAPUopt
+  set ::FAPUpo 0  }
 
  if {$::FAPU1 == 0.0} {
   .nut.po.pane.optframe.fish_s set {50 / 50}
@@ -3696,36 +7457,54 @@ proc ChangePersonalOptions {nuttag args} {
   if {$povar == 2} {
    db eval {update options set autocal = 2}
    set ::ENERC_KCALopt $::ENERC_KCALdv
-   .nut.po.pane.optframe.cal_s configure -state normal -textvariable ::ENERC_KCALopt
-#  .nut.po.pane.optframe.nfc_cb2 configure -text "Balance of Calories"
+   .nut.po.pane.optframe.cal_s configure \
+  -state normal \
+  -textvariable ::ENERC_KCALopt
+#  .nut.po.pane.optframe.nfc_cb2 configure \
+  -text "Balance of Calories"
 #  .nut.po.pane.optframe.nfc_cb2 invoke
    } elseif {$povar == 0} {
    db eval {update options set autocal = 0}
    set ::ENERC_KCALopt $::ENERC_KCALdv
-   .nut.po.pane.optframe.cal_s configure -state normal -textvariable ::ENERC_KCALopt
-#  .nut.po.pane.optframe.nfc_cb2 configure -text "Balance of Calories"
+   .nut.po.pane.optframe.cal_s configure \
+  -state normal \
+  -textvariable ::ENERC_KCALopt
+#  .nut.po.pane.optframe.nfc_cb2 configure \
+  -text "Balance of Calories"
 #  .nut.po.pane.optframe.nfc_cb2 invoke
    } else {
    db eval {update options set autocal = 0}
-   .nut.po.pane.optframe.cal_s configure -state disabled -textvariable ::ENERC_KCALdv
-   set ::ENERC_KCALopt -1
-   .nut.po.pane.optframe.fat_cb2 configure -text "DV 36% of Calories"
-   .nut.po.pane.optframe.nfc_cb2 configure -text "DV 54% of Calories"
+   .nut.po.pane.optframe.cal_s configure \
+  -state disabled \
+  -textvariable ::ENERC_KCALdv
+   set ::ENERC_KCALopt \
+  -1
+   .nut.po.pane.optframe.fat_cb2 configure \
+  -text "DV 36% of Calories"
+   .nut.po.pane.optframe.nfc_cb2 configure \
+  -text "DV 54% of Calories"
    }
   RefreshWeightLog
   } elseif {$nuttag == "FAT"} {
   if {$povar == 2} {
    set ::FATopt 0.0
-   .nut.po.pane.optframe.fat_s configure -state disabled -textvariable ::FATdv
+   .nut.po.pane.optframe.fat_s configure \
+  -state disabled \
+  -textvariable ::FATdv
    } elseif {$povar == 0} {
    set ::FATopt $::FATdv
-   .nut.po.pane.optframe.fat_s configure -state normal -textvariable ::FATopt
+   .nut.po.pane.optframe.fat_s configure \
+  -state normal \
+  -textvariable ::FATopt
    if {$::CHO_NONFIBopt != 0.0 && $::ENERC_KCALopt >= 0.0} {
     .nut.po.pane.optframe.nfc_cb2 invoke
     }
    } else {
-   .nut.po.pane.optframe.fat_s configure -state disabled -textvariable ::FATdv
-   set ::FATopt -1
+   .nut.po.pane.optframe.fat_s configure \
+  -state disabled \
+  -textvariable ::FATdv
+   set ::FATopt \
+  -1
    if {$::CHO_NONFIBopt != 0.0 && $::ENERC_KCALopt >= 0.0} {
     .nut.po.pane.optframe.nfc_cb2 invoke
     }
@@ -3733,30 +7512,47 @@ proc ChangePersonalOptions {nuttag args} {
   } elseif {$nuttag == "PROCNT"} {
   if {$povar == 2} {
    set ::PROCNTopt 0.0
-   .nut.po.pane.optframe.prot_s configure -state disabled -textvariable ::PROCNTdv
+   .nut.po.pane.optframe.prot_s configure \
+  -state disabled \
+  -textvariable ::PROCNTdv
    } elseif {$povar == 0} {
    set ::PROCNTopt $::PROCNTdv
-   .nut.po.pane.optframe.prot_s configure -state normal -textvariable ::PROCNTopt
+   .nut.po.pane.optframe.prot_s configure \
+  -state normal \
+  -textvariable ::PROCNTopt
    } else {
-   .nut.po.pane.optframe.prot_s configure -state disabled -textvariable ::PROCNTdv
-   set ::PROCNTopt -1
+   .nut.po.pane.optframe.prot_s configure \
+  -state disabled \
+  -textvariable ::PROCNTdv
+   set ::PROCNTopt \
+  -1
    }
   } elseif {$nuttag == "CHO_NONFIB"} {
   if {$povar == 2} {
    set ::CHO_NONFIBopt 0.0
-   .nut.po.pane.optframe.nfc_s configure -state disabled -textvariable ::CHO_NONFIBdv
-   .nut.po.pane.optframe.fat_cb2 configure -text "DV 36% of Calories"
+   .nut.po.pane.optframe.nfc_s configure \
+  -state disabled \
+  -textvariable ::CHO_NONFIBdv
+   .nut.po.pane.optframe.fat_cb2 configure \
+  -text "DV 36% of Calories"
    } elseif {$povar == 0} {
    set ::CHO_NONFIBopt $::CHO_NONFIBdv
-   .nut.po.pane.optframe.nfc_s configure -state normal -textvariable ::CHO_NONFIBopt
-   .nut.po.pane.optframe.fat_cb2 configure -text "Balance of Calories"
+   .nut.po.pane.optframe.nfc_s configure \
+  -state normal \
+  -textvariable ::CHO_NONFIBopt
+   .nut.po.pane.optframe.fat_cb2 configure \
+  -text "Balance of Calories"
    if {$::FATopt != 0.0 && $::ENERC_KCALopt >= 0.0} {
     .nut.po.pane.optframe.fat_cb2 invoke
     }
    } else {
-   .nut.po.pane.optframe.nfc_s configure -state disabled -textvariable ::CHO_NONFIBdv
-   set ::CHO_NONFIBopt -1
-   .nut.po.pane.optframe.fat_cb2 configure -text "Balance of Calories"
+   .nut.po.pane.optframe.nfc_s configure \
+  -state disabled \
+  -textvariable ::CHO_NONFIBdv
+   set ::CHO_NONFIBopt \
+  -1
+   .nut.po.pane.optframe.fat_cb2 configure \
+  -text "Balance of Calories"
    if {$::FATopt != 0.0 && $::ENERC_KCALopt >= 0.0} {
     .nut.po.pane.optframe.fat_cb2 invoke
     }
@@ -3764,50 +7560,79 @@ proc ChangePersonalOptions {nuttag args} {
   } elseif {$nuttag == "FIBTG"} {
   if {$povar == 2} {
    set ::FIBTGopt 0.0
-   .nut.po.pane.optframe.fiber_s configure -state disabled -textvariable ::FIBTGdv
+   .nut.po.pane.optframe.fiber_s configure \
+  -state disabled \
+  -textvariable ::FIBTGdv
    } elseif {$povar == 0} {
    set ::FIBTGopt $::FIBTGdv
-   .nut.po.pane.optframe.fiber_s configure -state normal -textvariable ::FIBTGopt
+   .nut.po.pane.optframe.fiber_s configure \
+  -state normal \
+  -textvariable ::FIBTGopt
    } else {
-   .nut.po.pane.optframe.fiber_s configure -state disabled -textvariable ::FIBTGdv
-   set ::FIBTGopt -1
+   .nut.po.pane.optframe.fiber_s configure \
+  -state disabled \
+  -textvariable ::FIBTGdv
+   set ::FIBTGopt \
+  -1
    }
   } elseif {$nuttag == "FASAT"} {
   if {$povar == 2} {
    set ::FASATopt 0.0
-   .nut.po.pane.optframe.sat_s configure -state disabled -textvariable ::FASATdv
+   .nut.po.pane.optframe.sat_s configure \
+  -state disabled \
+  -textvariable ::FASATdv
    } elseif {$povar == 0} {
    set ::FASATopt $::FASATdv
-   .nut.po.pane.optframe.sat_s configure -state normal -textvariable ::FASATopt
+   .nut.po.pane.optframe.sat_s configure \
+  -state normal \
+  -textvariable ::FASATopt
    } else {
-   .nut.po.pane.optframe.sat_s configure -state disabled -textvariable ::FASATdv
-   set ::FASATopt -1
+   .nut.po.pane.optframe.sat_s configure \
+  -state disabled \
+  -textvariable ::FASATdv
+   set ::FASATopt \
+  -1
    }
   } elseif {$nuttag == "FAPU"} {
   if {$povar == 2} {
    set ::FAPUopt 0.0
-   .nut.po.pane.optframe.efa_s configure -state disabled -textvariable ::FAPUdv
+   .nut.po.pane.optframe.efa_s configure \
+  -state disabled \
+  -textvariable ::FAPUdv
    } elseif {$povar == 0} {
    set ::FAPUopt $::FAPUdv
-   .nut.po.pane.optframe.efa_s configure -state normal -textvariable ::FAPUopt
+   .nut.po.pane.optframe.efa_s configure \
+  -state normal \
+  -textvariable ::FAPUopt
    } else {
-   .nut.po.pane.optframe.efa_s configure -state disabled -textvariable ::FAPUdv
-   set ::FAPUopt -1
+   .nut.po.pane.optframe.efa_s configure \
+  -state disabled \
+  -textvariable ::FAPUdv
+   set ::FAPUopt \
+  -1
    }
   } elseif {$nuttag == "FAPU1"} {
   set ::FAPU1 [string range $::FAPU1po 0 1]
   db eval {update options set FAPU1 = $::FAPU1}
-  thread::send -async $::SQL_THREAD {job_daily_value_refresh}
+  thread::send \
+  -async $::SQL_THREAD {job_daily_value_refresh}
   } else {
   if {$::vitminpo == 2} {
    set ::${nuttag}opt 0.0
-   .nut.po.pane.optframe.vite_s configure -state disabled -textvariable ::${nuttag}dv
+   .nut.po.pane.optframe.vite_s configure \
+  -state disabled \
+  -textvariable ::${nuttag}dv
    } elseif {$::vitminpo == 0} {
    set ::${nuttag}opt [db eval {select dv_default from nutr_def where Tagname = $nuttag}]
-   .nut.po.pane.optframe.vite_s configure -state normal -textvariable ::${nuttag}opt
+   .nut.po.pane.optframe.vite_s configure \
+  -state normal \
+  -textvariable ::${nuttag}opt
    } else {
-   .nut.po.pane.optframe.vite_s configure -state disabled -textvariable ::${nuttag}dv
-   set ::${nuttag}opt -1
+   .nut.po.pane.optframe.vite_s configure \
+  -state disabled \
+  -textvariable ::${nuttag}dv
+   set ::${nuttag}opt \
+  -1
    }
   }
  }
@@ -3838,7 +7663,11 @@ proc RefreshWeightLog {args} {
    if {!$::ALTGUI} {
     grid .nut.po.pane.wlogframe.clear
     } else {
-    place .nut.po.pane.wlogframe.clear -relx 0.3 -rely 0.89 -relheight 0.06 -relwidth 0.63
+    place .nut.po.pane.wlogframe.clear \
+  -relx 0.3 \
+  -rely 0.89 \
+  -relheight 0.06 \
+  -relwidth 0.63
     }
    } else {
     if {!$::ALTGUI} {
@@ -3850,13 +7679,19 @@ proc RefreshWeightLog {args} {
   }
  set measurements_not_entered [db eval { select abs(max(cast (julianday(substr(wldate,1,4) || '-' || substr(wldate,5,2) || '-' || substr(wldate,7,2)) - julianday('now', 'localtime') as int))) from wlog where cleardate is null } ]
  if {$measurements_not_entered == 0} {
-  .nut.po.pane.wlogframe.accept configure -state disabled
-  .nut.po.pane.wlogframe.weight_s configure -state disabled
-  .nut.po.pane.wlogframe.bf_s configure -state disabled
+  .nut.po.pane.wlogframe.accept configure \
+  -state disabled
+  .nut.po.pane.wlogframe.weight_s configure \
+  -state disabled
+  .nut.po.pane.wlogframe.bf_s configure \
+  -state disabled
   } else {
-.nut.po.pane.wlogframe.accept configure -state normal
-  .nut.po.pane.wlogframe.weight_s configure -state normal
-  .nut.po.pane.wlogframe.bf_s configure -state normal
+.nut.po.pane.wlogframe.accept configure \
+  -state normal
+  .nut.po.pane.wlogframe.weight_s configure \
+  -state normal
+  .nut.po.pane.wlogframe.bf_s configure \
+  -state normal
   }
 
  set ::wlogsummary [db onecolumn {select verbiage from z_tcl_wlsumm}]
@@ -3879,14 +7714,14 @@ RefreshWeightLog
 set AcceptNewMeasurements {
 
 proc AcceptNewMeasurements {args} {
- 
 db eval {insert into wlog values ( $::weightyintercept, $::currentbfp, null, NULL)}
 RefreshWeightLog
 if {$::ENERC_KCALpo == 2} {
  db eval {select nutopt as newopt from nutr_def where Nutr_No = 208} { }
  if {$newopt != $::ENERC_KCALopt} {
   set ::ENERC_KCALopt $newopt
-  thread::send -async $::SQL_THREAD {job_daily_value_refresh}
+  thread::send \
+  -async $::SQL_THREAD {job_daily_value_refresh}
   }
  }
 }
@@ -3907,8 +7742,7 @@ proc RefreshMealfoodQuantities {args} {
     } else {
     append selectstring "(select round(8.0 * Gm_Wgt / 28.349523,0) / 8.0 as \"::${NDB_No}\" from mealfoods where NDB_No = $NDB_No and meal_id = $::currentmeal), "
     }
-   if {[lindex $::MealfoodPCF [lsearch $::MealfoodStatus $NDB_No]] != "NULL"} { 
-    if {$::GRAMSopt} {
+   if {[lindex $::MealfoodPCF [lsearch $::MealfoodStatus $NDB_No]] != "NULL"} {    if {$::GRAMSopt} {
      append viewstring "(select cast (round(Gm_Wgt) as integer) as \"::${NDB_No}\" from mealfoods where NDB_No = $NDB_No and meal_id = $::currentmeal), "
      } else {
      append viewstring "(select round(8.0 * Gm_Wgt / 28.349523,0) / 8.0 as \"::${NDB_No}\" from mealfoods where NDB_No = $NDB_No and meal_id = $::currentmeal), "
@@ -3935,35 +7769,41 @@ set MealfoodDelete {
 
 proc MealfoodDelete {seq ndb dbdelete} {
 
- ${::rmMenu}.menu tag configure foodwidget${seq} -elide 1
- if {[lsearch -exact $::MealfoodStatus $ndb] != $seq} {return}
+ ${::rmMenu}.menu tag configure foodwidget${seq} \
+  -elide 1
+ if {[lsearch \
+  -exact $::MealfoodStatus $ndb] != $seq} {return}
  set prevtag [lindex $::MealfoodPCF $seq]
  if {$prevtag != "NULL"} {
   trace remove variable ::${prevtag}dv write "PCF ${seq} ${ndb}"
   trace remove variable ::${prevtag}rm write "PCF ${seq} ${ndb}"
   set ::MealfoodPCF [lreplace $::MealfoodPCF $seq $seq "NULL"]
-  thread::send -async $::SQL_THREAD {job_daily_value_refresh}
+  thread::send \
+  -async $::SQL_THREAD {job_daily_value_refresh}
   }
  ::trace remove variable ::PCFchoice${ndb} write "setPCF ${seq} ${ndb}"
  unset ::PCFchoice${ndb} ::${ndb}
  set ::MealfoodStatus [lreplace $::MealfoodStatus $seq $seq Hidden]
- ${::rmMenu}.menu.foodPCF${seq} configure  -style rm.TCombobox
- ${::rmMenu}.menu.foodspin${seq} configure  -state readonly
+ ${::rmMenu}.menu.foodPCF${seq} configure  \
+  -style rm.TCombobox
+ ${::rmMenu}.menu.foodspin${seq} configure  \
+  -state readonly
  set lastone [expr {$::MealfoodSequence - 1}]
  if {[lindex $::MealfoodStatus $lastone] == "Hidden"} {
   set ::MealfoodStatus [lreplace $::MealfoodStatus $lastone $lastone Available]
   }
  while {[lindex $::MealfoodStatus $lastone] == "Available" && $lastone > 0} {
-  incr lastone -1
+  incr lastone \
+  -1
   if {[lindex $::MealfoodStatus $lastone] == "Hidden"} {
    set ::MealfoodStatus [lreplace $::MealfoodStatus $lastone $lastone Available]
    }
   }
  if {$dbdelete} {
   db eval {delete from currentmeal where NDB_No = $ndb}
-  thread::send -async $::SQL_THREAD {job_daily_value_refresh}
+  thread::send \
+  -async $::SQL_THREAD {job_daily_value_refresh}
   }
- 
  }
 
 #end MealfoodDelete
@@ -3973,7 +7813,8 @@ set MealfoodSetWeight {
 
 proc MealfoodSetWeight {newval ndb ndbVarName args} {
 
-if {![string is double -strict $newval]} {
+if {![string is double \
+  -strict $newval]} {
  set newval 0.0
  {*}"set ::${ndb} $newval"
  } else {
@@ -3990,7 +7831,8 @@ set MealfoodSetWeightLater {
 
 proc MealfoodSetWeightLater {newval ndb ndbVarName args} {
 
-if {![string is double -strict $newval]} {
+if {![string is double \
+  -strict $newval]} {
  set newval 0.0
  {*}"set ::${ndb} $newval"
  } else {
@@ -4001,11 +7843,12 @@ if {![string is double -strict $newval]} {
    } else {
    set grams [expr {$ndbvar * 28.349523}]
    }
-  thread::send -async $::SQL_THREAD [list db eval "insert into z_tcl_jobqueue values (null, 'mealfood_qty', $ndb, $grams, $::currentmeal)"]
-  thread::send -async $::SQL_THREAD [list job_mealfood_qty $ndb]
+  thread::send \
+  -async $::SQL_THREAD [list db eval "insert into z_tcl_jobqueue values (null, 'mealfood_qty', $ndb, $grams, $::currentmeal)"]
+  thread::send \
+  -async $::SQL_THREAD [list job_mealfood_qty $ndb]
   }
- } 
-}
+ }}
 
 #end MealfoodSetWeightLater
 }
@@ -4014,49 +7857,117 @@ set MealfoodWidget {
 
 proc MealfoodWidget {Shrt_Desc NDB_No} {
 
- set noThereThere [lsearch -exact $::MealfoodStatus $NDB_No]
- if {$noThereThere > -1} {return $noThereThere}
- if {$noThereThere == -1} {
+ set noThereThere [lsearch \
+  -exact $::MealfoodStatus $NDB_No]
+ if {$noThereThere > \
+  -1} {return $noThereThere}
+ if {$noThereThere == \
+  -1} {
   set seq ${::MealfoodSequence}
   incr ::MealfoodSequence
   lappend ::MealfoodStatus $NDB_No
   lappend ::MealfoodPCF "NULL"
   lappend ::MealfoodPCFfactor 0.0
-  ttk::button ${::rmMenu}.menu.foodbutton${seq} -text $Shrt_Desc -command [list rm2vf $seq] -width 46 -style vf.TButton
-  tk::spinbox ${::rmMenu}.menu.foodspin${seq} -textvariable ::${NDB_No} -width 5 -justify right -from -9999 -to 9999 -increment 1 -cursor [. cget -cursor] -buttonbackground "#FF9428" -disabledforeground "#000000" -readonlybackground "#FFE3CA" -state readonly -command "MealfoodSetWeight %s ${NDB_No} ::${NDB_No}"
+  ttk::button ${::rmMenu}.menu.foodbutton${seq} \
+  -text $Shrt_Desc \
+  -command [list rm2vf $seq] \
+  -width 46 \
+  -style vf.TButton
+  tk::spinbox ${::rmMenu}.menu.foodspin${seq} \
+  -textvariable ::${NDB_No} \
+  -width 5 \
+  -justify right \
+  -from \
+  -9999 \
+  -to 9999 \
+  -increment 1 \
+  -cursor [. cget \
+  -cursor] \
+  -buttonbackground "#FF9428" \
+  -disabledforeground "#000000" \
+  -readonlybackground "#FFE3CA" \
+  -state readonly \
+  -command "MealfoodSetWeight %s ${NDB_No} ::${NDB_No}"
   if {! $::GRAMSopt} {
-   ${::rmMenu}.menu.foodspin${seq} configure -format {%0.3f} -from -999.9 -to 999.9 -increment 0.125
+   ${::rmMenu}.menu.foodspin${seq} configure \
+  -format {%0.3f} \
+  -from \
+  -999.9 \
+  -to 999.9 \
+  -increment 0.125
    }
-  ttk::combobox ${::rmMenu}.menu.foodPCF${seq} -textvariable ::PCFchoice${NDB_No} -state readonly -values $::PCFchoices -style rm.TCombobox -width 20 -justify center
-  ttk::button ${::rmMenu}.menu.fooddel${seq} -text "DEL" -width 3 -command "MealfoodDelete $seq $NDB_No 1" -style vf.TButton
-  ${::rmMenu}.menu configure -state normal
-  ${::rmMenu}.menu window create end -window ${::rmMenu}.menu.foodbutton${seq} -pady $::magnify -padx [expr {$::magnify * 3}]
-  ${::rmMenu}.menu window create end -window ${::rmMenu}.menu.foodspin${seq} -pady $::magnify -padx [expr {$::magnify * 3}]
-  ${::rmMenu}.menu window create end -window ${::rmMenu}.menu.foodPCF${seq} -pady $::magnify -padx [expr {$::magnify * 3}]
-  ${::rmMenu}.menu window create end -window ${::rmMenu}.menu.fooddel${seq} -pady $::magnify -padx [expr {$::magnify * 3}]
+  ttk::combobox ${::rmMenu}.menu.foodPCF${seq} \
+  -textvariable ::PCFchoice${NDB_No} \
+  -state readonly \
+  -values $::PCFchoices \
+  -style rm.TCombobox \
+  -width 20 \
+  -justify center
+  ttk::button ${::rmMenu}.menu.fooddel${seq} \
+  -text "DEL" \
+  -width 3 \
+  -command "MealfoodDelete $seq $NDB_No 1" \
+  -style vf.TButton
+  ${::rmMenu}.menu configure \
+  -state normal
+  ${::rmMenu}.menu window create end \
+  -window ${::rmMenu}.menu.foodbutton${seq} \
+  -pady $::magnify \
+  -padx [expr {$::magnify * 3}]
+  ${::rmMenu}.menu window create end \
+  -window ${::rmMenu}.menu.foodspin${seq} \
+  -pady $::magnify \
+  -padx [expr {$::magnify * 3}]
+  ${::rmMenu}.menu window create end \
+  -window ${::rmMenu}.menu.foodPCF${seq} \
+  -pady $::magnify \
+  -padx [expr {$::magnify * 3}]
+  ${::rmMenu}.menu window create end \
+  -window ${::rmMenu}.menu.fooddel${seq} \
+  -pady $::magnify \
+  -padx [expr {$::magnify * 3}]
   ${::rmMenu}.menu insert end "\n"
   set startrange [expr {$seq + 1.0}]
   set endrange [expr {$seq + 2.0}]
   ${::rmMenu}.menu tag add foodwidget${seq} $startrange $endrange
-  ${::rmMenu}.menu tag configure foodwidget${seq} -justify center
-  ${::rmMenu}.menu configure -state disabled
+  ${::rmMenu}.menu tag configure foodwidget${seq} \
+  -justify center
+  ${::rmMenu}.menu configure \
+  -state disabled
   } else {
-  set seq [lsearch -exact $::MealfoodStatus Available]
+  set seq [lsearch \
+  -exact $::MealfoodStatus Available]
   set ::MealfoodStatus [lreplace $::MealfoodStatus $seq $seq $NDB_No]
-  ${::rmMenu}.menu.foodbutton${seq} configure -text $Shrt_Desc
-  ${::rmMenu}.menu.foodspin${seq} configure -textvariable ::${NDB_No} -command "MealfoodSetWeight %s ${NDB_No} ::${NDB_No}"
+  ${::rmMenu}.menu.foodbutton${seq} configure \
+  -text $Shrt_Desc
+  ${::rmMenu}.menu.foodspin${seq} configure \
+  -textvariable ::${NDB_No} \
+  -command "MealfoodSetWeight %s ${NDB_No} ::${NDB_No}"
   if {! $::GRAMSopt} {
-   ${::rmMenu}.menu.foodspin${seq} configure -format {%0.3f} -from -999.9 -to 999.9 -increment 0.125
+   ${::rmMenu}.menu.foodspin${seq} configure \
+  -format {%0.3f} \
+  -from \
+  -999.9 \
+  -to 999.9 \
+  -increment 0.125
    } else {
-   ${::rmMenu}.menu.foodspin${seq} configure -from -9999 -to 9999 -increment 1
+   ${::rmMenu}.menu.foodspin${seq} configure \
+  -from \
+  -9999 \
+  -to 9999 \
+  -increment 1
    }
-  ${::rmMenu}.menu.foodPCF${seq} configure -textvariable ::PCFchoice${NDB_No}
-  ${::rmMenu}.menu.fooddel${seq} configure -command "MealfoodDelete $seq $NDB_No 1"
-  ${::rmMenu}.menu tag configure foodwidget${seq} -elide 0
+  ${::rmMenu}.menu.foodPCF${seq} configure \
+  -textvariable ::PCFchoice${NDB_No}
+  ${::rmMenu}.menu.fooddel${seq} configure \
+  -command "MealfoodDelete $seq $NDB_No 1"
+  ${::rmMenu}.menu tag configure foodwidget${seq} \
+  -elide 0
   }
  {*}"set ::PCFchoice${NDB_No} {No Auto Portion Control}"
  ::trace add variable ::PCFchoice${NDB_No} write "setPCF ${seq} ${NDB_No}"
- ${::rmMenu}.menu.foodspin${seq} configure -command "MealfoodSetWeight %s ${NDB_No} ::${NDB_No}"
+ ${::rmMenu}.menu.foodspin${seq} configure \
+  -command "MealfoodSetWeight %s ${NDB_No} ::${NDB_No}"
  set ::MealfoodPCF [lreplace $::MealfoodPCF $seq $seq "NULL"]
  if {$::mealcount == 0} {
   set ::mealcount 1
@@ -4074,12 +7985,13 @@ proc NBWamTabChange {} {
 
  uplevel #0 {
   set tabindex [.nut.am.nbw index [.nut.am.nbw select]]
-  if {$tabindex == 0} {.nut.am.herelabel configure -text "Here are \"Daily Value\" average percentages for your previous "} else {.nut.am.herelabel configure -text "Here are average daily nutrient levels for your previous "}
+  if {$tabindex == 0} {.nut.am.herelabel configure \
+  -text "Here are \"Daily Value\" average percentages for your previous "} else {.nut.am.herelabel configure \
+  -text "Here are average daily nutrient levels for your previous "}
   if {$tabindex != [.nut.rm.nbw index [.nut.rm.nbw select]]} {.nut.rm.nbw select .nut.rm.nbw.screen${tabindex}}
   if {$tabindex != [.nut.vf.nbw index [.nut.vf.nbw select]]} {.nut.vf.nbw select .nut.vf.nbw.screen${tabindex}}
   if {$tabindex != [.nut.ar.nbw index [.nut.ar.nbw select]]} {.nut.ar.nbw select .nut.ar.nbw.screen${tabindex}}
   }
- 
  }
 
 #end NBWamTabChange
@@ -4095,7 +8007,6 @@ proc NBWrmTabChange {} {
   if {$tabindex != [.nut.vf.nbw index [.nut.vf.nbw select]]} {.nut.vf.nbw select .nut.vf.nbw.screen${tabindex}}
   if {$tabindex != [.nut.ar.nbw index [.nut.ar.nbw select]]} {.nut.ar.nbw select .nut.ar.nbw.screen${tabindex}}
   }
- 
  }
 
 #end NBWrmTabChange
@@ -4111,7 +8022,6 @@ proc NBWvfTabChange {} {
   if {$tabindex != [.nut.rm.nbw index [.nut.rm.nbw select]]} {.nut.rm.nbw select .nut.rm.nbw.screen${tabindex}}
   if {$tabindex != [.nut.ar.nbw index [.nut.ar.nbw select]]} {.nut.ar.nbw select .nut.ar.nbw.screen${tabindex}}
   }
- 
  }
 
 #end NBWvfTabChange
@@ -4127,7 +8037,6 @@ proc NBWarTabChange {} {
   if {$tabindex != [.nut.rm.nbw index [.nut.rm.nbw select]]} {.nut.rm.nbw select .nut.rm.nbw.screen${tabindex}}
   if {$tabindex != [.nut.vf.nbw index [.nut.vf.nbw select]]} {.nut.vf.nbw select .nut.vf.nbw.screen${tabindex}}
   }
- 
  }
 
 #end NBWarTabChange
@@ -4154,8 +8063,10 @@ proc NewStory {storynut screen} {
   append storynut "b"
   upvar #0 $storynut ::newstory
   db eval {select Tagname, case when Units != X'B567' then Units else 'mcg' end as Units from nutr_def where NutrDesc = $::newstory} { }
-  .nut tab .nut.ts -text [list The {*}$::newstory Story]
-  .nut.ts.frgraph configure -text [list Graph of daily {*}$::newstory for this analysis period]
+  .nut tab .nut.ts \
+  -text [list The {*}$::newstory Story]
+  .nut.ts.frgraph configure \
+  -text [list Graph of daily {*}$::newstory for this analysis period]
   .nut.ts.frgraph.canvas delete all
   .nut add .nut.ts
   .nut select .nut.ts
@@ -4165,16 +8076,20 @@ proc NewStory {storynut screen} {
   .nut.ts.frranking.ranking delete [.nut.ts.frranking.ranking children {}]
   set screen $::oldstoryscreen
   }
- 
  set FdGrp_Cd 0
  db eval {select FdGrp_Cd from fd_group where FdGrp_Desc = $::fdgroupchoice} { }
 
  foreach col {food field1 field2} {
-  .nut.ts.frranking.ranking heading $col -text ""
+  .nut.ts.frranking.ranking heading $col \
+  -text ""
   }
- set savecursor [.nut.ts cget -cursor]
- .nut.ts configure -cursor watch
-.nut.ts.frgraph.canvas configure -width [winfo width .nut] -height [expr {2 + [winfo height .nut] / 4}]
+ set savecursor [.nut.ts cget \
+  -cursor]
+ .nut.ts configure \
+  -cursor watch
+.nut.ts.frgraph.canvas configure \
+  -width [winfo width .nut] \
+  -height [expr {2 + [winfo height .nut] / 4}]
  update
 
  if {$::rankchoice == "Foods Ranked per 100 Grams"} {
@@ -4191,22 +8106,29 @@ proc NewStory {storynut screen} {
   }
  if {![info exists storydata]} {set storydata " "}
  foreach col {food field1 field2} name [list Food Quantity $::newstory] {
-  .nut.ts.frranking.ranking heading $col -text $name
-  .nut.ts.frranking.ranking column $col -width [font measure TkFixedFont $name]
+  .nut.ts.frranking.ranking heading $col \
+  -text $name
+  .nut.ts.frranking.ranking column $col \
+  -width [font measure TkFixedFont $name]
   }
  foreach {ndb grams food field1 field2} $storydata {
-  .nut.ts.frranking.ranking insert {} end -id [list $ndb $grams] -values [list $food $field1 $field2]
+  .nut.ts.frranking.ranking insert {} end \
+  -id [list $ndb $grams] \
+  -values [list $food $field1 $field2]
   foreach col {food field1 field2} {
    set len [font measure TkFixedFont "[set $col]  "]
    }
   }
- .nut.ts configure -cursor $savecursor
+ .nut.ts configure \
+  -cursor $savecursor
  set width [winfo width .nut.ts.frgraph.canvas]
  set height [expr {[winfo height .nut.ts.frgraph.canvas] - 1}]
  .nut.ts.frgraph.canvas delete all
 
 
- catch {.nut.ts.frgraph.canvas create line [db eval { with meals (meal_id, Nutr_Val) as (select meal_id, sum(Gm_Wgt * Nutr_Val / 100.0) from mealfoods mf join nutr_def def join nut_data nd on mf.NDB_No = nd.NDB_No and def.Nutr_No = nd.Nutr_No and Tagname = $Tagname and meal_id >= $::FIRSTMEALts group by meal_id) select $width * (strftime('%J', substr(meal_id,1,4) || '-' || substr(meal_id,5,2) || '-' || substr(meal_id,7,2)) - (select min(strftime('%J', substr(meal_id,1,4) || '-' || substr(meal_id,5,2) || '-' || substr(meal_id,7,2))) from meals where meal_id >= $::FIRSTMEALts)) / (select max((strftime('%J', substr(meal_id,1,4) || '-' || substr(meal_id,5,2) || '-' || substr(meal_id,7,2)) - (select min(strftime('%J', substr(meal_id,1,4) || '-' || substr(meal_id,5,2) || '-' || substr(meal_id,7,2))) from meals where meal_id >= $::FIRSTMEALts))) from meals where meal_id >= $::FIRSTMEALts) as x, $height - (($height-2) * total(Nutr_Val) / (select max(y) from (select (strftime('%J', substr(meal_id,1,4) || '-' || substr(meal_id,5,2) || '-' || substr(meal_id,7,2)) - (select min(strftime('%J', substr(meal_id,1,4) || '-' || substr(meal_id,5,2) || '-' || substr(meal_id,7,2))) from meals where meal_id >= $::FIRSTMEALts)) / (select max((strftime('%J', substr(meal_id,1,4) || '-' || substr(meal_id,5,2) || '-' || substr(meal_id,7,2)) - (select min(strftime('%J', substr(meal_id,1,4) || '-' || substr(meal_id,5,2) || '-' || substr(meal_id,7,2))) from meals where meal_id >= $::FIRSTMEALts))) from meals where meal_id >= $::FIRSTMEALts) as x, total(Nutr_Val) as y from meals where meal_id >= $::FIRSTMEALts group by x))) as y from meals where meal_id >= $::FIRSTMEALts group by x }] -width [expr {$::magnify * 2}] -fill "#FF7F00"}
+ catch {.nut.ts.frgraph.canvas create line [db eval { with meals (meal_id, Nutr_Val) as (select meal_id, sum(Gm_Wgt * Nutr_Val / 100.0) from mealfoods mf join nutr_def def join nut_data nd on mf.NDB_No = nd.NDB_No and def.Nutr_No = nd.Nutr_No and Tagname = $Tagname and meal_id >= $::FIRSTMEALts group by meal_id) select $width * (strftime('%J', substr(meal_id,1,4) || '-' || substr(meal_id,5,2) || '-' || substr(meal_id,7,2)) - (select min(strftime('%J', substr(meal_id,1,4) || '-' || substr(meal_id,5,2) || '-' || substr(meal_id,7,2))) from meals where meal_id >= $::FIRSTMEALts)) / (select max((strftime('%J', substr(meal_id,1,4) || '-' || substr(meal_id,5,2) || '-' || substr(meal_id,7,2)) - (select min(strftime('%J', substr(meal_id,1,4) || '-' || substr(meal_id,5,2) || '-' || substr(meal_id,7,2))) from meals where meal_id >= $::FIRSTMEALts))) from meals where meal_id >= $::FIRSTMEALts) as x, $height - (($height-2) * total(Nutr_Val) / (select max(y) from (select (strftime('%J', substr(meal_id,1,4) || '-' || substr(meal_id,5,2) || '-' || substr(meal_id,7,2)) - (select min(strftime('%J', substr(meal_id,1,4) || '-' || substr(meal_id,5,2) || '-' || substr(meal_id,7,2))) from meals where meal_id >= $::FIRSTMEALts)) / (select max((strftime('%J', substr(meal_id,1,4) || '-' || substr(meal_id,5,2) || '-' || substr(meal_id,7,2)) - (select min(strftime('%J', substr(meal_id,1,4) || '-' || substr(meal_id,5,2) || '-' || substr(meal_id,7,2))) from meals where meal_id >= $::FIRSTMEALts))) from meals where meal_id >= $::FIRSTMEALts) as x, total(Nutr_Val) as y from meals where meal_id >= $::FIRSTMEALts group by x))) as y from meals where meal_id >= $::FIRSTMEALts group by x }] \
+  -width [expr {$::magnify * 2}] \
+  -fill "#FF7F00"}
  }
 
 #end NewStory
@@ -4235,7 +8157,6 @@ proc NutTabChange {} {
    destroy .
    }
   }
- 
  }
 
 #end NutTabChange
@@ -4246,10 +8167,10 @@ set OunceChangevf {
 proc OunceChangevf {args} {
 
  uplevel #0 {
-  if {![string is double -strict $ouncesvf]} { return }
+  if {![string is double \
+  -strict $ouncesvf]} { return }
   set gramsvf [expr {$ouncesvf * $ounce2gram}]
   }
- 
  }
 
 #end OunceChangevf
@@ -4267,7 +8188,11 @@ proc PCF {seq ndb args} {
    grid .nut.rm.bubblemachine
    } else {
    place forget .nut.rm.fsentry
-   place .nut.rm.bubblemachine -relx 0.4 -rely 0.19629629  -relheight 0.044444444 -relwidth 0.45
+   place .nut.rm.bubblemachine \
+  -relx 0.4 \
+  -rely 0.19629629  \
+  -relheight 0.044444444 \
+  -relwidth 0.45
    }
   .nut.rm.bubblemachine start
   set ::lastbubble [after 500 TurnOffTheBubbleMachine]
@@ -4282,11 +8207,11 @@ proc PCF {seq ndb args} {
  upvar 0 $ndbName ndbvar $dvName dvvar $rmName rmvar
  set factor [lindex $::MealfoodPCFfactor $seq]
  set ::nutvalchange [expr {($dvvar - $rmvar) * 100.0 / $dvvar}]
- if {$::nutvalchange < 0.2 && $::nutvalchange > -0.2} {return}
+ if {$::nutvalchange < 0.2 && $::nutvalchange > \
+  -0.2} {return}
  if {[expr {($dvvar - $rmvar)}] == 0.0} {return}
  if {($::GRAMSopt && abs($ndbvar) >= 1350.0) || (!$::GRAMSopt && abs($ndbvar) >= 135.0)} {
-  if {$ndbvar > 0.0} { 
-   set looong1 ""
+  if {$ndbvar > 0.0} {   set looong1 ""
    db eval {select Long_Desc as looong1, food_des.NDB_No as looong1ndb from food_des, mealfoods where food_des.NDB_No = mealfoods.NDB_No and meal_date = $::currentmeal / 100 and meal = $::currentmeal % 100 and mhectograms < 0.0 order by mhectograms asc limit 1} { }
    } else {
    db eval {select Long_Desc as looong1, food_des.NDB_No as looong1ndb from food_des, mealfoods where food_des.NDB_No = mealfoods.NDB_No and meal_date = $::currentmeal / 100 and meal = $::currentmeal % 100 and mhectograms > 0.0 order by mhectograms desc limit 1} { }
@@ -4330,12 +8255,18 @@ proc RecipeSaveAs {args} {
 db eval {drop table if exists z_tcl_recipe_des; drop table if exists z_tcl_recipe_data; CREATE temp TABLE z_tcl_recipe_des (NDB_No int primary key, FdGrp_Cd int, Long_Desc text, Shrt_Desc text, Ref_desc text, Refuse integer, Pro_Factor real, Fat_Factor real, CHO_Factor real); CREATE temp TABLE z_tcl_recipe_data (NDB_No int, Nutr_No int, Nutr_Val real, primary key(NDB_No, Nutr_No));}
 db eval {select count(*) as foodcount from mealfoods where meal_id = $::currentmeal} { }
 if {$foodcount == 0} {
- tk_messageBox -type ok -title $::version -message "A recipe must include at least one food."
+ tk_messageBox \
+  -type ok \
+  -title $::version \
+  -message "A recipe must include at least one food."
  return
  }
 db eval {select total(Gm_Wgt) as "::RecipeWeight" from mealfoods where meal_id = $::currentmeal} { }
 if {$::RecipeWeight <= 0.0} {
- tk_messageBox -type ok -title $::version -message "A recipe must have a weight greater than zero."
+ tk_messageBox \
+  -type ok \
+  -title $::version \
+  -message "A recipe must have a weight greater than zero."
  return
  }
 db eval {BEGIN}
@@ -4411,7 +8342,8 @@ proc RecipeModdv {tag var args} {
 set varstarget ::${tag}ar
 db eval {select dv_default as thedv from nutr_def where tagname = $tag} { }
 upvar #0 $var thevar $varstarget thevarstarget
-if {[string is double -strict $thevar]} {
+if {[string is double \
+  -strict $thevar]} {
 set $varstarget [expr {$thedv * $thevar / 100.0}]
  } else {
 set $varstarget {}
@@ -4791,41 +8723,64 @@ set RecipeDone {
 proc RecipeDone {args} {
 set ::RecipeName [string trimright $::RecipeName " "]
 if {$::RecipeName == {}} {
- tk_messageBox -type ok -title $::version -message "The recipe name must not be blank."
+ tk_messageBox \
+  -type ok \
+  -title $::version \
+  -message "The recipe name must not be blank."
  return
  }
 db eval {update z_tcl_recipe_des set Long_Desc = $::RecipeName, Shrt_Desc = substr($::RecipeName,1,60)}
 set count [db eval {select count(*) from food_des where Long_Desc = (select Long_Desc from z_tcl_recipe_des) or Shrt_Desc = (select Shrt_Desc from z_tcl_recipe_des)}]
 if {$count > 0} {
- tk_messageBox -type ok -title $::version -message "This recipe name is a duplicate of a food name already in the database."
+ tk_messageBox \
+  -type ok \
+  -title $::version \
+  -message "This recipe name is a duplicate of a food name already in the database."
  return
  }
-if {![string is double -strict $::RecipeServNum]} {
- tk_messageBox -type ok -title $::version -message "\"Number of servings recipe makes\" must be a decimal number greater than zero."
+if {![string is double \
+  -strict $::RecipeServNum]} {
+ tk_messageBox \
+  -type ok \
+  -title $::version \
+  -message "\"Number of servings recipe makes\" must be a decimal number greater than zero."
  return
  } elseif {$::RecipeServNum <= 0.0} {
- tk_messageBox -type ok -title $::version -message "\"Number of servings recipe makes\" must be a decimal number greater than zero."
+ tk_messageBox \
+  -type ok \
+  -title $::version \
+  -message "\"Number of servings recipe makes\" must be a decimal number greater than zero."
  return
  }
 if {$::RecipeServUnit == {}} {
- tk_messageBox -type ok -title $::version -message "The \"Serving Unit\" must not be blank."
+ tk_messageBox \
+  -type ok \
+  -title $::version \
+  -message "The \"Serving Unit\" must not be blank."
  return
  }
-if {![string is double -strict $::RecipeServUnitNum]} {
- tk_messageBox -type ok -title $::version -message "\"Number of units in one serving\" must be a decimal number greater than zero."
+if {![string is double \
+  -strict $::RecipeServUnitNum]} {
+ tk_messageBox \
+  -type ok \
+  -title $::version \
+  -message "\"Number of units in one serving\" must be a decimal number greater than zero."
  return
  } elseif {$::RecipeServUnitNum <= 0.0} {
- tk_messageBox -type ok -title $::version -message "\"Number of units in one serving\" must be a decimal number greater than zero."
+ tk_messageBox \
+  -type ok \
+  -title $::version \
+  -message "\"Number of units in one serving\" must be a decimal number greater than zero."
  return
  }
-if {[string is double -strict $::RecipeServWeight]} {
+if {[string is double \
+  -strict $::RecipeServWeight]} {
  if {$::GRAMSopt} {
   set newweight [expr {$::RecipeServWeight * $::RecipeServNum / 100.0}]
   } else {
   set newweight [expr {$::RecipeServWeight * $::RecipeServNum * .28349523}]
   }
- set diff [expr {100.0 * ($newweight - $::RecipeWeight)}] 
- db eval {update z_tcl_recipe_data set nutr_val = case when nutr_val + $diff < 0.0 then 0.0 else nutr_val + $diff end where nutr_no = 255}
+ set diff [expr {100.0 * ($newweight - $::RecipeWeight)}] db eval {update z_tcl_recipe_data set nutr_val = case when nutr_val + $diff < 0.0 then 0.0 else nutr_val + $diff end where nutr_no = 255}
  set ::RecipeWeight $newweight
  }
 db eval {update z_tcl_recipe_data set nutr_val = 100.0 * nutr_val / $::RecipeWeight}
@@ -4834,9 +8789,12 @@ db eval {insert into food_des select * from z_tcl_recipe_des}
 db eval {insert into nut_data select * from z_tcl_recipe_data}
 db eval {insert into weight select $ndb, 99, 100, 'grams', 100, 99, 100}
 db eval {insert into weight select $ndb, 1, $::RecipeServUnitNum, $::RecipeServUnit, $::RecipeWeight / $::RecipeServNum, 1, $::RecipeWeight / $::RecipeServNum}
- thread::send -async $::SQL_THREAD [list db eval {delete from currentmeal}]
-thread::send -async $::SQL_THREAD {job_daily_value_refresh}
-set count -1
+ thread::send \
+  -async $::SQL_THREAD [list db eval {delete from currentmeal}]
+thread::send \
+  -async $::SQL_THREAD {job_daily_value_refresh}
+set count \
+  -1
 foreach mf $::MealfoodStatus {
  incr count
  if {$mf == "Hidden" || $mf == "Available"} {continue}
@@ -4858,16 +8816,17 @@ proc ServingChange {args} {
   dropoutvf
   db eval {select NDB_No as NDB_Novf from food_des where Long_Desc = $ld limit 1} {
    db eval {insert into z_tcl_jobqueue values (null, 'view_foods', $NDB_Novf, null, null)}
-   thread::send -async $::SQL_THREAD {job_view_foods}
+   thread::send \
+  -async $::SQL_THREAD {job_view_foods}
    }
   set Long_Desc $ld
   db eval {select case when Refuse is not null then Refuse || "%" else Refuse end as Refusevf, setRefDesc(Ref_desc) from food_des where NDB_No = $NDB_Novf} { }
   db eval {select cast(round(Gm_Wgt) as int) as gramsvf, round(8.0 * Gm_Wgt / 28.35, 0) / 8.0 as ouncesvf, cast(round(Gm_Wgt * 0.01 * Nutr_Val) as int) as caloriesvf, round(8.0 * Amount, 0) / 8.0 as Amountvf, Msre_Desc as Msre_Descvf, 28.349523 as ounce2gram, case when Nutr_Val is null or Nutr_Val = 0.0 then 0.0 else 100.0/Nutr_Val end as cal2gram, origGm_Wgt/origAmount as Amount2gram from pref_Gm_Wgt join nut_data using (NDB_No) where NDB_No = $NDB_Novf and Nutr_No = 208} { }
   set servingsizes [db eval {select distinct Msre_Desc from weight where NDB_No = $NDB_Novf order by Seq limit 100 offset 1}]
-  .nut.vf.cb configure -values $servingsizes
+  .nut.vf.cb configure \
+  -values $servingsizes
   tuneinvf
   }
- 
  }
 
 #end ServingChange
@@ -4877,10 +8836,13 @@ set SetDefanal {
 
 proc SetDefanal {args} {
 
-if {![string is integer -strict $::meals_to_analyze_am]} {return}
+if {![string is integer \
+  -strict $::meals_to_analyze_am]} {return}
 
-thread::send -async $::SQL_THREAD [list db eval "insert into z_tcl_jobqueue values (null, 'defanal_am', cast($::meals_to_analyze_am as int), null, null)"]
-thread::send -async $::SQL_THREAD [list after idle job_defanal_am]
+thread::send \
+  -async $::SQL_THREAD [list db eval "insert into z_tcl_jobqueue values (null, 'defanal_am', cast($::meals_to_analyze_am as int), null, null)"]
+thread::send \
+  -async $::SQL_THREAD [list after idle job_defanal_am]
 }
 
 #end SetDefanal
@@ -4900,7 +8862,8 @@ db eval {delete from z_tcl_jobqueue where jobtype = 'defanal_am' and jobnum <= $
 db eval {select maxmeal from am_analysis_header} { }
 
 if {$maxmeal < $jobint} {
- thread::send -async $::GUI_THREAD [list set ::meals_to_analyze_am $maxmeal]
+ thread::send \
+  -async $::GUI_THREAD [list set ::meals_to_analyze_am $maxmeal]
  return
  }
 
@@ -4923,7 +8886,8 @@ db eval {delete from z_tcl_jobqueue where jobtype = 'mealfood_qty' and jobint = 
 
 db eval {select long_desc from food_des where ndb_no = $ndb} { }
 if {[catch { db eval {update mealfoods set Gm_Wgt = $jobreal where NDB_No = $ndb and meal_id = cast($jobtext as int)} }]} {
- thread::send -async $::GUI_THREAD [list badPCF null null null 4]
+ thread::send \
+  -async $::GUI_THREAD [list badPCF null null null 4]
  return
  }
 
@@ -4956,81 +8920,111 @@ set job_daily_value_refresh {
 
 proc job_daily_value_refresh {args} {
 
-db eval {select maxmeal, mealcount, caloriebutton as "::caloriebutton", format_meal_id(firstmeal) as "::FIRSTMEALam", firstmeal as "::FIRSTMEALts", format_meal_id(lastmeal) as "::LASTMEALam", n6balance as "::FAPU1am", macropct as "::ENERC_KCAL1am" from am_analysis_header} { 
-thread::send -async $::GUI_THREAD [list set ::caloriebutton $::caloriebutton]
-thread::send -async $::GUI_THREAD [list set ::FIRSTMEALam $::FIRSTMEALam]
-thread::send -async $::GUI_THREAD [list set ::FIRSTMEALts $::FIRSTMEALts]
-thread::send -async $::GUI_THREAD [list set ::LASTMEALam $::LASTMEALam]
-thread::send -async $::GUI_THREAD [list set ::FAPU1am $::FAPU1am]
-thread::send -async $::GUI_THREAD [list set ::ENERC_KCAL1am $::ENERC_KCAL1am]
-thread::send -async $::GUI_THREAD [list set ::mealcount $mealcount]
-thread::send -async $::GUI_THREAD {if {$::mealcount < $::meals_to_analyze_am} {SetDefanal}}
+db eval {select maxmeal, mealcount, caloriebutton as "::caloriebutton", format_meal_id(firstmeal) as "::FIRSTMEALam", firstmeal as "::FIRSTMEALts", format_meal_id(lastmeal) as "::LASTMEALam", n6balance as "::FAPU1am", macropct as "::ENERC_KCAL1am" from am_analysis_header} {thread::send \
+  -async $::GUI_THREAD [list set ::caloriebutton $::caloriebutton]
+thread::send \
+  -async $::GUI_THREAD [list set ::FIRSTMEALam $::FIRSTMEALam]
+thread::send \
+  -async $::GUI_THREAD [list set ::FIRSTMEALts $::FIRSTMEALts]
+thread::send \
+  -async $::GUI_THREAD [list set ::LASTMEALam $::LASTMEALam]
+thread::send \
+  -async $::GUI_THREAD [list set ::FAPU1am $::FAPU1am]
+thread::send \
+  -async $::GUI_THREAD [list set ::ENERC_KCAL1am $::ENERC_KCAL1am]
+thread::send \
+  -async $::GUI_THREAD [list set ::mealcount $mealcount]
+thread::send \
+  -async $::GUI_THREAD {if {$::mealcount < $::meals_to_analyze_am} {SetDefanal}}
 if {$maxmeal == 0} {
- thread::send -async $::GUI_THREAD {.nut.am.mealsb configure -from 0 -to 0}
+ thread::send \
+  -async $::GUI_THREAD {.nut.am.mealsb configure \
+  -from 0 \
+  -to 0}
  } else {
- thread::send -async $::GUI_THREAD [list .nut.am.mealsb configure -from 1 -to $maxmeal]
+ thread::send \
+  -async $::GUI_THREAD [list .nut.am.mealsb configure \
+  -from 1 \
+  -to $maxmeal]
  }
 
 }
 
 if {$maxmeal < $mealcount} {
- thread::send -async $::GUI_THREAD [list set ::meals_to_analyze_am $maxmeal]
+ thread::send \
+  -async $::GUI_THREAD [list set ::meals_to_analyze_am $maxmeal]
  }
 
 db eval {select "::" || Tagname || 'dv' as tag, round(dv, 1) as dv from am_dv natural join nutr_def} {
- thread::send -async $::GUI_THREAD [list set $tag $dv]
+ thread::send \
+  -async $::GUI_THREAD [list set $tag $dv]
  }
 db eval {select '::' || Tagname || 'am' as tag, case when null_value = 0 then round(Nutr_Val, 1) else null end as val from am_analysis natural join nutr_def} {
- thread::send -async $::GUI_THREAD [list set $tag $val]
+ thread::send \
+  -async $::GUI_THREAD [list set $tag $val]
  }
 db eval {select '::' || Tagname || 'amdv' as tag, case when null_value = 0 then cast(round(100.0 + dvpct_offset, 0) as int) else null end as val from am_analysis natural join am_dv natural join nutr_def} {
- thread::send -async $::GUI_THREAD [list set $tag $val]
+ thread::send \
+  -async $::GUI_THREAD [list set $tag $val]
  }
 db eval {select case when null_value = 0 then cast(round(Nutr_Val, 0) as int) else null end as "::CHO_NONFIBam1" from am_analysis where Nutr_No = 2000} {
-thread::send -async $::GUI_THREAD [list set ::CHO_NONFIBam1 $::CHO_NONFIBam1]
+thread::send \
+  -async $::GUI_THREAD [list set ::CHO_NONFIBam1 $::CHO_NONFIBam1]
  }
 
 if {$::NDB_Novf != 0} {
  db eval {select '::' || Tagname || 'vfdv' as tag, cast(round($::Gm_Wgtvf * Nutr_Val / dv) as int) as val from nutr_def nd left join am_dv ad on nd.Nutr_No = ad.Nutr_No left join nut_data d on d.NDB_No = $::NDB_Novf and nd.Nutr_No = d.Nutr_No where dv_default > 0.0} {
-  thread::send -async $::GUI_THREAD [list set $tag $val]
+  thread::send \
+  -async $::GUI_THREAD [list set $tag $val]
   }
  }
 
 set parm [lindex $args 0]
-if {[string is integer -strict $parm]} {
+if {[string is integer \
+  -strict $parm]} {
  db eval {select '::' || ndb_no as var, case when grams = 1 then cast(round(gm_wgt,0) as int) else round(8.0 * Gm_Wgt / 28.349523,0) / 8.0 end as val from mealfoods, options where meal_id = currentmeal and nutr_no is not null and ndb_no != $parm} {
-  thread::send -async $::GUI_THREAD [list set $var $val]
+  thread::send \
+  -async $::GUI_THREAD [list set $var $val]
   }
  } elseif {$parm == "" } {
-  thread::send -async $::GUI_THREAD {RefreshMealfoodQuantities}
+  thread::send \
+  -async $::GUI_THREAD {RefreshMealfoodQuantities}
  } else {
  db eval {select '::' || ndb_no as var, case when grams = 1 then cast(round(gm_wgt,0) as int) else round(8.0 * Gm_Wgt / 28.3495231,0) / 8.0 end as val from mealfoods, options where meal_id = currentmeal and nutr_no is not null} {
-  thread::send -async $::GUI_THREAD [list set $var $val]
+  thread::send \
+  -async $::GUI_THREAD [list set $var $val]
   }
  }
 
-db eval {select n6balance as "::FAPU1rm", macropct as "::ENERC_KCAL1rm" from rm_analysis_header} { 
-thread::send -async $::GUI_THREAD [list set ::FAPU1rm $::FAPU1rm]
-thread::send -async $::GUI_THREAD [list set ::ENERC_KCAL1rm $::ENERC_KCAL1rm]
+db eval {select n6balance as "::FAPU1rm", macropct as "::ENERC_KCAL1rm" from rm_analysis_header} {thread::send \
+  -async $::GUI_THREAD [list set ::FAPU1rm $::FAPU1rm]
+thread::send \
+  -async $::GUI_THREAD [list set ::ENERC_KCAL1rm $::ENERC_KCAL1rm]
 if {$::FAPU1rm == "\[No Data\]"} {
- thread::send -async $::GUI_THREAD [list set ::FAPU1rm "0 / 0"]
+ thread::send \
+  -async $::GUI_THREAD [list set ::FAPU1rm "0 / 0"]
  }
 if {$::ENERC_KCAL1rm == "\[No Data\]"} {
- thread::send -async $::GUI_THREAD [list set ::ENERC_KCAL1rm "0 / 0 / 0"]
+ thread::send \
+  -async $::GUI_THREAD [list set ::ENERC_KCAL1rm "0 / 0 / 0"]
  }
 
 }
 
 db eval {select '::' || Tagname || 'rm' as tag, case when null_value = 0 then round(Nutr_Val, 1) else null end as val from rm_analysis natural join nutr_def} {
- thread::send -async $::GUI_THREAD [list set $tag $val]
+ thread::send \
+  -async $::GUI_THREAD [list set $tag $val]
  }
 db eval {select '::' || Tagname || 'rmdv' as tag, case when null_value = 0 then cast(round(100.0 + dvpct_offset, 0) as int) else null end as val from rm_analysis natural join rm_dv natural join nutr_def} {
- thread::send -async $::GUI_THREAD [list set $tag $val]
+ thread::send \
+  -async $::GUI_THREAD [list set $tag $val]
  }
 db eval {select case when null_value = 0 then cast(round(Nutr_Val, 0) as int) else null end as "::CHO_NONFIBrm1" from rm_analysis where Nutr_No = 2000} {
-thread::send -async $::GUI_THREAD [list set ::CHO_NONFIBrm1 $::CHO_NONFIBrm1]
+thread::send \
+  -async $::GUI_THREAD [list set ::CHO_NONFIBrm1 $::CHO_NONFIBrm1]
  }
-thread::send -async $::GUI_THREAD [list set ::StoryIsStale 1]
+thread::send \
+  -async $::GUI_THREAD [list set ::StoryIsStale 1]
 }
 
 #end job_daily_value_refresh
@@ -5043,18 +9037,20 @@ proc SetMealRange_am {args} {
  uplevel #0 {
   if { $::FIRSTMEALam == "" } {
    set mealrange ""
-   .nut.am.meallabel configure -text " meals:"
+   .nut.am.meallabel configure \
+  -text " meals:"
    return
    }
   if { $::FIRSTMEALam == $::LASTMEALam } {
    set mealrange "Meal $::FIRSTMEALam"
-   .nut.am.meallabel configure -text " meal:"
+   .nut.am.meallabel configure \
+  -text " meal:"
    } else {
    set mealrange "Meals $::FIRSTMEALam through $::LASTMEALam"
-   .nut.am.meallabel configure -text " meals:"
+   .nut.am.meallabel configure \
+  -text " meals:"
    }
   }
- 
  }
 
 #end SetMealRange_am
@@ -5064,21 +9060,32 @@ set SetMPD {
 
 proc SetMPD {mpd} {
 
-thread::send -async $::SQL_THREAD [list job_SetMPD $mpd]
+thread::send \
+  -async $::SQL_THREAD [list job_SetMPD $mpd]
 set ::oldmpd $::meals_per_day
 set ::meals_per_day $mpd
 
 .nut.rm.setmpd.m delete 0 end
 if {$::meals_per_day != 1} {
- .nut.rm.setmpd.m add command -label "Set 1 meal per day" -command [list SetMPD 1]
+ .nut.rm.setmpd.m add command \
+  -label "Set 1 meal per day" \
+  -command [list SetMPD 1]
  } else {
- .nut.rm.setmpd.m add command -label "Set 1 meal per day" -command [list SetMPD 1] -state disabled
+ .nut.rm.setmpd.m add command \
+  -label "Set 1 meal per day" \
+  -command [list SetMPD 1] \
+  -state disabled
  }
 for {set i 2} {$i < 20} {incr i} {
  if {$i != $::meals_per_day} {
-  .nut.rm.setmpd.m add command -label "Set $i meals per day" -command [list SetMPD $i]
+  .nut.rm.setmpd.m add command \
+  -label "Set $i meals per day" \
+  -command [list SetMPD $i]
   } else {
-  .nut.rm.setmpd.m add command -label "Set $i meals per day" -command [list SetMPD $i] -state disabled
+  .nut.rm.setmpd.m add command \
+  -label "Set $i meals per day" \
+  -command [list SetMPD $i] \
+  -state disabled
   }
  }
 
@@ -5092,11 +9099,18 @@ set job_SetMPD {
 proc job_SetMPD {mpd} {
 
 db eval {update options set meals_per_day = $mpd}
-thread::send -async $::GUI_THREAD [list SetMealBase]
-thread::send -async $::GUI_THREAD {tk_messageBox -type ok -title $::version -message "Meals per day changed from $::oldmpd to $::meals_per_day.  Existing meals were archived and will be copied back into the active table if meals per day is ever changed back to $::oldmpd."}
+thread::send \
+  -async $::GUI_THREAD [list SetMealBase]
+thread::send \
+  -async $::GUI_THREAD {tk_messageBox \
+  -type ok \
+  -title $::version \
+  -message "Meals per day changed from $::oldmpd to $::meals_per_day.  Existing meals were archived and will be copied back into the active table if meals per day is ever changed back to $::oldmpd."}
 db eval {select defanal_am as "::meals_to_analyze_am" from options} { }
-thread::send -async $::GUI_THREAD [list set ::meals_to_analyze_am $::meals_to_analyze_am]
-thread::send -async $::GUI_THREAD [list job_daily_value_refresh]
+thread::send \
+  -async $::GUI_THREAD [list set ::meals_to_analyze_am $::meals_to_analyze_am]
+thread::send \
+  -async $::GUI_THREAD [list job_daily_value_refresh]
 
 }
 
@@ -5107,7 +9121,9 @@ set SwitchToAnalysis {
 
 proc SwitchToAnalysis {args} {
 
- .nut.rm.analysismeal configure -text "Menu" -command SwitchToMenu
+ .nut.rm.analysismeal configure \
+  -text "Menu" \
+  -command SwitchToMenu
  if {!$::ALTGUI} {
   grid remove $::rmMainPane
   grid remove .nut.rm.grams
@@ -5121,7 +9137,11 @@ proc SwitchToAnalysis {args} {
   place forget .nut.rm.ounces
  #place forget .nut.rm.recipebutton
   set ::rmMainPane .nut.rm.nbw
-  place $::rmMainPane -relx 0.0 -rely 0.25 -relheight 0.75 -relwidth 1.0
+  place $::rmMainPane \
+  -relx 0.0 \
+  -rely 0.25 \
+  -relheight 0.75 \
+  -relwidth 1.0
   }
  }
 
@@ -5132,7 +9152,9 @@ set SwitchToMenu {
 
 proc SwitchToMenu {args} {
 
-.nut.rm.analysismeal configure -text "Analysis" -command SwitchToAnalysis
+.nut.rm.analysismeal configure \
+  -text "Analysis" \
+  -command SwitchToAnalysis
 if {!$::ALTGUI} {
  grid remove $::rmMainPane
  grid .nut.rm.grams
@@ -5143,14 +9165,31 @@ if {!$::ALTGUI} {
  grid remove .nut.rm.searchcancel
  } else {
  place forget $::rmMainPane
- place .nut.rm.grams -relx 0.87 -rely 0.0046296296 -relheight 0.044444444 -relwidth 0.11
- place .nut.rm.ounces -relx 0.87 -rely 0.0490740736 -relheight 0.044444444 -relwidth 0.11
-#place .nut.rm.recipebutton -relx 0.0058 -rely 0.185 -relheight 0.045 -relwidth 0.2
+ place .nut.rm.grams \
+  -relx 0.87 \
+  -rely 0.0046296296 \
+  -relheight 0.044444444 \
+  -relwidth 0.11
+ place .nut.rm.ounces \
+  -relx 0.87 \
+  -rely 0.0490740736 \
+  -relheight 0.044444444 \
+  -relwidth 0.11
+#place .nut.rm.recipebutton \
+  -relx 0.0058 \
+  -rely 0.185 \
+  -relheight 0.045 \
+  -relwidth 0.2
  set ::rmMainPane .nut.rm.frmenu
- place $::rmMainPane -relx 0.0 -rely 0.25 -relheight 0.75 -relwidth 1.0
+ place $::rmMainPane \
+  -relx 0.0 \
+  -rely 0.25 \
+  -relheight 0.75 \
+  -relwidth 1.0
  place forget .nut.rm.searchcancel
  }
- .nut.rm.recipebutton configure -state normal
+ .nut.rm.recipebutton configure \
+  -state normal
 
  }
 
@@ -5169,7 +9208,11 @@ proc TurnOffTheBubbleMachine {} {
   grid .nut.rm.fsentry
   } else {
   place forget .nut.rm.bubblemachine
-  place .nut.rm.fsentry -relx 0.4 -rely 0.19629629  -relheight 0.044444444 -relwidth 0.45
+  place .nut.rm.fsentry \
+  -relx 0.4 \
+  -rely 0.19629629  \
+  -relheight 0.044444444 \
+  -relwidth 0.45
   }
  }
 
@@ -5187,7 +9230,11 @@ proc TurnOnTheBubbleMachine {} {
    grid .nut.rm.bubblemachine
    } else {
    place forget .nut.rm.fsentry
-   place .nut.rm.bubblemachine -relx 0.4 -rely 0.19629629  -relheight 0.044444444 -relwidth 0.45
+   place .nut.rm.bubblemachine \
+  -relx 0.4 \
+  -rely 0.19629629  \
+  -relheight 0.044444444 \
+  -relwidth 0.45
    }
   .nut.rm.bubblemachine start
   update
@@ -5201,15 +9248,30 @@ set badPCF {
 proc badPCF {food food1 selection message} {
 
  if {$message == 0} {
-  tk_messageBox -type ok -title $::version -message "\"$food\" does not have a value for $selection."
+  tk_messageBox \
+  -type ok \
+  -title $::version \
+  -message "\"$food\" does not have a value for $selection."
   } elseif {$message == 1} {
-  tk_messageBox -type ok -title $::version -message "\"$food\" is too similar in nutrient composition to another food, \"$food1\"."
+  tk_messageBox \
+  -type ok \
+  -title $::version \
+  -message "\"$food\" is too similar in nutrient composition to another food, \"$food1\"."
   } elseif {$message == 2} {
-  tk_messageBox -type ok -title $::version -message "$selection is set to \"Adjust to my meals\"."
+  tk_messageBox \
+  -type ok \
+  -title $::version \
+  -message "$selection is set to \"Adjust to my meals\"."
   } elseif {$message == 3} {
-  tk_messageBox -type ok -title $::version -message "Portion control for $selection causes too much recursion in the algorithm probably due to a conflicting requirement."
+  tk_messageBox \
+  -type ok \
+  -title $::version \
+  -message "Portion control for $selection causes too much recursion in the algorithm probably due to a conflicting requirement."
   } elseif {$message == 4} {
-  tk_messageBox -type ok -title $::version -message "Changing quantity for \"$food\" causes too much recursion in the portion control algorithm probably due to a conflicting requirement from other portion control settings."
+  tk_messageBox \
+  -type ok \
+  -title $::version \
+  -message "Changing quantity for \"$food\" causes too much recursion in the portion control algorithm probably due to a conflicting requirement from other portion control settings."
   }
  }
 
@@ -5230,7 +9292,6 @@ proc dropoutvf {args} {
   trace remove variable Amountvf write AmountChangevf
   trace remove variable Msre_Descvf write ServingChange
   }
- 
  }
 
 #end dropoutvf
@@ -5244,8 +9305,9 @@ proc format_meal_id {meal_id} {
  if {$mealno == ""} {return}
  if {$mealno == "08"} {set mealno 8}
  set mealno [expr {int($mealno)}]
- return \"[clock format [clock scan [string range $meal_id 0 7] -format {%Y%m%d}] -format {%a %b %e, %Y #}]${mealno}\"
- 
+ return \"[clock format [clock scan [string range $meal_id 0 7] \
+  -format {%Y%m%d}] \
+  -format {%a %b %e, %Y #}]${mealno}\"
  }
 
 #end format_meal_id
@@ -5263,7 +9325,8 @@ proc mealchange {args} {
  if {!$::ALTGUI} {
   grid remove $::rmMainPane
   grid remove .nut.rm.setmpd
-  .nut.rm.recipebutton configure -state normal
+  .nut.rm.recipebutton configure \
+  -state normal
   set ::rmMainPane .nut.rm.frmenu
   grid $::rmMainPane
   grid .nut.rm.grams
@@ -5272,25 +9335,48 @@ proc mealchange {args} {
   } else {
   place forget $::rmMainPane
   place forget .nut.rm.setmpd
-  .nut.rm.recipebutton configure -state normal
+  .nut.rm.recipebutton configure \
+  -state normal
   set ::rmMainPane .nut.rm.frmenu
-  place $::rmMainPane -relx 0.0 -rely 0.25 -relheight 0.75 -relwidth 1.0
-  place .nut.rm.grams -relx 0.87 -rely 0.0046296296 -relheight 0.044444444 -relwidth 0.11
-  place .nut.rm.ounces -relx 0.87 -rely 0.0490740736 -relheight 0.044444444 -relwidth 0.11
-  place .nut.rm.analysismeal -relx 0.87 -rely 0.14722222 -relheight 0.044444444 -relwidth 0.11
+  place $::rmMainPane \
+  -relx 0.0 \
+  -rely 0.25 \
+  -relheight 0.75 \
+  -relwidth 1.0
+  place .nut.rm.grams \
+  -relx 0.87 \
+  -rely 0.0046296296 \
+  -relheight 0.044444444 \
+  -relwidth 0.11
+  place .nut.rm.ounces \
+  -relx 0.87 \
+  -rely 0.0490740736 \
+  -relheight 0.044444444 \
+  -relwidth 0.11
+  place .nut.rm.analysismeal \
+  -relx 0.87 \
+  -rely 0.14722222 \
+  -relheight 0.044444444 \
+  -relwidth 0.11
   }
- set julian [expr { ($::mealoffset / $::meals_per_day) + [clock format [clock scan [expr {$::mealbase / 100}] -format {%Y%m%d}] -format {%J}] }]
+ set julian [expr { ($::mealoffset / $::meals_per_day) + [clock format [clock scan [expr {$::mealbase / 100}] \
+  -format {%Y%m%d}] \
+  -format {%J}] }]
  set mealnum [expr { $::mealbase % 100 + $::mealoffset % $::meals_per_day }]
  if {$mealnum > $::meals_per_day} {
   set julian [expr {$julian + 1}]
   set mealnum [expr {$mealnum - $::meals_per_day}]
   }
- set ::currentmeal [clock format [clock scan $julian -format {%J}] -format {%Y%m%d}]
+ set ::currentmeal [clock format [clock scan $julian \
+  -format {%J}] \
+  -format {%Y%m%d}]
  set ::currentmeal [expr {$::currentmeal * 100 + $mealnum}]
  set ::mealchoice "Meal [format_meal_id $::currentmeal]"
- .nut.rm.scale configure -label $::mealchoice
+ .nut.rm.scale configure \
+  -label $::mealchoice
  if {abs($::mealoffset) == 100} {after 500 recenterscale $::currentmeal}
- set count -1
+ set count \
+  -1
  foreach mf $::MealfoodStatus {
   incr count
   if {$mf == "Hidden" || $mf == "Available"} {continue}
@@ -5302,7 +9388,8 @@ proc mealchange {args} {
    MealfoodWidget $Shrt_Desc $NDB_No
    }
   }
- thread::send -async $::SQL_THREAD {job_daily_value_refresh}
+ thread::send \
+  -async $::SQL_THREAD {job_daily_value_refresh}
  }
 
 #end mealchange
@@ -5315,15 +9402,24 @@ proc n6hufa {short3 short6 long3 long6 sat mono trans pufa cals float} {
  if {$short3 == "" &&  $short6 == "" && $long3 == "" && $long6 == ""} {
   if {!$float} {return "\[No Data\]"} else {return 0.0}
   }
- if {![string is double -strict $short3]} {set short3 0.0}
- if {![string is double -strict $short6]} {set short6 0.0}
- if {![string is double -strict $long3]} {set long3 0.0}
- if {![string is double -strict $long6]} {set long6 0.0}
- if {![string is double -strict $sat]} {set sat 0.0}
- if {![string is double -strict $mono]} {set mono 0.0}
- if {![string is double -strict $trans]} {set trans 0.0}
- if {![string is double -strict $pufa]} {set pufa 0.0}
- if {![string is double -strict $cals]} {set cals 0.0}
+ if {![string is double \
+  -strict $short3]} {set short3 0.0}
+ if {![string is double \
+  -strict $short6]} {set short6 0.0}
+ if {![string is double \
+  -strict $long3]} {set long3 0.0}
+ if {![string is double \
+  -strict $long6]} {set long6 0.0}
+ if {![string is double \
+  -strict $sat]} {set sat 0.0}
+ if {![string is double \
+  -strict $mono]} {set mono 0.0}
+ if {![string is double \
+  -strict $trans]} {set trans 0.0}
+ if {![string is double \
+  -strict $pufa]} {set pufa 0.0}
+ if {![string is double \
+  -strict $cals]} {set cals 0.0}
  if { $cals == 0.0 } {
   if {!$float} {return "0 / 0"} else {return 0.0}
   }
@@ -5350,7 +9446,6 @@ proc n6hufa {short3 short6 long3 long6 sat mono trans pufa cals float} {
    return $answer
    }
   }
- 
  }
 
 #end n6hufa
@@ -5360,9 +9455,7 @@ set recenterscale {
 
 proc recenterscale {currentmeal} {
 
- set ::mealoffset 0 
- set ::mealbase $currentmeal
- 
+ set ::mealoffset 0 set ::mealbase $currentmeal
  }
 
 #end recenterscale
@@ -5381,17 +9474,21 @@ proc setPCF {seqno ndb varNameSel args} {
    set saveselection $selection
    db eval {select Long_Desc from food_des where NDB_No = $ndb} { }
    ${::rmMenu}.menu.foodPCF${seqno} current 0
-   ${::rmMenu}.menu.foodPCF${seqno} configure  -style rm.TCombobox
+   ${::rmMenu}.menu.foodPCF${seqno} configure  \
+  -style rm.TCombobox
    after idle [list badPCF $Long_Desc NULL $saveselection 0]
    return
    }
   set opt [db eval {select nutopt from nutr_def where NutrDesc = $selection}]
-  if {$opt == -1} {
+  if {$opt == \
+  -1} {
    set saveselection $selection
    set Long_Desc {}
    ${::rmMenu}.menu.foodPCF${seqno} current 0
-   ${::rmMenu}.menu.foodPCF${seqno} configure  -style rm.TCombobox
-   ${::rmMenu}.menu.foodspin${seqno} configure  -state readonly
+   ${::rmMenu}.menu.foodPCF${seqno} configure  \
+  -style rm.TCombobox
+   ${::rmMenu}.menu.foodspin${seqno} configure  \
+  -state readonly
    after idle [list badPCF $Long_Desc NULL $saveselection 2]
    return
    }
@@ -5399,18 +9496,24 @@ proc setPCF {seqno ndb varNameSel args} {
   if {[catch { db eval {update currentmeal set NutrDesc = $selection where NDB_No = $ndb} }]} {
    db eval {update currentmeal set NutrDesc = null where NDB_no = $ndb}
    ${::rmMenu}.menu.foodPCF${seqno} current 0
-   ${::rmMenu}.menu.foodPCF${seqno} configure  -style rm.TCombobox
-   ${::rmMenu}.menu.foodspin${seqno} configure  -state readonly
+   ${::rmMenu}.menu.foodPCF${seqno} configure  \
+  -style rm.TCombobox
+   ${::rmMenu}.menu.foodspin${seqno} configure  \
+  -state readonly
    after idle [list badPCF NULL NULL $::saveit 3]
    return
    }
-  set prevseqno [lsearch -exact $::MealfoodPCF $Tagname]
+  set prevseqno [lsearch \
+  -exact $::MealfoodPCF $Tagname]
   set prevndb [lindex $::MealfoodStatus $prevseqno]
-  if {$prevseqno > -1 && $prevseqno != $seqno} {
+  if {$prevseqno > \
+  -1 && $prevseqno != $seqno} {
    set ::MealfoodPCF [lreplace $::MealfoodPCF $prevseqno $prevseqno "NULL"]
    ${::rmMenu}.menu.foodPCF${prevseqno} current 0
-   ${::rmMenu}.menu.foodPCF${prevseqno} configure  -style rm.TCombobox
-   ${::rmMenu}.menu.foodspin${prevseqno} configure  -state readonly
+   ${::rmMenu}.menu.foodPCF${prevseqno} configure  \
+  -style rm.TCombobox
+   ${::rmMenu}.menu.foodspin${prevseqno} configure  \
+  -state readonly
 #  trace remove variable ::${Tagname}dv write "PCF $prevseqno $prevndb"
 #  trace remove variable ::${Tagname}rm write "PCF $prevseqno $prevndb"
    }
@@ -5421,8 +9524,10 @@ proc setPCF {seqno ndb varNameSel args} {
 #  }
   set ::MealfoodPCF [lreplace $::MealfoodPCF $seqno $seqno $Tagname]
 # set ::MealfoodPCFfactor [lreplace $::MealfoodPCFfactor $seqno $seqno $PCFfactor]
-  ${::rmMenu}.menu.foodPCF${seqno} configure  -style nut.TCombobox
-  ${::rmMenu}.menu.foodspin${seqno} configure  -state disabled
+  ${::rmMenu}.menu.foodPCF${seqno} configure  \
+  -style nut.TCombobox
+  ${::rmMenu}.menu.foodspin${seqno} configure  \
+  -state disabled
 # if {$prevseqno != $seqno} {
 #  trace add variable ::${Tagname}dv write "PCF $seqno $ndb"
 #  trace add variable ::${Tagname}rm write "PCF $seqno $ndb"
@@ -5434,12 +9539,15 @@ proc setPCF {seqno ndb varNameSel args} {
   set oldtag [lindex $::MealfoodPCF $seqno]
   if {$oldtag == "NULL"} {return}
   set ::MealfoodPCF [lreplace $::MealfoodPCF $seqno $seqno "NULL"]
-  ${::rmMenu}.menu.foodPCF${seqno} configure  -style rm.TCombobox
-  ${::rmMenu}.menu.foodspin${seqno} configure  -state readonly
+  ${::rmMenu}.menu.foodPCF${seqno} configure  \
+  -style rm.TCombobox
+  ${::rmMenu}.menu.foodspin${seqno} configure  \
+  -state readonly
 # trace remove variable ::${oldtag}dv write "PCF $seqno $ndb"
 # trace remove variable ::${oldtag}rm write "PCF $seqno $ndb"
   }
- thread::send -async $::SQL_THREAD {job_daily_value_refresh}
+ thread::send \
+  -async $::SQL_THREAD {job_daily_value_refresh}
  }
 
 #end setPCF
@@ -5451,11 +9559,11 @@ set setRefDesc {
 proc setRefDesc {ref_desc} {
 
  if {$ref_desc == ""} {
-  .nut.vf.refusemb.m entryconfigure 0 -label "No refuse description provided" 
-  } else {
-  .nut.vf.refusemb.m entryconfigure 0 -label $ref_desc
+  .nut.vf.refusemb.m entryconfigure 0 \
+  -label "No refuse description provided"  } else {
+  .nut.vf.refusemb.m entryconfigure 0 \
+  -label $ref_desc
   }
- 
  }
 
 #end setRefDesc
@@ -5472,7 +9580,6 @@ proc tuneinvf {args} {
   trace add variable Amountvf write AmountChangevf
   trace add variable Msre_Descvf write ServingChange
   }
- 
  }
 
 #end tuneinvf
@@ -5510,12 +9617,25 @@ proc theusualPopulateMenu { } {
  .nut.rm.theusual.m.delete delete 0 end
  set tu_names [db eval {select distinct meal_name from theusual}]
  foreach name $tu_names {
-  .nut.rm.theusual.m.add add command -label "Add $name" -command [list theusualAdd $name] -background "#FF9428"
-  .nut.rm.theusual.m.save add command -label "Save $name" -command [list theusualSave $name] -background "#FF9428"
-  .nut.rm.theusual.m.delete add command -label "Delete $name" -command [list theusualDelete $name] -background "#FF9428"
+  .nut.rm.theusual.m.add add command \
+  -label "Add $name" \
+  -command [list theusualAdd $name] \
+  -background "#FF9428"
+  .nut.rm.theusual.m.save add command \
+  -label "Save $name" \
+  -command [list theusualSave $name] \
+  -background "#FF9428"
+  .nut.rm.theusual.m.delete add command \
+  -label "Delete $name" \
+  -command [list theusualDelete $name] \
+  -background "#FF9428"
   }
- .nut.rm.theusual.m.save add separator -background "#FF9428"
- .nut.rm.theusual.m.save add command -label "Save as ..." -command theusualSaveNew -background "#FF9428"
+ .nut.rm.theusual.m.save add separator \
+  -background "#FF9428"
+ .nut.rm.theusual.m.save add command \
+  -label "Save as ..." \
+  -command theusualSaveNew \
+  -background "#FF9428"
  }
 
 #end theusualPopulateMenu
@@ -5537,7 +9657,11 @@ proc theusualAdd {mealname} {
    place forget .nut.rm.setmpd
    place forget .nut.rm.frlistbox
    place forget .nut.rm.searchcancel
-   place .nut.rm.analysismeal -relx 0.87 -rely 0.14722222 -relheight 0.044444444 -relwidth 0.11
+   place .nut.rm.analysismeal \
+  -relx 0.87 \
+  -rely 0.14722222 \
+  -relheight 0.044444444 \
+  -relwidth 0.11
    }
   SwitchToMenu
   db eval {begin}
@@ -5547,14 +9671,17 @@ proc theusualAdd {mealname} {
     set seq [MealfoodWidget $Shrt_Desc $ndb]
     ${::rmMenu}.menu.foodPCF${seq} set $pcf
     if {$pcf != "No Auto Portion Control"} {
-     ${::rmMenu}.menu.foodPCF${seq} configure -style nut.TCombobox
+     ${::rmMenu}.menu.foodPCF${seq} configure \
+  -style nut.TCombobox
      } else {
-     ${::rmMenu}.menu.foodPCF${seq} configure -style rm.TCombobox
+     ${::rmMenu}.menu.foodPCF${seq} configure \
+  -style rm.TCombobox
      }
     }
    }
   db eval {commit}
-  thread::send -async $::SQL_THREAD {job_daily_value_refresh}
+  thread::send \
+  -async $::SQL_THREAD {job_daily_value_refresh}
   }
  TurnOffTheBubbleMachine
  }
@@ -5582,9 +9709,21 @@ proc theusualSaveNew {args} {
   grid .nut.rm.newtheusualentry
   grid .nut.rm.newtheusualbutton
   } else {
-  place .nut.rm.newtheusuallabel -relx 0.39 -rely 0.03 -relheight 0.09 -relwidth 0.33
-  place .nut.rm.newtheusualentry -relx 0.31 -rely 0.12 -relheight 0.045 -relwidth 0.33
-  place .nut.rm.newtheusualbutton -relx 0.65 -rely 0.12 -relheight 0.045 -relwidth 0.07
+  place .nut.rm.newtheusuallabel \
+  -relx 0.39 \
+  -rely 0.03 \
+  -relheight 0.09 \
+  -relwidth 0.33
+  place .nut.rm.newtheusualentry \
+  -relx 0.31 \
+  -rely 0.12 \
+  -relheight 0.045 \
+  -relwidth 0.33
+  place .nut.rm.newtheusualbutton \
+  -relx 0.65 \
+  -rely 0.12 \
+  -relheight 0.045 \
+  -relwidth 0.07
   }
  }
 
@@ -5661,30 +9800,55 @@ proc changedv_vitmin {nut} {
   grid .nut.po.pane.optframe.vite_cb1
   grid .nut.po.pane.optframe.vite_cb2
   } else {
-  place .nut.po.pane.optframe.vite_l -relx 0.0 -rely 0.75 -relheight 0.04444444 -relwidth 0.25
-  place .nut.po.pane.optframe.vite_s -relx 0.265 -rely 0.75 -relheight 0.04444444 -relwidth 0.14
-  place .nut.po.pane.optframe.vite_cb1 -relx 0.44 -rely 0.75 -relheight 0.04444444 -relwidth 0.23
-  place .nut.po.pane.optframe.vite_cb2 -relx 0.69 -rely 0.75 -relheight 0.04444444 -relwidth 0.23
+  place .nut.po.pane.optframe.vite_l \
+  -relx 0.0 \
+  -rely 0.75 \
+  -relheight 0.04444444 \
+  -relwidth 0.25
+  place .nut.po.pane.optframe.vite_s \
+  -relx 0.265 \
+  -rely 0.75 \
+  -relheight 0.04444444 \
+  -relwidth 0.14
+  place .nut.po.pane.optframe.vite_cb1 \
+  -relx 0.44 \
+  -rely 0.75 \
+  -relheight 0.04444444 \
+  -relwidth 0.23
+  place .nut.po.pane.optframe.vite_cb2 \
+  -relx 0.69 \
+  -rely 0.75 \
+  -relheight 0.04444444 \
+  -relwidth 0.23
   }
 
  db eval {select Tagname as tag, Units as un from nutr_def where NutrDesc = $nut} { }
- .nut.po.pane.optframe.vite_l configure -text "$nut $un"
- .nut.po.pane.optframe.vite_cb1 configure -command [list ChangePersonalOptions $tag]
- .nut.po.pane.optframe.vite_cb2 configure -command [list ChangePersonalOptions $tag]
+ .nut.po.pane.optframe.vite_l configure \
+  -text "$nut $un"
+ .nut.po.pane.optframe.vite_cb1 configure \
+  -command [list ChangePersonalOptions $tag]
+ .nut.po.pane.optframe.vite_cb2 configure \
+  -command [list ChangePersonalOptions $tag]
  set dvvar "::${tag}dv"
  set optvar "::${tag}opt"
  upvar #0 $dvvar vitmindv $optvar vitminopt
- 
- if {$vitminopt == -1.0} {
-  .nut.po.pane.optframe.vite_s configure -state disabled -textvariable $dvvar
-  set ::vitminpo -1
+ if {$vitminopt == \
+  -1.0} {
+  .nut.po.pane.optframe.vite_s configure \
+  -state disabled \
+  -textvariable $dvvar
+  set ::vitminpo \
+  -1
   } elseif {$vitminopt == 0.0} {
-  .nut.po.pane.optframe.vite_s configure -state disabled -textvariable $dvvar
+  .nut.po.pane.optframe.vite_s configure \
+  -state disabled \
+  -textvariable $dvvar
   set ::vitminpo 2
   } else {
-  .nut.po.pane.optframe.vite_s configure -state normal -textvariable $optvar
-  set ::vitminpo 0 
-  }
+  .nut.po.pane.optframe.vite_s configure \
+  -state normal \
+  -textvariable $optvar
+  set ::vitminpo 0  }
 
  }
 
@@ -5701,24 +9865,44 @@ proc drawClock {} {
     set aussenradius [expr {$::clockscale * 95.0}]
     set innenradius  [expr {$::clockscale * 83.0}]
     # Ziffernblatt
-    .loadframe.c create rectangle 2 2 [expr {$::clockscale * 200 - 1}] [expr {$::clockscale * 200.0 - 1}] -fill "#C7C3C7" -outline ""
-    .loadframe.c create line 1 [expr {$::clockscale * 200}] [expr {$::clockscale * 200}] [expr {$::clockscale * 200}] [expr {$::clockscale * 200}] 1 -fill black 
-    .loadframe.c create line 1 [expr {$::clockscale * 200 - 1}] [expr {$::clockscale * 200 - 1}] [expr {$::clockscale * 200 - 1}] [expr {$::clockscale * 200 - 1}] 1 -fill "#8E8A8E" 
-    .loadframe.c create line 0 [expr {$::clockscale * 200}] 0 0 [expr {$::clockscale * 200}] 0 -fill "#F8F8F8" 
-    .loadframe.c create line 1 [expr {$::clockscale * 200 - 2}] 1 1 [expr {$::clockscale * 200 - 2}] 1 -fill "#D7D7D7" 
-    # Zeiger
-    .loadframe.c create line [expr {$::clockscale * 100}] [expr {$::clockscale * 100}]     [expr {[expr {$::clockscale * 100}]+$stundenzeigerlaenge}] [expr {$::clockscale * 100}] -tag stundenschatten
-    .loadframe.c create line [expr {$::clockscale * 100}] [expr {$::clockscale * 100}] [expr {$::clockscale * 100}] [expr {[expr {$::clockscale * 100}]-$minutenzeigerlaenge}]     -tag minutenschatten
-    .loadframe.c create line [expr {$::clockscale * 100}] [expr {$::clockscale * 100}] [expr {$::clockscale * 100}] [expr {[expr {$::clockscale * 100}]+$sekundenzeigerlaenge}]    -tag sekundenschatten
-    .loadframe.c create line [expr {$::clockscale * 100}] [expr {$::clockscale * 100}]     [expr {[expr {$::clockscale * 100}]+$stundenzeigerlaenge}] [expr {$::clockscale * 100}] -tag {stundenzeiger zeiger}
-    .loadframe.c create line [expr {$::clockscale * 100}] [expr {$::clockscale * 100}] [expr {$::clockscale * 100}] [expr {[expr {$::clockscale * 100}]-$minutenzeigerlaenge}]     -tag {minutenzeiger zeiger}
-    .loadframe.c create line [expr {$::clockscale * 100}] [expr {$::clockscale * 100}] [expr {$::clockscale * 100}] [expr {[expr {$::clockscale * 100}]+$sekundenzeigerlaenge}]    -tag {sekundenzeiger zeiger}
-    .loadframe.c itemconfigure stundenzeiger    -width [expr {$::clockscale * 11}] -fill "#554444"
-    .loadframe.c itemconfigure minutenzeiger    -width [expr {$::clockscale * 8}] -fill "#554444"
-    .loadframe.c itemconfigure sekundenzeiger   -width [expr {$::clockscale * 4}] -fill "#FFFF00"
-    .loadframe.c itemconfigure stundenschatten  -width [expr {$::clockscale * 11}] -fill "#B0B0B0"
-    .loadframe.c itemconfigure minutenschatten  -width [expr {$::clockscale * 8}] -fill "#B0B0B0"
-    .loadframe.c itemconfigure sekundenschatten -width [expr {$::clockscale * 4}] -fill "#B0B0B0"
+    .loadframe.c create rectangle 2 2 [expr {$::clockscale * 200 - 1}] [expr {$::clockscale * 200.0 - 1}] \
+  -fill "#C7C3C7" \
+  -outline ""
+    .loadframe.c create line 1 [expr {$::clockscale * 200}] [expr {$::clockscale * 200}] [expr {$::clockscale * 200}] [expr {$::clockscale * 200}] 1 \
+  -fill black    .loadframe.c create line 1 [expr {$::clockscale * 200 - 1}] [expr {$::clockscale * 200 - 1}] [expr {$::clockscale * 200 - 1}] [expr {$::clockscale * 200 - 1}] 1 \
+  -fill "#8E8A8E"    .loadframe.c create line 0 [expr {$::clockscale * 200}] 0 0 [expr {$::clockscale * 200}] 0 \
+  -fill "#F8F8F8"    .loadframe.c create line 1 [expr {$::clockscale * 200 - 2}] 1 1 [expr {$::clockscale * 200 - 2}] 1 \
+  -fill "#D7D7D7"    # Zeiger
+    .loadframe.c create line [expr {$::clockscale * 100}] [expr {$::clockscale * 100}]     [expr {[expr {$::clockscale * 100}]+$stundenzeigerlaenge}] [expr {$::clockscale * 100}] \
+  -tag stundenschatten
+    .loadframe.c create line [expr {$::clockscale * 100}] [expr {$::clockscale * 100}] [expr {$::clockscale * 100}] [expr {[expr {$::clockscale * 100}]-$minutenzeigerlaenge}]     \
+  -tag minutenschatten
+    .loadframe.c create line [expr {$::clockscale * 100}] [expr {$::clockscale * 100}] [expr {$::clockscale * 100}] [expr {[expr {$::clockscale * 100}]+$sekundenzeigerlaenge}]    \
+  -tag sekundenschatten
+    .loadframe.c create line [expr {$::clockscale * 100}] [expr {$::clockscale * 100}]     [expr {[expr {$::clockscale * 100}]+$stundenzeigerlaenge}] [expr {$::clockscale * 100}] \
+  -tag {stundenzeiger zeiger}
+    .loadframe.c create line [expr {$::clockscale * 100}] [expr {$::clockscale * 100}] [expr {$::clockscale * 100}] [expr {[expr {$::clockscale * 100}]-$minutenzeigerlaenge}]     \
+  -tag {minutenzeiger zeiger}
+    .loadframe.c create line [expr {$::clockscale * 100}] [expr {$::clockscale * 100}] [expr {$::clockscale * 100}] [expr {[expr {$::clockscale * 100}]+$sekundenzeigerlaenge}]    \
+  -tag {sekundenzeiger zeiger}
+    .loadframe.c itemconfigure stundenzeiger    \
+  -width [expr {$::clockscale * 11}] \
+  -fill "#554444"
+    .loadframe.c itemconfigure minutenzeiger    \
+  -width [expr {$::clockscale * 8}] \
+  -fill "#554444"
+    .loadframe.c itemconfigure sekundenzeiger   \
+  -width [expr {$::clockscale * 4}] \
+  -fill "#FFFF00"
+    .loadframe.c itemconfigure stundenschatten  \
+  -width [expr {$::clockscale * 11}] \
+  -fill "#B0B0B0"
+    .loadframe.c itemconfigure minutenschatten  \
+  -width [expr {$::clockscale * 8}] \
+  -fill "#B0B0B0"
+    .loadframe.c itemconfigure sekundenschatten \
+  -width [expr {$::clockscale * 4}] \
+  -fill "#B0B0B0"
     # Ziffern
     for {set i 0} {$i < 60} {incr i} {
         set r0 [expr {$innenradius + 5}]
@@ -5734,10 +9918,14 @@ proc drawClock {} {
         set x [expr {sin($PI/6*(6-$i))*$innenradius+[expr {$::clockscale * 100}]}]
         set y [expr {cos($PI/6*(6-$i))*$innenradius+[expr {$::clockscale * 100}]}]
         .loadframe.c create text $x $y \
-                -text [expr {$i ? $i : 12}] \
-                -font TkSmallCaptionFont \
-                -fill #000000 \
-                -tag ziffer
+                \
+  -text [expr {$i ? $i : 12}] \
+                \
+  -font TkSmallCaptionFont \
+                \
+  -fill #000000 \
+                \
+  -tag ziffer
     }
 }
 
@@ -5819,7 +10007,8 @@ proc showTime {} {
     after cancel showTime
     after 1000 showTime
     set secs [clock seconds]
-    set l [clock format $secs -format {%H %M %S} ]
+    set l [clock format $secs \
+  -format {%H %M %S} ]
     set std [lindex $l 0]
     set min [lindex $l 1]
     set sec [lindex $l 2]
@@ -5832,7 +10021,6 @@ proc showTime {} {
     minutenZeigerAuf $min
     sekundenZeigerAuf $sec
 }
- 
 #end showTime
 }
 
@@ -5862,15 +10050,18 @@ if {[catch {dbmem restore main $::DiskDB}]} {
 dbmem eval {PRAGMA synchronous = 0}
 
 if {$::THREADS} {
- dbmem progress 1920 [list thread::send -async $::GUI_THREAD {pbprog_threaded 1 1.0 }]
+ dbmem progress 1920 [list thread::send \
+  -async $::GUI_THREAD {pbprog_threaded 1 1.0 }]
  } else {
  dbmem progress 1920 {pbprog 1 1.0 }
  }
 load_nutr_def
 
 if {$::THREADS} {
- thread::send -async $::GUI_THREAD {set ::pbar(1) 100.0}
- dbmem progress 10 [list thread::send -async $::GUI_THREAD {pbprog_threaded 2 1.0 }]
+ thread::send \
+  -async $::GUI_THREAD {set ::pbar(1) 100.0}
+ dbmem progress 10 [list thread::send \
+  -async $::GUI_THREAD {pbprog_threaded 2 1.0 }]
  } else {
  set ::pbar(1) 100.0
  dbmem progress 10 {pbprog 2 1.0 }
@@ -5878,8 +10069,10 @@ if {$::THREADS} {
 load_fd_group
 
 if {$::THREADS} {
- thread::send -async $::GUI_THREAD {set ::pbar(2) 100.0}
- dbmem progress 8000 [list thread::send -async $::GUI_THREAD {pbprog_threaded 3 1.0 }]
+ thread::send \
+  -async $::GUI_THREAD {set ::pbar(2) 100.0}
+ dbmem progress 8000 [list thread::send \
+  -async $::GUI_THREAD {pbprog_threaded 3 1.0 }]
  } else {
  set ::pbar(2) 100.0
  dbmem progress 8000 {pbprog 3 1.0 }
@@ -5889,7 +10082,8 @@ load_food_des1
 dbmem eval {select count(*) as count from food_des} {
  if {$count != 0} {
   if {$::THREADS} {
-   dbmem progress 32000 [list thread::send -async $::GUI_THREAD {pbprog_threaded 3 1.0 }]
+   dbmem progress 32000 [list thread::send \
+  -async $::GUI_THREAD {pbprog_threaded 3 1.0 }]
    } else {
    dbmem progress 32000 {pbprog 3 1.0 }
    }
@@ -5897,8 +10091,10 @@ dbmem eval {select count(*) as count from food_des} {
  }
 
 if {$::THREADS} {
- thread::send -async $::GUI_THREAD {set ::pbar(3) 100.0}
- dbmem progress 9000 [list thread::send -async $::GUI_THREAD {pbprog_threaded 4 1.0 }]
+ thread::send \
+  -async $::GUI_THREAD {set ::pbar(3) 100.0}
+ dbmem progress 9000 [list thread::send \
+  -async $::GUI_THREAD {pbprog_threaded 4 1.0 }]
  } else {
  set ::pbar(3) 100.0
  dbmem progress 9000 {pbprog 4 1.0 }
@@ -5906,7 +10102,8 @@ if {$::THREADS} {
 load_weight
 
 if {$::THREADS} {
- thread::send -async $::GUI_THREAD {set ::pbar(4) 100.0 ; pbprog1_threaded}
+ thread::send \
+  -async $::GUI_THREAD {set ::pbar(4) 100.0 ; pbprog1_threaded}
  dbmem progress 0 ""
  } else {
  set ::pbprog1counter 0
@@ -5917,14 +10114,17 @@ if {$::THREADS} {
 load_nut_data1
 
 if {$::THREADS} {
- dbmem progress 300000 {thread::send -async $::GUI_THREAD {pbprog 5 1.0 }}
+ dbmem progress 300000 {thread::send \
+  -async $::GUI_THREAD {pbprog 5 1.0 }}
  } else {
  dbmem progress 300000 {pbprog 5 1.0 }
  }
 
 if {$::THREADS} {
- thread::send -async $::GUI_THREAD {set ::pbar(5) 100.0}
- dbmem progress 240000 {thread::send -async $::GUI_THREAD {pbprog 6 1.0 }}
+ thread::send \
+  -async $::GUI_THREAD {set ::pbar(5) 100.0}
+ dbmem progress 240000 {thread::send \
+  -async $::GUI_THREAD {pbprog 6 1.0 }}
  } else {
  set ::pbar(5) 100.0
  dbmem progress 120000 {pbprog 6 0.5 }
@@ -5932,8 +10132,10 @@ if {$::THREADS} {
 ComputeDerivedValues dbmem food_des
 
 if {$::THREADS} {
- thread::send -async $::GUI_THREAD {set ::pbar(6) 100.0}
- dbmem progress [expr {[dbmem eval {select count(NDB_No) from food_des}] * 120}] {thread::send -async $::GUI_THREAD {pbprog 7 1.0 }}
+ thread::send \
+  -async $::GUI_THREAD {set ::pbar(6) 100.0}
+ dbmem progress [expr {[dbmem eval {select count(NDB_No) from food_des}] * 120}] {thread::send \
+  -async $::GUI_THREAD {pbprog 7 1.0 }}
  } else {
  set ::pbar(6) 100.0
  dbmem progress [expr {[dbmem eval {select count(NDB_No) from food_des}] * 60}] {pbprog 7 0.5 }
@@ -5942,23 +10144,29 @@ if {$::THREADS} {
 load_logic
 
 if {$::THREADS} {
- thread::send -async $::GUI_THREAD {set ::pbar(7) 100.0 ; .loadframe.pbar8 configure -mode indeterminate ; .loadframe.pbar8 start}
+ thread::send \
+  -async $::GUI_THREAD {set ::pbar(7) 100.0 ; .loadframe.pbar8 configure \
+  -mode indeterminate ; .loadframe.pbar8 start}
  dbmem progress 0 ""
  } else {
  set ::pbar(7) 100.0
  dbmem progress 4000 {update}
- .loadframe.pbar8 configure -mode indeterminate
+ .loadframe.pbar8 configure \
+  -mode indeterminate
  .loadframe.pbar8 start
  }
 load_legacy
 
 if {$::THREADS} {
- thread::send -async $::GUI_THREAD {.loadframe.pbar8 stop ; .loadframe.pbar8 configure -mode determinate ; set ::pbar(8) 80.0}
+ thread::send \
+  -async $::GUI_THREAD {.loadframe.pbar8 stop ; .loadframe.pbar8 configure \
+  -mode determinate ; set ::pbar(8) 80.0}
  dbmem progress 0 ""
  } else {
  dbmem progress 0 ""
  .loadframe.pbar8 stop
- .loadframe.pbar8 configure -mode determinate
+ .loadframe.pbar8 configure \
+  -mode determinate
  set ::pbar(8) 80.0
  update
  }
@@ -5987,21 +10195,25 @@ if {[catch {dbmem backup main $::DiskDB}]} {
  }
 dbmem close
 if {$::THREADS} {
- thread::send -async $::GUI_THREAD {set ::pbar(8) 90.0}
+ thread::send \
+  -async $::GUI_THREAD {set ::pbar(8) 90.0}
  } else {
  set ::pbar(8) 90.0
  update
  }
 db eval {vacuum}
-file rename -force "NUTR_DEF.txt" "NUTR_DEF.txt.loaded"
+file rename \
+  -force "NUTR_DEF.txt" "NUTR_DEF.txt.loaded"
 if {$::THREADS} {
- thread::send -async $::GUI_THREAD {set ::pbar(8) 100.0}
+ thread::send \
+  -async $::GUI_THREAD {set ::pbar(8) 100.0}
  } else {
  set ::pbar(8) 100.0
  update
  }
 if {$::THREADS} {
- thread::send -async $::GUI_THREAD {wm deiconify . ; after cancel showTime ; destroy .loadframe ; db eval {select code from z_tcl_code where name = 'Start_NUT'} { } ; eval $code}
+ thread::send \
+  -async $::GUI_THREAD {wm deiconify . ; after cancel showTime ; destroy .loadframe ; db eval {select code from z_tcl_code where name = 'Start_NUT'} { } ; eval $code}
  } else {
  wm deiconify .
  after cancel showTime
@@ -6039,7 +10251,8 @@ proc opt_change {tag args} {
 
 set var "::${tag}opt"
 upvar #0 $var optvar
-if {[string is double -strict $optvar]} {
+if {[string is double \
+  -strict $optvar]} {
  after 300 [list opt_change_later $optvar $tag]
  }
 
@@ -6055,8 +10268,10 @@ proc opt_change_later {newval tag args} {
 set var "::${tag}opt"
 upvar #0 $var optvar
 if {$newval == $optvar} {
- thread::send -async $::SQL_THREAD [list db eval "insert into z_tcl_jobqueue values (null, 'opt_change', null, $optvar, '$tag')"]
- thread::send -async $::SQL_THREAD [list job_opt_change $tag]
+ thread::send \
+  -async $::SQL_THREAD [list db eval "insert into z_tcl_jobqueue values (null, 'opt_change', null, $optvar, '$tag')"]
+ thread::send \
+  -async $::SQL_THREAD [list job_opt_change $tag]
  }
 }
 
@@ -6068,15 +10283,21 @@ set SetMealBase {
 proc SetMealBase {args} {
 db eval {select meals_per_day as "::meals_per_day" from options} { }
 db eval {select mealcount as "::mealcount" from am_analysis_header} { }
-set ::mealnumbase_time [expr {int(([db eval {select julianday('now','localtime') + 0.5}] - [clock format [clock seconds] -format {%J}] + (1.0 / $::meals_per_day)) * $::meals_per_day)}]
-set ::mealdatebase_time [clock format [clock seconds] -format {%Y%m%d}]
+set ::mealnumbase_time [expr {int(([db eval {select julianday('now','localtime') + 0.5}] - [clock format [clock seconds] \
+  -format {%J}] + (1.0 / $::meals_per_day)) * $::meals_per_day)}]
+set ::mealdatebase_time [clock format [clock seconds] \
+  -format {%Y%m%d}]
 set ::mealbase_time [expr {$::mealdatebase_time * 100 + $::mealnumbase_time}]
 if {$::mealcount > 0} {
  db eval {select max(meal_id) / 100 as "::mealdatebase_max", max(meal_id) % 100 + 1 "::mealnumbase_max" from mealfoods} { }
  if {$::mealnumbase_max > $::meals_per_day} {
   set ::mealnumbase_max [expr {$::mealnumbase_max - $::meals_per_day}]
-  set ::mealdatebase_max [expr {1 + [clock format [clock scan $::mealdatebase_max -format {%Y%m%d}] -format {%J}]}]
-  set ::mealdatebase_max [clock format [clock scan $::mealdatebase_max -format {%J}] -format {%Y%m%d}]
+  set ::mealdatebase_max [expr {1 + [clock format [clock scan $::mealdatebase_max \
+  -format {%Y%m%d}] \
+  -format {%J}]}]
+  set ::mealdatebase_max [clock format [clock scan $::mealdatebase_max \
+  -format {%J}] \
+  -format {%Y%m%d}]
   }
  set ::mealbase_max [expr {$::mealdatebase_max * 100 + $::mealnumbase_max}]
  } else {
@@ -6091,7 +10312,8 @@ if {$::mealbase_time >= $::mealbase_max} {
  }
 set ::currentmeal $::mealbase
 db eval {update options set currentmeal = $::currentmeal}
-.nut.rm.scale configure -label $::mealchoice
+.nut.rm.scale configure \
+  -label $::mealchoice
 }
 
 #end SetMealBase
@@ -6105,11 +10327,21 @@ proc GO_change {args} {
  set ::StoryIsStale 1
  if {$::GRAMSopt == 1} {
   for {set i 0} {$i < $::MealfoodSequence} {incr i} {
-   ${::rmMenu}.menu.foodspin${i} configure -format {%0.0f} -from -9999 -to 9999 -increment 1
+   ${::rmMenu}.menu.foodspin${i} configure \
+  -format {%0.0f} \
+  -from \
+  -9999 \
+  -to 9999 \
+  -increment 1
    }
   } elseif {$::GRAMSopt == 0} {
   for {set i 0} {$i < $::MealfoodSequence} {incr i} {
-   ${::rmMenu}.menu.foodspin${i} configure -format {%0.3f} -from -999.9 -to 999.9 -increment 0.125
+   ${::rmMenu}.menu.foodspin${i} configure \
+  -format {%0.3f} \
+  -from \
+  -999.9 \
+  -to 999.9 \
+  -increment 0.125
    }
   }
  RefreshMealfoodQuantities
@@ -6163,16 +10395,15 @@ PRAGMA journal_mode = WAL;
 */
 
 begin;
-   
-/* These temp tables must start out corresponding exactly to the USDA schemas
+  /* These temp tables must start out corresponding exactly to the USDA schemas
    for import from the USDA's distributed files but in some cases we need
    transitional temp tables to safely add what's new from the USDA to what the
-   user already has. 
-*/
+   user already has.*/
 
 /* For NUTR_DEF, we get rid of the tildes which escape non-numeric USDA fields,
    and add two fields:  dv_default to use when Daily Value is undefined, and
-   nutopt which has three basic values:  -1 which means DV is whatever is in
+   nutopt which has three basic values:  \
+  -1 which means DV is whatever is in
    the user's analysis unless null or <= 0.0 in which case the dv_default is
    used; 0.0 which means the default Daily Value or computation; and > 0.0 which
    is a specific gram amount of the nutrient.
@@ -6221,8 +10452,7 @@ dbmem copy fail tnut_data NUT_DATA.txt "^" ""
 dbmem eval {
 /* These real NUT tables may already exist and contain user data */
 
-create table if not exists nutr_def (Nutr_No int primary key, Units text, Tagname text, NutrDesc text, dv_default real, nutopt real); 
-create table if not exists fd_group (FdGrp_Cd int primary key, FdGrp_Desc text);
+create table if not exists nutr_def (Nutr_No int primary key, Units text, Tagname text, NutrDesc text, dv_default real, nutopt real);create table if not exists fd_group (FdGrp_Cd int primary key, FdGrp_Desc text);
 create table if not exists food_des (NDB_No int primary key, FdGrp_Cd int, Long_Desc text, Shrt_Desc text, Ref_desc text, Refuse integer, Pro_Factor real, Fat_Factor real, CHO_Factor real);
 create table if not exists weight (NDB_No int, Seq int, Amount real, Msre_Desc text, Gm_Wgt real, origSeq int, origGm_Wgt real, primary key(NDB_No, origSeq));
 create table if not exists nut_data (NDB_No int, Nutr_No int, Nutr_Val real, primary key(NDB_No, Nutr_No));
@@ -6492,8 +10722,7 @@ dbmem eval {
 INSERT OR REPLACE INTO food_des (NDB_No, FdGrp_Cd, Long_Desc, Shrt_Desc, Ref_desc, Refuse, Pro_Factor, Fat_Factor, CHO_Factor) select trim(NDB_No, '~'), trim(FdGrp_Cd, '~'), replace(trim(trim(Long_Desc, '~') || ' (' || trim(SciName, '~') || ')',' ('),' ()',''), upper(substr(trim(Shrt_Desc, '~'),1,1)) || lower(substr(trim(Shrt_Desc, '~'),2)), trim(Ref_desc, '~'), Refuse, Pro_Factor, Fat_Factor, CHO_Factor from tfood_des;
 update food_des set Shrt_Desc = Long_Desc where length(Long_Desc) <= 60;
 update food_des set CHO_Factor = 4.0 where hex(CHO_Factor) = '0D';
-  
-drop table tfood_des;
+ drop table tfood_des;
 }
 }
 
@@ -6505,8 +10734,7 @@ set load_weight {
 proc load_weight {args} {
 
 dbmem eval {
-/* 
-   the weight table is next, and needs a little explanation.  The Seq
+/*   the weight table is next, and needs a little explanation.  The Seq
    column is a key and starts at 1 from the USDA; however, we want
    the user to be able to select his own serving unit, and we do that
    by changing the serving unit the user wants to Seq = 0, while saving
@@ -6559,7 +10787,6 @@ drop table tnut_data;
 set load_legacy {
 
 proc load_legacy {args} {
- 
 set lite [file nativename nut.sqlite]
 
 if {![file exists $lite]} {return}
@@ -6708,22 +10935,29 @@ package require Tk
 wm geometry . 1x1
 set appSize 0.0
 set ::magnify [expr {[winfo vrootheight .] / 711.0}]
-if {[string is double -strict $appSize] && $appSize > 0.0} {
+if {[string is double \
+  -strict $appSize] && $appSize > 0.0} {
  set ::magnify [expr {$::magnify * $appSize}]
  }
 if {$appSize == 0.0} {set ::magnify 1.0}
 foreach font [font names] {
- font configure $font -size [expr {int($::magnify * [font configure $font -size]
+ font configure $font \
+  -size [expr {int($::magnify * [font configure $font \
+  -size]
 )}]
  }
-set i [font measure TkDefaultFont -displayof . "  TransMonoenoic  "]
-set ::column18 [expr {int(round($i / 3.0))}]                      
+set i [font measure TkDefaultFont \
+  -displayof . "  TransMonoenoic  "]
+set ::column18 [expr {int(round($i / 3.0))}]
 set ::column15 [expr {int(round(2.0 * $i / 5.0))}]
 option add *Dialog.msg.wrapLength [expr {400 * $::magnify}]
 option add *Dialog.dtl.wrapLength [expr {400 * $::magnify}]
 
 db eval {select max(version) as "::version" from z_tcl_version} { }
 
-tk_messageBox -type ok -title "updateNUT.tcl Completion" -message "There\'s a signpost up ahead.\n\nNext stop:  ${::version}"
+tk_messageBox \
+  -type ok \
+  -title "updateNUT.tcl Completion" \
+  -message "There\'s a signpost up ahead.\n\nNext stop:  ${::version}"
 exit 0
 

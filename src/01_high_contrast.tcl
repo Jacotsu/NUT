@@ -26,7 +26,6 @@ namespace eval ttk::theme::HighContrast {
 				viewFoodsBg			"#00FF00"
 				persOptionsBg		"#5454FF"
 				theStoryBg			"#FFFF00"
-
     }
 
 
@@ -58,6 +57,7 @@ namespace eval ttk::theme::HighContrast {
 
         ttk::style configure nutrient.TButton \
 					-relief raised \
+					-anchor center \
 					-background "#FFFF00"
 
 				ttk::style configure nutrient.am.TLabel \
@@ -130,6 +130,8 @@ namespace eval ttk::theme::HighContrast {
 					-background "#FF9428"
 				ttk::style configure rm.Horizontal.TScale \
 					-background "#FF9428"
+				ttk::style configure rm.Horizontal.TScale \
+					-background "#FF9428"
 				ttk::style configure rm.TMenubutton \
   				-relief raised \
 					-background "#FF9428"
@@ -188,6 +190,7 @@ namespace eval ttk::theme::HighContrast {
 
 				ttk::style configure po.TButton \
   				-relief raised \
+					-anchor center \
 					-background $colors(persOptionsBg) \
 					-foreground $colors(theStoryBg)
 				ttk::style configure po.TMenubutton \
@@ -198,13 +201,14 @@ namespace eval ttk::theme::HighContrast {
 					-foreground $colors(theStoryBg)
 				ttk::style configure po.TLabel \
 					-background $colors(persOptionsBg) \
-					-foreground $colors(theStoryBg)
+					-foreground $colors(theStoryBg) \
+					-anchor e
 				ttk::style configure po.TMenubutton \
 					-background $colors(persOptionsBg) \
 					-foreground $colors(theStoryBg)
 				ttk::style configure po.TSpinbox \
 					-background $colors(persOptionsBg) \
-					-foreground $colors(theStoryBg)
+					-foreground "#000000"
 
 				ttk::style configure .nut.po.pane \
 					-background $colors(persOptionsBg) \
@@ -279,10 +283,20 @@ namespace eval ttk::theme::HighContrast {
 					-background $colors(viewFoodsBg)
 				ttk::style configure .nut.vf.refusemb.m \
 					-background $colors(viewFoodsBg)
-				ttk::style configure .nut.rm.searchcancel \
-					-background $colors(viewFoodsBg)
 				ttk::style configure .nut.ar.save \
 					-background $colors(viewFoodsBg)
+
+
+				ttk::style configure rm.searchcancel.TButton \
+					-anchor center \
+					-background $colors(viewFoodsBg)
+				ttk::style configure rm.analysis.TButton \
+					-anchor center \
+					-background $colors(recordMealsBg)
+				ttk::style configure vf.searchcancel.TButton \
+					-anchor center \
+					-background $colors(recordMealsBg)
+
 
 
 				# Maps
