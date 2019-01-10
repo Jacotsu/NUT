@@ -24,6 +24,4 @@ source src/03_linux_gui.tcl
 
 initDB
 
-ttk::style theme use HighContrast
-
 eval $Main

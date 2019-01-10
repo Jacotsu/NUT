@@ -1,5 +1,7 @@
 package require Tk 8.6.0
 
+set HighContrastTheme {
+
 namespace eval ttk::theme::HighContrast {
 
     variable version 0.1
@@ -42,11 +44,16 @@ namespace eval ttk::theme::HighContrast {
 
         ttk::style map . -foreground [list disabled $colors(-disabledfg)]
 
-#
+				# New elements:
+				#
+
         # Layouts:
         #
         ttk::style layout rm.Horizontal.TScale {
-        	Horizontal.Scale.trough -sticky ew
+        	Horizontal.Scale.trough -sticky ew -children {
+        		Scrollbar.leftarrow -side left
+        		Scrollbar.rightarrow -side right
+    			}
         }
 
 
@@ -288,12 +295,15 @@ namespace eval ttk::theme::HighContrast {
 
 
 				ttk::style configure rm.searchcancel.TButton \
+					-relief raised \
 					-anchor center \
 					-background $colors(viewFoodsBg)
 				ttk::style configure rm.analysis.TButton \
+					-relief raised \
 					-anchor center \
 					-background $colors(recordMealsBg)
 				ttk::style configure vf.searchcancel.TButton \
+					-relief raised \
 					-anchor center \
 					-background $colors(recordMealsBg)
 
@@ -353,4 +363,5 @@ namespace eval ttk::theme::HighContrast {
 
 
     }
+}
 }
