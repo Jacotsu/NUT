@@ -187,7 +187,7 @@ ttk::frame .nut.qn -style "qn.TFrame"
 pack [ttk::label .nut.qn.label \
   -text "\nNUT has ended."]
 
-bind .nut <<NotebookTabChanged>> NutTabChange
+bind .nut <<NotebookTabChanged>> {NutTabChange .nut}
 
 ttk::label .nut.am.herelabel \
   -text "Here are \"Daily Value\" average percentages for your previous " \
@@ -2391,10 +2391,10 @@ set screen 1
   }
  }
 
-bind .nut.am.nbw <<NotebookTabChanged>> NBWamTabChange
-bind .nut.rm.nbw <<NotebookTabChanged>> NBWrmTabChange
-bind .nut.vf.nbw <<NotebookTabChanged>> NBWvfTabChange
-bind .nut.ar.nbw <<NotebookTabChanged>> NBWarTabChange
+bind .nut.am.nbw <<NotebookTabChanged>> {NBWTabChange .nut.am.nbw}
+bind .nut.rm.nbw <<NotebookTabChanged>> {NBWTabChange .nut.rm.nbw}
+bind .nut.vf.nbw <<NotebookTabChanged>> {NBWTabChange .nut.vf.nbw}
+bind .nut.ar.nbw <<NotebookTabChanged>> {NBWTabChange .nut.ar.nbw}
 
 if {$need_load == 1} {
 
@@ -2595,16 +2595,16 @@ proc MealfoodWidget {Shrt_Desc NDB_No} {
 			-increment 1
  		}
 		${::rmMenu}.menu.foodPCF${seq} configure \
-		-textvariable ::PCFchoice${NDB_No}
+			-textvariable ::PCFchoice${NDB_No}
 		${::rmMenu}.menu.fooddel${seq} configure \
-		-command "MealfoodDelete $seq $NDB_No 1"
+			-command "MealfoodDelete $seq $NDB_No 1"
 		${::rmMenu}.menu tag configure foodwidget${seq} \
-		-elide 0
+			-elide 0
 	}
 	{*}"set ::PCFchoice${NDB_No} {No Auto Portion Control}"
-	::trace add variable ::PCFchoice${NDB_No} write "setPCF ${seq} ${NDB_No}"
+		::trace add variable ::PCFchoice${NDB_No} write "setPCF ${seq} ${NDB_No}"
 	${::rmMenu}.menu.foodspin${seq} configure \
-	-command "MealfoodSetWeight %s ${NDB_No} ::${NDB_No}"
+		-command "MealfoodSetWeight %s ${NDB_No} ::${NDB_No}"
 	set ::MealfoodPCF [lreplace $::MealfoodPCF $seq $seq "NULL"]
 	if {$::mealcount == 0} {
 		set ::mealcount 1
@@ -2615,3 +2615,16 @@ proc MealfoodWidget {Shrt_Desc NDB_No} {
 
 #end MealfoodWidget
 }
+
+set NBWTabChange {
+
+proc NBWTabChange {notebook} {
+
+	set tabindex [$notebook index [$notebook select]]
+
+	foreach pane {am rm vf ar} {
+		.nut.$pane.nbw select .nut.$pane.nbw.screen${tabindex}
+	}
+}
+}
+

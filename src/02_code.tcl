@@ -2737,14 +2737,16 @@ set MealfoodSetWeight {
 
 proc MealfoodSetWeight {newval ndb ndbVarName args} {
 
-	if {![string is double \
-		-strict $newval]} {
-	 set newval 0.0
-	 {*}"set ::${ndb} $newval"
-	 } else {
-	 if {! $::GRAMSopt} { {*}"set ::${ndb} [expr {$newval * 1.0}]" }
-	 after 300 [list MealfoodSetWeightLater $newval $ndb $ndbVarName]
-	 }
+puts "$ndb $newval"
+	if {![string is double -strict $newval]} {
+		set newval 0.0
+		set ::${ndb} $newval
+ 	} else {
+		if {! $::GRAMSopt} {
+			set ::${ndb} [expr {$newval * 1.0}]
+		}
+			after 300 {MealfoodSetWeightLater $newval $ndb $ndbVarName}
+ }
 
 }
 
@@ -2757,7 +2759,7 @@ proc MealfoodSetWeightLater {newval ndb ndbVarName args} {
 
 	if {![string is double -strict $newval]} {
 		set newval 0.0
-		{*}"set ::${ndb} $newval"
+		set ::${ndb} $newval
  	} else {
 		upvar 0 $ndbVarName ndbvar
 		if {$newval == $ndbvar} {
@@ -2766,10 +2768,11 @@ proc MealfoodSetWeightLater {newval ndb ndbVarName args} {
  			} else {
 				set grams [expr {$ndbvar * 28.349523}]
  			}
+			thread::send -async $::SQL_THREAD [list db eval "insert into
+				z_tcl_jobqueue values (null, 'mealfood_qty', $ndb, $grams,
+				$::currentmeal)"]
 			thread::send \
-			-async $::SQL_THREAD [list db eval "insert into z_tcl_jobqueue values (null, 'mealfood_qty', $ndb, $grams, $::currentmeal)"]
-			thread::send \
-			-async $::SQL_THREAD [list job_mealfood_qty $ndb]
+				-async $::SQL_THREAD [list job_mealfood_qty $ndb]
 		}
  	}
 }
@@ -2778,68 +2781,6 @@ proc MealfoodSetWeightLater {newval ndb ndbVarName args} {
 }
 
 
-set NBWamTabChange {
-
-proc NBWamTabChange {} {
-
- uplevel #0 {
-  set tabindex [.nut.am.nbw index [.nut.am.nbw select]]
-  if {$tabindex == 0} {.nut.am.herelabel configure \
-  -text "Here are \"Daily Value\" average percentages for your previous "} else {.nut.am.herelabel configure \
-  -text "Here are average daily nutrient levels for your previous "}
-  if {$tabindex != [.nut.rm.nbw index [.nut.rm.nbw select]]} {.nut.rm.nbw select .nut.rm.nbw.screen${tabindex}}
-  if {$tabindex != [.nut.vf.nbw index [.nut.vf.nbw select]]} {.nut.vf.nbw select .nut.vf.nbw.screen${tabindex}}
-  if {$tabindex != [.nut.ar.nbw index [.nut.ar.nbw select]]} {.nut.ar.nbw select .nut.ar.nbw.screen${tabindex}}
-  }
- }
-
-#end NBWamTabChange
-}
-
-set NBWrmTabChange {
-
-proc NBWrmTabChange {} {
-
- uplevel #0 {
-  set tabindex [.nut.rm.nbw index [.nut.rm.nbw select]]
-  if {$tabindex != [.nut.am.nbw index [.nut.am.nbw select]]} {.nut.am.nbw select .nut.am.nbw.screen${tabindex}}
-  if {$tabindex != [.nut.vf.nbw index [.nut.vf.nbw select]]} {.nut.vf.nbw select .nut.vf.nbw.screen${tabindex}}
-  if {$tabindex != [.nut.ar.nbw index [.nut.ar.nbw select]]} {.nut.ar.nbw select .nut.ar.nbw.screen${tabindex}}
-  }
- }
-
-#end NBWrmTabChange
-}
-
-set NBWvfTabChange {
-
-proc NBWvfTabChange {} {
-
- uplevel #0 {
-  set tabindex [.nut.vf.nbw index [.nut.vf.nbw select]]
-  if {$tabindex != [.nut.am.nbw index [.nut.am.nbw select]]} {.nut.am.nbw select .nut.am.nbw.screen${tabindex}}
-  if {$tabindex != [.nut.rm.nbw index [.nut.rm.nbw select]]} {.nut.rm.nbw select .nut.rm.nbw.screen${tabindex}}
-  if {$tabindex != [.nut.ar.nbw index [.nut.ar.nbw select]]} {.nut.ar.nbw select .nut.ar.nbw.screen${tabindex}}
-  }
- }
-
-#end NBWvfTabChange
-}
-
-set NBWarTabChange {
-
-proc NBWarTabChange {} {
-
- uplevel #0 {
-  set tabindex [.nut.ar.nbw index [.nut.ar.nbw select]]
-  if {$tabindex != [.nut.am.nbw index [.nut.am.nbw select]]} {.nut.am.nbw select .nut.am.nbw.screen${tabindex}}
-  if {$tabindex != [.nut.rm.nbw index [.nut.rm.nbw select]]} {.nut.rm.nbw select .nut.rm.nbw.screen${tabindex}}
-  if {$tabindex != [.nut.vf.nbw index [.nut.vf.nbw select]]} {.nut.vf.nbw select .nut.vf.nbw.screen${tabindex}}
-  }
- }
-
-#end NBWarTabChange
-}
 
 set NewStoryLater {
 
@@ -2935,27 +2876,21 @@ proc NewStory {storynut screen} {
 
 set NutTabChange {
 
-proc NutTabChange {} {
+proc NutTabChange {notebookId} {
 
- uplevel #0 {
-  set pathid [.nut select]
-  if { $pathid == ".nut.vf" } {
-   } elseif { $pathid == ".nut.am" } {
-   } elseif { $pathid == ".nut.rm" } {
-   } elseif { $pathid == ".nut.ts" } {
-   if {$::StoryIsStale} {
-    NewStory $::oldstorynut $::oldstoryscreen
+	set pathid [$notebookId select]
+  if { $pathid == ".nut.ts" } {
+		if {$::StoryIsStale} {
+			NewStory $::oldstorynut $::oldstoryscreen
     }
-   } elseif { $pathid == ".nut.po" } {
-   RefreshWeightLog
-   } elseif { $pathid == ".nut.qn" } {
-   update
-   after 1250
-   rename unknown ""
-   rename _original_unknown unknown
-   destroy .
+ 	} elseif { $pathid == ".nut.po" } {
+  	RefreshWeightLog
+  } elseif { $pathid == ".nut.qn" } {
+  	update
+		rename unknown ""
+		rename _original_unknown unknown
+		destroy .
    }
-  }
  }
 
 #end NutTabChange
@@ -2966,11 +2901,11 @@ set OunceChangevf {
 proc OunceChangevf {args} {
 
  uplevel #0 {
-  if {![string is double \
-  -strict $ouncesvf]} { return }
-  set gramsvf [expr {$ouncesvf * $ounce2gram}]
-  }
+  if {[string is double -strict $ouncesvf]} {
+		set gramsvf [expr {$ouncesvf * $ounce2gram}]
+	}
  }
+}
 
 #end OunceChangevf
 }
@@ -5889,10 +5824,7 @@ proc initDB {args} {
 	db eval {insert or replace into z_tcl_code values('MealfoodSetWeight',$::MealfoodSetWeight)}
 	db eval {insert or replace into z_tcl_code values('MealfoodSetWeightLater',$::MealfoodSetWeightLater)}
 	db eval {insert or replace into z_tcl_code values('MealfoodWidget',$::MealfoodWidget)}
-	db eval {insert or replace into z_tcl_code values('NBWamTabChange',$::NBWamTabChange)}
-	db eval {insert or replace into z_tcl_code values('NBWrmTabChange',$::NBWrmTabChange)}
-	db eval {insert or replace into z_tcl_code values('NBWarTabChange',$::NBWarTabChange)}
-	db eval {insert or replace into z_tcl_code values('NBWvfTabChange',$::NBWvfTabChange)}
+	db eval {insert or replace into z_tcl_code values('NBWTabChange',$::NBWTabChange)}
 	db eval {insert or replace into z_tcl_code values('NewStoryLater',$::NewStoryLater)}
 	db eval {insert or replace into z_tcl_code values('NewStory',$::NewStory)}
 	db eval {insert or replace into z_tcl_code values('NutTabChange',$::NutTabChange)}
