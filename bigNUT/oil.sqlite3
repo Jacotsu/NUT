@@ -2,7 +2,42 @@
  redestribute oil/fat foods in keto meal
 */
 
-insert into currentmeal values (4047, null, null);
-insert into currentmeal values (4584, null, null);
-insert into currentmeal select ndb_no, case when ndb_no = 4584 then 0.9 else 0.0 end * gm_wgt * third / fat, null from (with first as (select m.ndb_no, gm_wgt, gm_wgt * nutr_val / 100.0 as fat from mealfoods m join nut_data n on m.ndb_no = n.ndb_no and n.nutr_no = 204 where meal_id = (select currentmeal from options) and m.ndb_no in (1145, 4047, 4584)) select *, (select sum(fat) / 3.0 from first) as third from first) where ndb_no in (4047, 4584);
-delete from mealfoods where gm_wgt = 0.0 and ndb_no in (4047, 4584) and meal_id = (select currentmeal from options);
+INSERT INTO currentmeal
+VALUES      (4047,
+             NULL,
+             NULL);
+
+INSERT INTO currentmeal
+VALUES      (4584,
+             NULL,
+             NULL);
+
+INSERT INTO currentmeal
+SELECT ndb_no,
+       CASE
+         WHEN ndb_no = 4584 THEN 0.9
+         ELSE 0.0
+       END * gm_wgt * third / fat,
+       NULL
+FROM   (WITH first
+             AS (SELECT m.ndb_no,
+                        gm_wgt,
+                        gm_wgt * nutr_val / 100.0 AS fat
+                 FROM   mealfoods m
+                        join nut_data n
+                          ON m.ndb_no = n.ndb_no
+                             AND n.nutr_no = 204
+                 WHERE  meal_id = (SELECT currentmeal
+                                   FROM   options)
+                        AND m.ndb_no IN ( 1145, 4047, 4584 ))
+        SELECT *,
+               (SELECT SUM(fat) / 3.0
+                FROM   first) AS third
+         FROM   first)
+WHERE  ndb_no IN ( 4047, 4584 );
+
+DELETE FROM mealfoods
+WHERE  gm_wgt = 0.0
+       AND ndb_no IN ( 4047, 4584 )
+       AND meal_id = (SELECT currentmeal
+                      FROM   options);

@@ -1,19 +1,19 @@
-/* 
+/*
    This begins the NUT application logic which is implemented as SQL
    tables and triggers in order that the NUT code be independent of the
    GUI and its language, be implemented in C for performance,
    and be implemented by SQLite for portability.
-*/ 
+*/
 
 begin;
-    
-/* 
+
+/*
    First we create various tables just for internal computation
-  
+
    The following tables are for intermediate values in the computation
    of Daily Values
 */
-  
+
 DROP TABLE if exists z_vars1;
 CREATE TABLE z_vars1 (am_cals2gram_pro real, am_cals2gram_fat real, am_cals2gram_cho real, am_alccals real, am_fa2fat real, balance_of_calories int);
 
@@ -25,16 +25,16 @@ CREATE TABLE z_vars3 (am_fat_dv_boc real, am_chocdf_dv_boc real, am_cho_nonfib_d
 
 DROP TABLE if exists z_vars4;
 CREATE TABLE z_vars4 (Nutr_No int, dv real, Nutr_Val real);
-  
+
 /*
   The following table is used in conjunction with recursive triggers to
   compute essential fatty acid reference values
-*/  
+*/
 
 DROP TABLE if exists z_n6;
 CREATE TABLE z_n6 (n6hufa real, FAPU1 real, pufa_reduction real, iter int, reduce int, p3 real, p6 real, h3 real, h6 real, o real);
 
-/*  
+/*
    The following table is the am analysis minus the currentmeal.  That way,
    we avoid the overhead of reanalyzing everything while we are
    doing automatic portion control.  The "am_analysis" view is the
@@ -44,16 +44,16 @@ CREATE TABLE z_n6 (n6hufa real, FAPU1 real, pufa_reduction real, iter int, reduc
    different meal, and we always need to have a good rm_analysis
    before we can see a good am_analysis.
 */
-  
+
 drop table if exists z_anal;
 create table z_anal (Nutr_No int primary key, null_value int, Nutr_Val real);
 
-/*    
+/*
    The following tables and views are intermediates for functions in NUT.
    The prefixes are:
 	am	Analyze meals
 	rm	Record meals aka currentmeal
-*/    
+*/
 
 /* An "analysis header" is various info that is not specifically nutrient
    values:
@@ -86,7 +86,7 @@ create table am_analysis_header (maxmeal int, mealcount int, meals_per_day int, 
 
 drop table if exists am_dv;
 create table am_dv (Nutr_No int primary key asc, dv real, dvpct_offset real);
-    
+
 drop table if exists rm_analysis_header;
 create table rm_analysis_header (maxmeal int, mealcount int, meals_per_day int, firstmeal integer, lastmeal integer, currentmeal integer, caloriebutton text, macropct text, n6balance text);
 
@@ -98,7 +98,7 @@ create table rm_dv (Nutr_No int primary key asc, dv real, dvpct_offset real);
 
 drop view if exists am_analysis;
 create view am_analysis as select am.Nutr_No as Nutr_No, case when currentmeal between firstmeal and lastmeal and am.null_value = 1 and rm.null_value = 1 then 1 when currentmeal not between firstmeal and lastmeal and am.null_value = 1 then 1 else 0 end as null_value, case when currentmeal between firstmeal and lastmeal then ifnull(am.Nutr_Val,0.0) + 1.0 / mealcount * ifnull(rm.Nutr_Val, 0.0) else am.Nutr_Val end as Nutr_Val from z_anal am left join rm_analysis rm on am.Nutr_No = rm.Nutr_No join am_analysis_header;
-    
+
 /*
    PCF is automatic portion control; aka protein/carb/fat which was extended
    to include all DV nutrients.  The idea is you can control macronutrients
@@ -119,59 +119,59 @@ create view am_analysis as select am.Nutr_No as Nutr_No, case when currentmeal b
    to start triggers so we can use the same code in different
    triggers without literally repeating it in every trigger that
    needs it
-*/  
+*/
 
 drop table if exists z_trig_ctl;
 CREATE TABLE z_trig_ctl(am_analysis_header integer default 0, rm_analysis_header integer default 0, am_analysis_minus_currentmeal integer default 0, am_analysis_null integer default 0, am_analysis integer default 0, rm_analysis integer default 0, rm_analysis_null integer default 0, am_dv integer default 0, PCF_processing integer default 0, block_setting_preferred_weight integer default 0, block_mealfoods_insert_trigger default 0, block_mealfoods_delete_trigger integer default 0);
 insert into z_trig_ctl default values;
-  
+
 /*
    Procedures implemented as triggers started by a true bool in z_trig_ctl
-*/  
+*/
 
 drop trigger if exists am_analysis_header_trigger;
-CREATE TRIGGER am_analysis_header_trigger after update of am_analysis_header on z_trig_ctl when NEW.am_analysis_header = 1 begin 
+CREATE TRIGGER am_analysis_header_trigger after update of am_analysis_header on z_trig_ctl when NEW.am_analysis_header = 1 begin
 update z_trig_ctl set am_analysis_header = 0;
 delete from am_analysis_header;
 insert into am_analysis_header select (select count(distinct meal_id) from mealfoods) as maxmeal, count(meal_id) as mealcount, meals_per_day, ifnull(min(meal_id),0) as firstmeal, ifnull(max(meal_id),0) as lastmeal, currentmeal, NULL as caloriebutton, NULL as macropct, NULL as n6balance from options left join (select distinct meal_id from mealfoods order by meal_id desc limit (select defanal_am from options));
 end;
-  
+
 drop trigger if exists rm_analysis_header_trigger;
-CREATE TRIGGER rm_analysis_header_trigger after update of rm_analysis_header on z_trig_ctl when NEW.rm_analysis_header = 1 begin 
+CREATE TRIGGER rm_analysis_header_trigger after update of rm_analysis_header on z_trig_ctl when NEW.rm_analysis_header = 1 begin
 update z_trig_ctl set rm_analysis_header = 0;
 delete from rm_analysis_header;
 insert into rm_analysis_header select maxmeal, case when (select count(*) from mealfoods where meal_id = currentmeal) = 0 then 0 else 1 end as mealcount, meals_per_day, currentmeal as firstmeal, currentmeal as lastmeal, currentmeal as currentmeal, NULL as caloriebutton, '0 / 0 / 0' as macropct, '0 / 0' as n6balance from am_analysis_header;
 end;
-    
+
 drop trigger if exists am_analysis_minus_currentmeal_trigger;
-CREATE TRIGGER am_analysis_minus_currentmeal_trigger after update of am_analysis_minus_currentmeal on z_trig_ctl when NEW.am_analysis_minus_currentmeal = 1 begin 
+CREATE TRIGGER am_analysis_minus_currentmeal_trigger after update of am_analysis_minus_currentmeal on z_trig_ctl when NEW.am_analysis_minus_currentmeal = 1 begin
 update z_trig_ctl set am_analysis_minus_currentmeal = 0;
 delete from z_anal;
 insert into z_anal select Nutr_No, case when sum(mhectograms * Nutr_Val) is null then 1 else 0 end, ifnull(sum(mhectograms * Nutr_Val), 0.0) from (select NDB_No, total(Gm_Wgt / 100.0 / mealcount * meals_per_day) as mhectograms from mealfoods join am_analysis_header where meal_id between firstmeal and lastmeal and meal_id != currentmeal group by NDB_No) join nutr_def natural left join nut_data group by Nutr_No;
 end;
-  
+
 /*  We need null triggers because processing is so different when the analysis
     is null; i.e. there is no food in the analysis.
 */
 
 drop trigger if exists am_analysis_null_trigger;
-CREATE TRIGGER am_analysis_null_trigger after update of am_analysis_null on z_trig_ctl when NEW.am_analysis_null = 1 begin 
+CREATE TRIGGER am_analysis_null_trigger after update of am_analysis_null on z_trig_ctl when NEW.am_analysis_null = 1 begin
 update z_trig_ctl set am_analysis_null = 0;
 delete from z_anal;
 insert into z_anal select nutr_no, 1, 0.0 from nutr_def join am_analysis_header where firstmeal = currentmeal and lastmeal = currentmeal;
 insert into z_anal select nutr_no, 0, 0.0 from nutr_def join am_analysis_header where firstmeal != currentmeal or lastmeal != currentmeal;
 update am_analysis_header set macropct = '0 / 0 / 0', n6balance = '0 / 0';
 end;
-   
+
 drop trigger if exists rm_analysis_null_trigger;
-CREATE TRIGGER rm_analysis_null_trigger after update of rm_analysis_null on z_trig_ctl when NEW.rm_analysis_null = 1 begin 
+CREATE TRIGGER rm_analysis_null_trigger after update of rm_analysis_null on z_trig_ctl when NEW.rm_analysis_null = 1 begin
 update z_trig_ctl set rm_analysis_null = 0;
 delete from rm_analysis;
 insert into rm_analysis select Nutr_No, 0, 0.0 from nutr_def;
 update rm_analysis_header set caloriebutton = (select caloriebutton from am_analysis_header), macropct = '0 / 0 / 0', n6balance = '0 / 0';
 end;
 
-/* 
+/*
    These triggers are gnarly because many DVs require the results of other DVs
    so it takes many steps.  And also, figuring the omega-6/3 balance and
    the essential fatty acid DVs requires division; however, the values
@@ -180,9 +180,9 @@ end;
    we need a lot of joins to get all the necessary nutrient values together
    for computation.
 */
-  
+
 drop trigger if exists am_analysis_trigger;
-CREATE TRIGGER am_analysis_trigger after update of am_analysis on z_trig_ctl when NEW.am_analysis = 1 begin 
+CREATE TRIGGER am_analysis_trigger after update of am_analysis on z_trig_ctl when NEW.am_analysis = 1 begin
 update z_trig_ctl set am_analysis = 0;
 update am_analysis_header set macropct = (select cast (ifnull(round(100 * PROT_KCAL.Nutr_Val / ENERC_KCAL.Nutr_Val,0),0) as int) || ' / ' || cast (ifnull(round(100 * CHO_KCAL.Nutr_Val / ENERC_KCAL.Nutr_Val,0),0) as int) || ' / ' || cast (ifnull(round(100 * FAT_KCAL.Nutr_Val / ENERC_KCAL.Nutr_Val,0),0) as int) from am_analysis ENERC_KCAL join am_analysis PROT_KCAL on ENERC_KCAL.Nutr_No = 208 and PROT_KCAL.Nutr_No = 3000 join am_analysis CHO_KCAL on CHO_KCAL.Nutr_No = 3002 join am_analysis FAT_KCAL on FAT_KCAL.Nutr_No = 3001);
 delete from z_n6;
@@ -192,7 +192,7 @@ update am_analysis_header set n6balance = case when n6balance is null then '0 / 
 end;
 
 drop trigger if exists rm_analysis_trigger;
-CREATE TRIGGER rm_analysis_trigger after update of rm_analysis on z_trig_ctl when NEW.rm_analysis = 1 begin 
+CREATE TRIGGER rm_analysis_trigger after update of rm_analysis on z_trig_ctl when NEW.rm_analysis = 1 begin
 update z_trig_ctl set rm_analysis = 0;
 delete from rm_analysis;
 insert into rm_analysis select Nutr_No, case when sum(mhectograms * Nutr_Val) is null then 1 else 0 end, ifnull(sum(mhectograms * Nutr_Val), 0.0) from (select NDB_No, total(Gm_Wgt / 100.0 * meals_per_day) as mhectograms from mealfoods join am_analysis_header where meal_id = currentmeal group by NDB_No) join nutr_def natural left join nut_data group by Nutr_No;
@@ -203,7 +203,7 @@ update rm_analysis_header set n6balance = (select case when n6hufa_int = 0 or n6
 end;
 
 drop trigger if exists am_dv_trigger;
-CREATE TRIGGER am_dv_trigger after update of am_dv on z_trig_ctl when NEW.am_dv = 1 begin 
+CREATE TRIGGER am_dv_trigger after update of am_dv on z_trig_ctl when NEW.am_dv = 1 begin
 update z_trig_ctl set am_dv = 0;
 delete from am_dv;
 insert into am_dv select Nutr_No, dv, 100.0 * Nutr_Val / dv - 100.0 from (select Nutr_No, Nutr_Val, case when nutopt = 0.0 then dv_default when nutopt = -1.0 and Nutr_Val > 0.0 then Nutr_Val when nutopt = -1.0 and Nutr_Val <= 0.0 then dv_default else nutopt end as dv from nutr_def natural join am_analysis where dv_default > 0.0 and (Nutr_No = 208 or Nutr_No between 301 and 601 or Nutr_No = 2008));
@@ -239,32 +239,32 @@ end;
 */
 
 drop view if exists z_pcf;
-create view z_pcf as select meal_id, 
+create view z_pcf as select meal_id,
 NDB_No, Gm_Wgt + dv / meals_per_day * dvpct_offset / Nutr_Val * -1.0 as Gm_Wgt, Nutr_No
-from mealfoods natural join rm_dv natural join nut_data join options 
+from mealfoods natural join rm_dv natural join nut_data join options
 where abs(dvpct_offset) >= 0.05 order by abs(dvpct_offset);
 
 drop trigger if exists PCF_processing;
-CREATE TRIGGER PCF_processing after update of PCF_processing on z_trig_ctl when NEW.PCF_processing = 1 begin 
+CREATE TRIGGER PCF_processing after update of PCF_processing on z_trig_ctl when NEW.PCF_processing = 1 begin
 update z_trig_ctl set PCF_processing = 0;
 replace into mealfoods select * from z_pcf limit 1;
 update z_trig_ctl set block_mealfoods_delete_trigger = 0;
 end;
-  
+
 /*
    Now start the actual triggers that kick off when something happens.
    They replay the previous procedures as required by the different
    circumstances that update the appropriate column in z_trig_ctl to true.
-*/  
+*/
 
 /*
    Update to defanal_am in options (number of meals to analyze)
    so we need to rewrite the am_analysis and am_dv and thus practically
    everything
 */
-  
+
 drop trigger if exists defanal_am_trigger;
-CREATE TRIGGER defanal_am_trigger after update of defanal_am on options begin 
+CREATE TRIGGER defanal_am_trigger after update of defanal_am on options begin
 update z_trig_ctl set am_analysis_header = 1;
 update z_trig_ctl set am_analysis_minus_currentmeal = case when (select mealcount from am_analysis_header) > 1 then 1 when (select mealcount from am_analysis_header) = 1 and (select lastmeal from am_analysis_header) != (select currentmeal from am_analysis_header) then 1 else 0 end;
 update z_trig_ctl set am_analysis_null = case when (select mealcount from am_analysis_header) > 1 then 0 when (select mealcount from am_analysis_header) = 1 and (select lastmeal from am_analysis_header) != (select currentmeal from am_analysis_header) then 0 else 1 end;
@@ -272,14 +272,14 @@ update z_trig_ctl set am_analysis = 1;
 update z_trig_ctl set am_dv = 1;
 update z_trig_ctl set PCF_processing = 1;
 end;
-  
+
 /*
    Update to currentmeal in options
    so we need to rewrite practically everything
-*/  
+*/
 
 drop trigger if exists currentmeal_trigger;
-CREATE TRIGGER currentmeal_trigger after update of currentmeal on options begin 
+CREATE TRIGGER currentmeal_trigger after update of currentmeal on options begin
 update mealfoods set Nutr_No = null where Nutr_No is not null;
 update z_trig_ctl set am_analysis_header = 1;
 update z_trig_ctl set am_analysis_minus_currentmeal = case when (select mealcount from am_analysis_header) > 1 then 1 when (select mealcount from am_analysis_header) = 1 and (select lastmeal from am_analysis_header) != (select currentmeal from am_analysis_header) then 1 else 0 end;
@@ -290,7 +290,7 @@ update z_trig_ctl set rm_analysis_null = case when (select mealcount from rm_ana
 update z_trig_ctl set am_analysis = 1;
 update z_trig_ctl set am_dv = 1;
 end;
-  
+
 /*
    Input: table z_n6 to compute column n6hufa
    Output column:  n6hufa
@@ -298,12 +298,12 @@ end;
              Compute Lands' n6hufa % and set up for following triggers to
              determine reference values
 */
- 
+
 drop trigger if exists z_n6_insert_trigger;
-CREATE TRIGGER z_n6_insert_trigger after insert on z_n6 begin 
+CREATE TRIGGER z_n6_insert_trigger after insert on z_n6 begin
 update z_n6 set n6hufa = (select 100.0 / (1.0 + 0.0441 / p6 * (1.0 + p3 / 0.0555 + h3 / 0.005 + o / 5.0 + p6 / 0.175)) + 100.0 / (1.0 + 0.7 / h6 * (1.0 + h3 / 3.0))), reduce = 0, iter = 0;
 end;
-    
+
 /*
    Input:  If column "reduce" is set right, this trigger recursively
            subtracts omega-6 fatty acids to produce n6hufa numbers to match the
@@ -314,10 +314,10 @@ end;
 */
 
 drop trigger if exists z_n6_reduce6_trigger;
-CREATE TRIGGER z_n6_reduce6_trigger after update on z_n6 when NEW.n6hufa > OLD.FAPU1 and NEW.iter < 100 and NEW.reduce in (0, 6) begin 
+CREATE TRIGGER z_n6_reduce6_trigger after update on z_n6 when NEW.n6hufa > OLD.FAPU1 and NEW.iter < 100 and NEW.reduce in (0, 6) begin
 update z_n6 set iter = iter + 1, reduce = 6, n6hufa = (select 100.0 / (1.0 + 0.0441 / (p6 - iter * .01 * p6) * (1.0 + p3 / 0.0555 + h3 / 0.005 + o / 5.0 + p6 / 0.175)) + 100.0 / (1.0 + 0.7 / (h6 - iter * .01 * h6) * (1.0 + h3 / 3.0)));
 end;
-    
+
 /*
    Input:  If column "reduce" is set right, this trigger recursively
            subtracts omega-3 fatty acids to produce n6hufa numbers to match the
@@ -326,19 +326,19 @@ end;
    Purpose:  determine daily values for n-3 when we know n-3 is excessive
              because n6hufa < target FAPU1
 */
-  
+
 drop trigger if exists z_n6_reduce3_trigger;
-CREATE TRIGGER z_n6_reduce3_trigger after update of n6hufa on z_n6 when NEW.n6hufa < OLD.FAPU1 and NEW.iter < 100 and NEW.reduce in (0, 3) begin 
+CREATE TRIGGER z_n6_reduce3_trigger after update of n6hufa on z_n6 when NEW.n6hufa < OLD.FAPU1 and NEW.iter < 100 and NEW.reduce in (0, 3) begin
 update z_n6 set iter = iter + 1, reduce = 3, n6hufa = (select 100.0 / (1.0 + 0.0441 / p6 * (1.0 + (p3 - iter * .01 * p3) / 0.0555 + (h3 - iter * .01 * h3) / 0.005 + o / 5.0 + p6 / 0.175)) + 100.0 / (1.0 + 0.7 / h6 * (1.0 + (h3 - iter * .01 * h3) / 3.0)));
 end;
-    
+
 /*
   First insert into currentmeal is special because it changes everything!
 */
 
 drop trigger if exists insert_mealfoods_trigger;
- 
-CREATE TRIGGER insert_mealfoods_trigger after insert on mealfoods when NEW.meal_id = (select currentmeal from options) and (select count(*) from mealfoods where meal_id = NEW.meal_id) = 1 begin 
+
+CREATE TRIGGER insert_mealfoods_trigger after insert on mealfoods when NEW.meal_id = (select currentmeal from options) and (select count(*) from mealfoods where meal_id = NEW.meal_id) = 1 begin
 update z_trig_ctl set am_analysis_header = 1;
 update z_trig_ctl set am_analysis_minus_currentmeal = case when (select mealcount from am_analysis_header) > 1 then 1 when (select mealcount from am_analysis_header) = 1 and (select lastmeal from am_analysis_header) != (select currentmeal from am_analysis_header) then 1 else 0 end;
 update z_trig_ctl set am_analysis_null = case when (select mealcount from am_analysis_header) > 1 then 0 when (select mealcount from am_analysis_header) = 1 and (select lastmeal from am_analysis_header) != (select currentmeal from am_analysis_header) then 0 else 1 end;
@@ -348,13 +348,13 @@ update z_trig_ctl set rm_analysis_null = case when (select mealcount from rm_ana
 update z_trig_ctl set am_analysis = 1;
 update z_trig_ctl set am_dv = 1;
 end;
-  
+
 /*
   Last delete from currentmeal is special because it changes everything!
 */
-  
+
 drop trigger if exists delete_mealfoods_trigger;
-CREATE TRIGGER delete_mealfoods_trigger after delete on mealfoods when OLD.meal_id = (select currentmeal from options) and (select count(*) from mealfoods where meal_id = OLD.meal_id) = 0 begin 
+CREATE TRIGGER delete_mealfoods_trigger after delete on mealfoods when OLD.meal_id = (select currentmeal from options) and (select count(*) from mealfoods where meal_id = OLD.meal_id) = 0 begin
 update mealfoods set Nutr_No = null where Nutr_No is not null;
 update z_trig_ctl set am_analysis_header = 1;
 update z_trig_ctl set am_analysis_minus_currentmeal = case when (select mealcount from am_analysis_header) > 1 then 1 when (select mealcount from am_analysis_header) = 1 and (select lastmeal from am_analysis_header) != (select currentmeal from am_analysis_header) then 1 else 0 end;
@@ -365,25 +365,25 @@ update z_trig_ctl set rm_analysis_null = case when (select mealcount from rm_ana
 update z_trig_ctl set am_analysis = 1;
 update z_trig_ctl set am_dv = 1;
 end;
-  
+
 /*
   Input: mealfoods modified Gm_Wgt
   Output: weight Gm_Wgt
   Purpose:  NUT remembers user serving size preference in first weight record
             when ordered by Seq (although origSeq is the actual key).
 */
-    
+
 drop trigger if exists update_mealfoods2weight_trigger;
-CREATE TRIGGER update_mealfoods2weight_trigger AFTER UPDATE ON mealfoods when NEW.Gm_Wgt > 0.0 and (select block_setting_preferred_weight from z_trig_ctl) = 0 BEGIN 
+CREATE TRIGGER update_mealfoods2weight_trigger AFTER UPDATE ON mealfoods when NEW.Gm_Wgt > 0.0 and (select block_setting_preferred_weight from z_trig_ctl) = 0 BEGIN
 update weight set Gm_Wgt = NEW.Gm_Wgt where NDB_No = NEW.NDB_No and Seq = (select min(Seq) from weight where NDB_No = NEW.NDB_No) ;
 end;
-    
+
 drop trigger if exists insert_mealfoods2weight_trigger;
-CREATE TRIGGER insert_mealfoods2weight_trigger AFTER INSERT ON mealfoods when NEW.Gm_Wgt > 0.0 and (select block_setting_preferred_weight from z_trig_ctl) = 0 BEGIN 
+CREATE TRIGGER insert_mealfoods2weight_trigger AFTER INSERT ON mealfoods when NEW.Gm_Wgt > 0.0 and (select block_setting_preferred_weight from z_trig_ctl) = 0 BEGIN
 update weight set Gm_Wgt = NEW.Gm_Wgt where NDB_No = NEW.NDB_No and Seq = (select min(Seq) from weight where NDB_No = NEW.NDB_No) ;
 end;
-    
-    
+
+
 /*
   If you follow the weight saga so far, you realize that if the user wants to
   always see a different serving unit, you have to change the Seq to 0 for that
@@ -461,22 +461,22 @@ CREATE VIEW wlview as select wldate, weight, bodyfat, round(weight - weight * bo
 */
 
 drop view if exists wlsummary;
-create view wlsummary as select case 
+create view wlsummary as select case
 when (select weightn from z_wslope) > 1 then
 'Weight:  ' || (select round(weightyintercept,1) from z_wslope) || char(13) || char(10) ||
 'Bodyfat:  ' || case when (select weightyintercept from z_wslope) > 0.0 then round(1000.0 * (select fatyintercept from z_fslope) / (select weightyintercept from z_wslope)) / 10.0 else 0.0 end || '%' || char(13) || char(10)
 when (select weightn from z_wslope) = 1 then
-'Weight:  ' || (select weight from z_wl where cleardate is null) || char(13) || char(10) || 
+'Weight:  ' || (select weight from z_wl where cleardate is null) || char(13) || char(10) ||
 'Bodyfat:  ' || (select bodyfat from z_wl where cleardate is null) || '%'
-else 
-'Weight:  0.0' || char(13) || char(10) || 
+else
+'Weight:  0.0' || char(13) || char(10) ||
 'Bodyfat:  0.0%'
 end || char(13) || char(10) ||
 'Today' || "'" || 's Calorie level = ' || (select cast(round(nutopt) as int) from nutr_def where Nutr_No = 208)
 || char(13) || char(10)
 || char(13) || char(10) ||
-case when (select weightn from z_wslope) = 0 then '0 data points so far...' 
-when (select weightn from z_wslope) = 1 then '1 data point so far...' 
+case when (select weightn from z_wslope) = 0 then '0 data points so far...'
+when (select weightn from z_wslope) = 1 then '1 data point so far...'
 else
 'Based on the trend of ' || (select cast(cast(weightn as int) as text) from z_wslope) || ' data points so far...' || char(13) || char(10) || char(10) ||
 'Predicted lean mass today = ' ||
@@ -487,7 +487,7 @@ else
 case when (select weightslope - fatslope from z_wslope, z_fslope) >= 0.0 then 'gained ' else 'lost ' end ||
 (select cast(abs(round((weightslope - fatslope) * span * 1000.0) / 1000.0) as text) from z_wslope, z_fslope, z_span) ||
 ' lean mass over ' ||
-(select span from z_span) || 
+(select span from z_span) ||
 case when (select span from z_span) = 1 then ' day' else ' days' end || char(13) || char(10) ||
 case when (select fatslope from z_fslope) > 0.0 then 'and gained ' else 'and lost ' end ||
 (select cast(abs(round(fatslope * span * 1000.0) / 1000.0) as text) from z_fslope, z_span) || ' fat mass.'
@@ -549,12 +549,12 @@ end;
   So, write the first analysis after a USDA load and initialize nutopts if
   necessary.
 */
-  
+
 update nutr_def set nutopt = 0.0 where nutopt is null;
 update options set currentmeal = case when currentmeal is null then 0 else currentmeal end;
 update options set defanal_am = case when defanal_am is null then 0 else defanal_am end;
-    
-/* 
+
+/*
   SQLite supposedly performs better if it has analyzed how big the tables are
 */
 

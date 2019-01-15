@@ -5,7 +5,7 @@
 
 attach '../nut/nut.sqlite' as lite;
 
-/* 
+/*
   Now, run this init file like this:  sqlite3 -init lite.sqlite3 nut.db
 
   If you are already looking at a bigNUT prompt you could also do it this way:
@@ -13,16 +13,56 @@ attach '../nut/nut.sqlite' as lite;
 */
 
 begin;
-delete from lite.wlog;
-insert into lite.wlog select weight, bodyfat, wldate, cleardate from z_wl;
-delete from lite.mealfoods;
-insert into lite.mealfoods select meal_id / 100, meal_id % 100, NDB_No, Gm_Wgt / 100.0 from mealfoods;
-delete from lite.theusual;
-insert into lite.theusual select meal_name, NDB_No, case when Nutr_No is null then 'No Auto Portion Control' else NutrDesc end from z_tu left join nutr_def using (Nutr_No);
-update lite.options set defanal_am = (select defanal_am from options);
-update lite.nutr_def set nutopt = (select nutopt from nutr_def where NutrDesc = 'Protein') where NutrDesc = 'Protein';
-update lite.nutr_def set nutopt = (select nutopt from nutr_def where NutrDesc = 'Total Fat') where NutrDesc = 'Total Fat';
-update lite.nutr_def set nutopt = (select nutopt from nutr_def where NutrDesc = 'Non-Fiber Carb') where NutrDesc = 'Non-Fiber Carb';
-update lite.nutr_def set nutopt = (select nutopt from nutr_def where NutrDesc = 'Calories') where NutrDesc = 'Calories';
-commit;
+
+DELETE
+FROM   lite.wlog;INSERT INTO lite.wlog
+SELECT weight,
+       bodyfat,
+       wldate,
+       cleardate
+FROM   z_wl;DELETE
+FROM   lite.mealfoods;INSERT INTO lite.mealfoods
+SELECT meal_id / 100,
+       meal_id % 100,
+       ndb_no,
+       gm_wgt / 100.0
+FROM   mealfoods;DELETE
+FROM   lite.theusual;INSERT INTO lite.theusual
+SELECT    meal_name,
+          ndb_no,
+          CASE
+                    WHEN nutr_no IS NULL THEN 'No Auto Portion Control'
+                    ELSE nutrdesc
+          END
+FROM      z_tu
+LEFT JOIN nutr_def
+using     (nutr_no);UPDATE lite.options
+SET    defanal_am =
+       (
+              SELECT defanal_am
+              FROM   options);UPDATE lite.nutr_def
+SET    nutopt =
+       (
+              SELECT nutopt
+              FROM   nutr_def
+              WHERE  nutrdesc = 'Protein')
+WHERE  nutrdesc = 'Protein';UPDATE lite.nutr_def
+SET    nutopt =
+       (
+              SELECT nutopt
+              FROM   nutr_def
+              WHERE  nutrdesc = 'Total Fat')
+WHERE  nutrdesc = 'Total Fat';UPDATE lite.nutr_def
+SET    nutopt =
+       (
+              SELECT nutopt
+              FROM   nutr_def
+              WHERE  nutrdesc = 'Non-Fiber Carb')
+WHERE  nutrdesc = 'Non-Fiber Carb';UPDATE lite.nutr_def
+SET    nutopt =
+       (
+              SELECT nutopt
+              FROM   nutr_def
+              WHERE  nutrdesc = 'Calories')
+WHERE  nutrdesc = 'Calories';COMMIT;
 detach lite;

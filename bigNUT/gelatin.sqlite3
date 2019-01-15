@@ -3,4 +3,10 @@
   glycine dv has its protein added to the protein dv
 */
 
-update nutr_def set nutopt = 90.0 + (select nutr_val from nut_in_meals where ndb_no = 19177 and nutrdesc = 'Protein') where nutrdesc = 'Protein';
+UPDATE nutr_def
+SET    nutopt = 90.0
+                + (SELECT nutr_val
+                   FROM   nut_in_meals
+                   WHERE  ndb_no = 19177
+                          AND nutrdesc = 'Protein')
+WHERE  nutrdesc = 'Protein';

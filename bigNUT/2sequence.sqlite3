@@ -7,30 +7,115 @@
 
 begin;
 
-with newcm (meal_id) as (
- with cm1 (base, meal) as (
-  with cm (base, meal) as (
-   select currentmeal / 100, currentmeal % 100 from options
-   )
-  select case when meal = 3 then date(substr(base, 1, 4) || '-' || substr(base, 5, 2) || '-' || substr(base, 7, 2), '+1 day') else substr(base, 1, 4) || '-' || substr(base, 5, 2) || '-' || substr(base, 7, 2) end, case when meal = 3 then 1 else meal + 1 end from cm
-  )
- select cast( substr(base, 1, 4) || substr(base, 6, 2) || substr(base, 9, 2) as int) * 100 + meal from cm1
- )
-update options set currentmeal = (select meal_id from newcm);
-update options set defanal_am = 1;
+WITH newcm
+     (
+          meal_id
+     )
+     AS
+     (
+          WITH cm1
+               (
+                    base,
+                    meal
+               )
+               AS
+               (
+                    WITH cm
+                         (
+                              base,
+                              meal
+                         )
+                         AS
+                         (
+                                SELECT currentmeal / 100,
+                                       currentmeal % 100
+                                FROM   options
+                         )
+                  SELECT
+                         CASE
+                                WHEN meal = 3 THEN Date(Substr(base, 1, 4)
+                                              || '-'
+                                              || Substr(base, 5, 2)
+                                              || '-'
+                                              || Substr(base, 7, 2), '+1 day')
+                                ELSE Substr(base, 1, 4)
+                                              || '-'
+                                              || Substr(base, 5, 2)
+                                              || '-'
+                                              || Substr(base, 7, 2)
+                         END,
+                         CASE
+                                WHEN meal = 3 THEN 1
+                                ELSE meal + 1
+                         END
+                  FROM   cm
+               )
+        SELECT Cast( Substr(base, 1, 4)
+                      || Substr(base, 6, 2)
+                      || Substr(base, 9, 2) AS INT) * 100 + meal
+        FROM   cm1
+     )
+UPDATE options
+SET    currentmeal =
+       (
+              SELECT meal_id
+              FROM   newcm);UPDATE options
+SET    defanal_am = 1;DROP VIEWIF EXISTS z_mn;CREATE temp VIEW z_mn AS
+WITH meal
+     (
+          m
+     )
+     AS
+     (
+            SELECT currentmeal % 100
+            FROM   options
+     )SELECT
+       CASE
+              WHEN m = 1 THEN 'R Breakfast'
+              WHEN m = 2 THEN 'KC Dinner'
+              ELSE 'R Supper'
+       END AS mn,
+       m
+FROM   meal;INSERT INTO currentmeal
+SELECT ndb_no,
+       gm_wgt,
+       nutrdesc
+FROM   theusual
+WHERE  meal_name =
+       (
+              SELECT mn
+              FROM   z_mn);UPDATE nutr_def
+SET    nutopt = 0.0
+WHERE  nutrdesc = 'Total Fat';
 
-drop view if exists z_mn;
-create temp view z_mn as
- with meal (m) as (
-  select currentmeal % 100 from options
-  )
- select case when m = 1 then 'R Breakfast' when m = 2 then 'KC Dinner' else 'R Supper' end as mn, m from meal;
-
-insert into currentmeal select NDB_No, Gm_Wgt, NutrDesc from theusual where meal_name = (select mn from z_mn);
-
-update nutr_def set nutopt = 0.0 where NutrDesc = 'Total Fat';
--- update nutr_def set nutopt = case when (select m from z_mn) in (1, 3) then 125.0 else 140.0 end where NutrDesc = 'Protein';
-
-	with temp (meal2nfc) as (select sum(Nutr_Val * Gm_Wgt / 100.0) from mealfoods join nut_data nd using (NDB_No) where nd.Nutr_No = 2000 and meal_id = (select max(meal_id) from mealfoods where meal_id % 100 = 2)) update nutr_def set nutopt = case when (select m from z_mn) in (1, 3) then (180.0 - (select meal2nfc from temp)) * 1.5 else -1 end where NutrDesc = 'Non-Fiber Carb';
-
-commit;
+-- update nutr_def set nutopt = case when (select m from z_mn) in (1, 3) then 125.0 else 140.0 end where NutrDesc = 'Protein';WITH temp
+      (
+            meal2nfc
+      )
+      AS
+      (
+             SELECT Sum(nutr_val * gm_wgt / 100.0)
+             FROM   mealfoods
+             JOIN   nut_data nd
+             using  (ndb_no)
+             WHERE  nd.nutr_no = 2000
+             AND    meal_id =
+                    (
+                           SELECT Max(meal_id)
+                           FROM   mealfoods
+                           WHERE  meal_id % 100 = 2)
+      )
+UPDATE nutr_def
+SET    nutopt =
+       CASE
+              WHEN
+                     (
+                            SELECT m
+                            FROM   z_mn) IN (1,
+                                             3) THEN (180.0 -
+                     (
+                            SELECT meal2nfc
+                            FROM   temp)) * 1.5
+              ELSE -1
+       END
+WHERE  nutrdesc = 'Non-Fiber Carb';COMMIT;

@@ -13,28 +13,136 @@
 
 begin;
 
-with newcm (meal_id) as (
- with cm1 (base, meal) as (
-  with cm (base, meal) as (
-   select currentmeal / 100, currentmeal % 100 from options
-   )
-  select case when meal = 3 then date(substr(base, 1, 4) || '-' || substr(base, 5, 2) || '-' || substr(base, 7, 2), '+1 day') else substr(base, 1, 4) || '-' || substr(base, 5, 2) || '-' || substr(base, 7, 2) end, case when meal = 3 then 1 else meal + 1 end from cm
-  )
- select cast( substr(base, 1, 4) || substr(base, 6, 2) || substr(base, 9, 2) as int) * 100 + meal from cm1
- )
-update options set currentmeal = (select meal_id from newcm);
-
-drop view if exists z_mn;
-create temp view z_mn as
- with meal (m, mod2, mod8) as (
-  select options.currentmeal % 100, maxmeal % 2, maxmeal % 8 from options, am_analysis_header
-  )
- select case when mod8 not in (1, 2, 3) then case when mod2 = 1 then case when m = 1 then 'R Breakfast' when m = 2 then 'R Dinner' else 'R Supper' end else case when m = 1 then 'P Breakfast' when m = 2 then 'P Dinner' else 'P Supper' end end else case when m = 1 then 'K Breakfast' when m = 2 then 'K Dinner' else 'K Supper' end end as mn, mod8 from meal;
-
-insert into currentmeal select NDB_No, Gm_Wgt, NutrDesc from theusual where meal_name = (select mn from z_mn);
-update nutr_def set nutopt = case when (select mod8 from z_mn) not in (1, 2, 3) then -1 else 0.0 end where nutrdesc = 'Total Fat';
-update nutr_def set nutopt = case when (select mod8 from z_mn) not in (1, 2, 3) then 0.0 else -1 end where nutrdesc = 'Non-Fiber Carb';
-update options set defanal_am = case when (select mod8 from z_mn) in (2, 5) then 1 else defanal_am + 1 end;
-drop view z_mn;
-
-commit;
+WITH newcm
+     (
+          meal_id
+     )
+     AS
+     (
+          WITH cm1
+               (
+                    base,
+                    meal
+               )
+               AS
+               (
+                    WITH cm
+                         (
+                              base,
+                              meal
+                         )
+                         AS
+                         (
+                                SELECT currentmeal / 100,
+                                       currentmeal % 100
+                                FROM   options
+                         )
+                  SELECT
+                         CASE
+                                WHEN meal = 3 THEN Date(Substr(base, 1, 4)
+                                              || '-'
+                                              || Substr(base, 5, 2)
+                                              || '-'
+                                              || Substr(base, 7, 2), '+1 day')
+                                ELSE Substr(base, 1, 4)
+                                              || '-'
+                                              || Substr(base, 5, 2)
+                                              || '-'
+                                              || Substr(base, 7, 2)
+                         END,
+                         CASE
+                                WHEN meal = 3 THEN 1
+                                ELSE meal + 1
+                         END
+                  FROM   cm
+               )
+        SELECT Cast( Substr(base, 1, 4)
+                      || Substr(base, 6, 2)
+                      || Substr(base, 9, 2) AS INT) * 100 + meal
+        FROM   cm1
+     )
+UPDATE options
+SET    currentmeal =
+       (
+              SELECT meal_id
+              FROM   newcm);DROP VIEWIF EXISTS z_mn;CREATE temp VIEW z_mn AS
+WITH meal
+     (
+          m,
+          mod2,
+          mod8
+     )
+     AS
+     (
+            SELECT options.currentmeal % 100,
+                   maxmeal %             2,
+                   maxmeal %             8
+            FROM   options,
+                   am_analysis_header
+     )SELECT
+       CASE
+              WHEN mod8 NOT IN (1,
+                                2,
+                                3) THEN
+                     CASE
+                            WHEN mod2 = 1 THEN
+                                   CASE
+                                          WHEN m = 1 THEN 'R Breakfast'
+                                          WHEN m = 2 THEN 'R Dinner'
+                                          ELSE 'R Supper'
+                                   END
+                            ELSE
+                                   CASE
+                                          WHEN m = 1 THEN 'P Breakfast'
+                                          WHEN m = 2 THEN 'P Dinner'
+                                          ELSE 'P Supper'
+                                   END
+                     END
+              ELSE
+                     CASE
+                            WHEN m = 1 THEN 'K Breakfast'
+                            WHEN m = 2 THEN 'K Dinner'
+                            ELSE 'K Supper'
+                     END
+       END AS mn,
+       mod8
+FROM   meal;INSERT INTO currentmeal
+SELECT ndb_no,
+       gm_wgt,
+       nutrdesc
+FROM   theusual
+WHERE  meal_name =
+       (
+              SELECT mn
+              FROM   z_mn);UPDATE nutr_def
+SET    nutopt =
+       CASE
+              WHEN
+                     (
+                            SELECT mod8
+                            FROM   z_mn) NOT IN (1,
+                                                 2,
+                                                 3) THEN -1
+              ELSE 0.0
+       END
+WHERE  nutrdesc = 'Total Fat';UPDATE nutr_def
+SET    nutopt =
+       CASE
+              WHEN
+                     (
+                            SELECT mod8
+                            FROM   z_mn) NOT IN (1,
+                                                 2,
+                                                 3) THEN 0.0
+              ELSE -1
+       END
+WHERE  nutrdesc = 'Non-Fiber Carb';UPDATE options
+SET    defanal_am =
+       CASE
+              WHEN
+                     (
+                            SELECT mod8
+                            FROM   z_mn) IN (2,
+                                             5) THEN 1
+              ELSE defanal_am + 1
+       END;DROP VIEW z_mn;COMMIT;
