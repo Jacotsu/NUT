@@ -6,56 +6,67 @@
   it goes away for you if you close the database connection, but it doesn't go away for the
   other connections that came in with the same user init.  The only exceptions are the
   shopping list and cost table which need to be persistent and therefore real tables.
-*/
+*/ PRAGMA recursive_triggers = 1;
 
-PRAGMA recursive_triggers = 1;
-
-begin;
+BEGIN;
 
 /*
   HEERE BEGYNNETH AUTOMATIC PORTION CONTROL (PCF)
-*/
-
-/*
+*/ /*
   If a mealfoods replace causes the delete trigger to start, we get a
   recursive nightmare.  So we need a before insert trigger.
 */
+DROP TRIGGER IF EXISTS before_mealfoods_insert_pcf;
 
-drop trigger if exists before_mealfoods_insert_pcf;
-create temp trigger before_mealfoods_insert_pcf before insert on mealfoods
-when (select block_mealfoods_insert_trigger from z_trig_ctl) = 0
-begin
-update z_trig_ctl set block_mealfoods_delete_trigger = 1;
-end;
+
+CREATE TEMP TRIGGER before_mealfoods_insert_pcf
+BEFORE
+INSERT ON mealfoods WHEN
+  (SELECT block_mealfoods_insert_trigger
+   FROM z_trig_ctl) = 0 BEGIN
+UPDATE z_trig_ctl
+SET block_mealfoods_delete_trigger = 1; END;
 
 /*
   A mealfoods insert trigger
 */
+DROP TRIGGER IF EXISTS mealfoods_insert_pcf;
 
-drop trigger if exists mealfoods_insert_pcf;
-create temp trigger mealfoods_insert_pcf after insert on mealfoods
-when NEW.meal_id = (select currentmeal from options)
-and (select block_mealfoods_insert_trigger from z_trig_ctl) = 0
-begin
-update z_trig_ctl set rm_analysis = 1;
-update z_trig_ctl set am_analysis = 1;
-update z_trig_ctl set am_dv = 1;
-update z_trig_ctl set PCF_processing = 1;
-end;
+
+CREATE TEMP TRIGGER mealfoods_insert_pcf AFTER
+INSERT ON mealfoods WHEN NEW.meal_id =
+  (SELECT currentmeal
+   FROM OPTIONS)
+AND
+  (SELECT block_mealfoods_insert_trigger
+   FROM z_trig_ctl) = 0 BEGIN
+UPDATE z_trig_ctl
+SET rm_analysis = 1;
+UPDATE z_trig_ctl
+SET am_analysis = 1;
+UPDATE z_trig_ctl
+SET am_dv = 1;
+UPDATE z_trig_ctl
+SET PCF_processing = 1; END;
 
 /*
   A mealfoods update trigger
 */
+DROP TRIGGER IF EXISTS mealfoods_update_pcf;
 
-drop trigger if exists mealfoods_update_pcf;
-create temp trigger mealfoods_update_pcf after update on mealfoods
-when OLD.meal_id = (select currentmeal from options)
-begin
-update z_trig_ctl set rm_analysis = 1;
-update z_trig_ctl set am_analysis = 1;
-update z_trig_ctl set am_dv = 1;
-update z_trig_ctl set PCF_processing = 1;
-end;
+
+CREATE TEMP TRIGGER mealfoods_update_pcf AFTER
+UPDATE ON mealfoods WHEN OLD.meal_id =
+  (SELECT currentmeal
+   FROM OPTIONS) BEGIN
+UPDATE z_trig_ctl
+SET rm_analysis = 1;
+UPDATE z_trig_ctl
+SET am_analysis = 1;
+UPDATE z_trig_ctl
+SET am_dv = 1;
+UPDATE z_trig_ctl
+SET PCF_processing = 1; END;
 
 /*
   A mealfoods delete trigger.  One of the bizarre consequences of these
@@ -66,194 +77,343 @@ end;
   from the view currentmeal does seem to work properly without having to
   null out the NutrDesc column.
 */
+DROP TRIGGER IF EXISTS mealfoods_delete_pcf;
 
-drop trigger if exists mealfoods_delete_pcf;
-create temp trigger mealfoods_delete_pcf after delete on mealfoods
-when OLD.meal_id = (select currentmeal from options)
-and (select block_mealfoods_delete_trigger from z_trig_ctl) = 0
-begin
-update z_trig_ctl set am_analysis_header = 1;
-update z_trig_ctl set rm_analysis = 1;
-update z_trig_ctl set am_analysis = 1;
-update z_trig_ctl set am_dv = 1;
-update z_trig_ctl set PCF_processing = 1;
-end;
+
+CREATE TEMP TRIGGER mealfoods_delete_pcf AFTER
+DELETE ON mealfoods WHEN OLD.meal_id =
+  (SELECT currentmeal
+   FROM OPTIONS)
+AND
+  (SELECT block_mealfoods_delete_trigger
+   FROM z_trig_ctl) = 0 BEGIN
+UPDATE z_trig_ctl
+SET am_analysis_header = 1;
+UPDATE z_trig_ctl
+SET rm_analysis = 1;
+UPDATE z_trig_ctl
+SET am_analysis = 1;
+UPDATE z_trig_ctl
+SET am_dv = 1;
+UPDATE z_trig_ctl
+SET PCF_processing = 1; END;
 
 /*
   Another thing that can start automatic portion control is changing the
   nutopt in nutr_def which will change the Daily Values.  And then the same
   thing for FAPU1 in options.
 */
+DROP TRIGGER IF EXISTS update_nutopt_pcf;
 
-drop trigger if exists update_nutopt_pcf;
-create temp trigger update_nutopt_pcf after update of nutopt on nutr_def
-begin
-update z_trig_ctl set rm_analysis = 1;
-update z_trig_ctl set am_analysis = 1;
-update z_trig_ctl set am_dv = 1;
-update z_trig_ctl set PCF_processing = 1;
-end;
 
-drop trigger if exists update_FAPU1_pcf;
-create temp trigger update_FAPU1_pcf after update of FAPU1 on options
-begin
-update z_trig_ctl set rm_analysis = 1;
-update z_trig_ctl set am_analysis = 1;
-update z_trig_ctl set am_dv = 1;
-update z_trig_ctl set PCF_processing = 1;
-end;
+CREATE TEMP TRIGGER update_nutopt_pcf AFTER
+UPDATE OF nutopt ON nutr_def BEGIN
+UPDATE z_trig_ctl
+SET rm_analysis = 1;
+UPDATE z_trig_ctl
+SET am_analysis = 1;
+UPDATE z_trig_ctl
+SET am_dv = 1;
+UPDATE z_trig_ctl
+SET PCF_processing = 1; END;
+
+
+DROP TRIGGER IF EXISTS update_FAPU1_pcf;
+
+
+CREATE TEMP TRIGGER update_FAPU1_pcf AFTER
+UPDATE OF FAPU1 ON OPTIONS BEGIN
+UPDATE z_trig_ctl
+SET rm_analysis = 1;
+UPDATE z_trig_ctl
+SET am_analysis = 1;
+UPDATE z_trig_ctl
+SET am_dv = 1;
+UPDATE z_trig_ctl
+SET PCF_processing = 1; END;
 
 /*
   HEERE ENDETH AUTOMATIC PORTION CONTROL (PCF)
-*/
-
-/*
+*/ /*
   We often want to grab the preferred weight for a food so we create a special
   view that dishes it up!  This view delivers the preferred Gm_Wgt and the
   newly computed Amount of the serving unit.  The preferred weight is never
   zero or negative, so if the Gm_Wgt might not be > 0.0 you need special logic.
 */
+DROP VIEW IF EXISTS pref_Gm_Wgt;
 
-drop view if exists pref_Gm_Wgt;
-create temp view pref_Gm_Wgt as select NDB_No, Seq, Gm_Wgt / origGm_Wgt * Amount as Amount, Msre_Desc, Gm_Wgt, origSeq, origGm_Wgt, Amount as origAmount from weight natural join (select NDB_No, min(Seq) as Seq from weight group by NDB_No);
+
+CREATE TEMP VIEW pref_Gm_Wgt AS
+SELECT NDB_No,
+       Seq,
+       Gm_Wgt / origGm_Wgt * Amount AS Amount,
+       Msre_Desc,
+       Gm_Wgt,
+       origSeq,
+       origGm_Wgt,
+       Amount AS origAmount
+FROM weight
+NATURAL JOIN
+  (SELECT NDB_No,
+          min(Seq) AS Seq
+   FROM weight
+   GROUP BY NDB_No);
 
 /*
   Here's an "INSTEAD OF" trigger to allow updating the Gm_Wgt of the
   preferred weight record.
 */
+DROP TRIGGER IF EXISTS pref_weight_Gm_Wgt;
 
-drop trigger if exists pref_weight_Gm_Wgt;
-create temp trigger pref_weight_Gm_Wgt instead of update of Gm_Wgt on pref_Gm_Wgt
-when NEW.Gm_Wgt > 0.0 begin
-update weight set Gm_Wgt = NEW.Gm_Wgt where NDB_No = NEW.NDB_No and Seq =
-(select min(Seq) from weight where NDB_No = NEW.NDB_No);
-end;
-  
+
+CREATE TEMP TRIGGER pref_weight_Gm_Wgt INSTEAD OF
+UPDATE OF Gm_Wgt ON pref_Gm_Wgt WHEN NEW.Gm_Wgt > 0.0 BEGIN
+UPDATE weight
+SET Gm_Wgt = NEW.Gm_Wgt
+WHERE NDB_No = NEW.NDB_No
+  AND Seq =
+    (SELECT min(Seq)
+     FROM weight
+     WHERE NDB_No = NEW.NDB_No); END;
+
 /*
   This is a variant of the previous trigger to change the preferred Gm_Wgt
   of a food by specifying the Amount of the serving unit, the Msre_Desc.
   In addition, it proffers an update to the Gm_Wgt of the food in the
   current meal, just in case that is the reason for the update.
 */
+DROP TRIGGER IF EXISTS pref_weight_Amount;
 
-drop trigger if exists pref_weight_Amount;
-create temp trigger pref_weight_Amount instead of update of Amount on pref_Gm_Wgt
-when NEW.Amount > 0.0 begin
-update weight set Gm_Wgt = origGm_Wgt * NEW.Amount / Amount 
-where NDB_No = NEW.NDB_No and 
-Seq = (select min(Seq) from weight where NDB_No = NEW.NDB_No);
-update currentmeal set Gm_Wgt = null where NDB_No = NEW.NDB_No;
-end;
-  
+
+CREATE TEMP TRIGGER pref_weight_Amount INSTEAD OF
+UPDATE OF Amount ON pref_Gm_Wgt WHEN NEW.Amount > 0.0 BEGIN
+UPDATE weight
+SET Gm_Wgt = origGm_Wgt * NEW.Amount / Amount
+WHERE NDB_No = NEW.NDB_No
+  AND Seq =
+    (SELECT min(Seq)
+     FROM weight
+     WHERE NDB_No = NEW.NDB_No);
+  UPDATE currentmeal
+  SET Gm_Wgt = NULL WHERE NDB_No = NEW.NDB_No; END;
+
 /*
   Using the preferred weight, we can View Foods in various ways.
 */
+DROP VIEW IF EXISTS view_foods;
 
-drop view if exists view_foods;
-create temp view view_foods as select NutrDesc, NDB_No, substr(Shrt_Desc,1,45), round(Nutr_Val * Gm_Wgt / 100.0,1) as Nutr_Val, Units, cast(cast(round(Nutr_Val * Gm_Wgt / dv) as int) as text) || '% DV' as dv from nutr_def natural join nut_data left join am_dv using (Nutr_No) natural join food_des natural join pref_Gm_Wgt;
+
+CREATE TEMP VIEW view_foods AS
+SELECT NutrDesc,
+       NDB_No,
+       substr(Shrt_Desc, 1, 45),
+       round(Nutr_Val * Gm_Wgt / 100.0, 1) AS Nutr_Val,
+       Units,
+       cast(cast(round(Nutr_Val * Gm_Wgt / dv) AS int) AS text) || '% DV' AS dv
+FROM nutr_def
+NATURAL JOIN nut_data
+LEFT JOIN am_dv USING (Nutr_No)
+NATURAL JOIN food_des
+NATURAL JOIN pref_Gm_Wgt;
 
 /*
   We create a convenience view of the current meal, aka mealfoods.
 */
+DROP VIEW IF EXISTS currentmeal;
 
-drop view if exists currentmeal;
-CREATE temp VIEW currentmeal as select mf.NDB_No as NDB_No, case when (select grams from options) then cast (cast (round(mf.Gm_Wgt) as int) as text) || ' g' else cast(round(mf.Gm_Wgt / 28.35 * 8.0) / 8.0 as text) || ' oz' end || ' (' || cast(round(case when mf.Gm_Wgt <= 0.0 or mf.Gm_Wgt != pGW.Gm_Wgt then mf.Gm_Wgt / origGm_Wgt * origAmount else Amount end * 8.0) / 8.0 as text) || ' ' || Msre_Desc || ') ' || Shrt_Desc || ' ' as Gm_Wgt, NutrDesc from mealfoods mf natural join food_des left join pref_Gm_Wgt pGW using (NDB_No) left join nutr_def using (Nutr_No) where meal_id = (select currentmeal from options) order by Shrt_Desc;
+
+CREATE TEMP VIEW currentmeal AS
+SELECT mf.NDB_No AS NDB_No,
+       CASE
+           WHEN
+                  (SELECT grams
+                   FROM OPTIONS) THEN CAST (CAST (round(mf.Gm_Wgt) AS int) AS text) || ' g'
+           ELSE cast(round(mf.Gm_Wgt / 28.35 * 8.0) / 8.0 AS text) || ' oz'
+       END || ' (' || cast(round(CASE
+                                     WHEN mf.Gm_Wgt <= 0.0
+                                          OR mf.Gm_Wgt != pGW.Gm_Wgt THEN mf.Gm_Wgt / origGm_Wgt * origAmount
+                                     ELSE Amount
+                                 END * 8.0) / 8.0 AS text) || ' ' || Msre_Desc || ') ' || Shrt_Desc || ' ' AS Gm_Wgt,
+              NutrDesc
+FROM mealfoods mf
+NATURAL JOIN food_des
+LEFT JOIN pref_Gm_Wgt pGW USING (NDB_No)
+LEFT JOIN nutr_def USING (Nutr_No)
+WHERE meal_id =
+    (SELECT currentmeal
+     FROM OPTIONS)
+ORDER BY Shrt_Desc;
 
 /*
-  OK, now the INSTEAD OF trigger to simplify somewhat the insertion of a 
+  OK, now the INSTEAD OF trigger to simplify somewhat the insertion of a
   meal food:
 */
+DROP TRIGGER IF EXISTS currentmeal_insert;
 
-drop trigger if exists currentmeal_insert;
-create temp trigger currentmeal_insert instead of insert on currentmeal begin
-update mealfoods set Nutr_No = null where Nutr_No = (select Nutr_No from
-nutr_def where NutrDesc = NEW.NutrDesc);
-insert or replace into mealfoods values ((select currentmeal from options),
-NEW.NDB_No, case when NEW.Gm_Wgt is null then (select Gm_Wgt from pref_Gm_Wgt
-where NDB_No = NEW.NDB_No) else NEW.Gm_Wgt end, case when NEW.NutrDesc is null 
-then null when (select count(*) from nutr_def where NutrDesc = NEW.NutrDesc
-and dv_default > 0.0) = 1 then (select Nutr_No from nutr_def where NutrDesc
-= NEW.NutrDesc) when (select count(*) from nutr_def where Nutr_No =
-NEW.NutrDesc and dv_default > 0.0) = 1 then NEW.NutrDesc else null end);
-end;
+
+CREATE TEMP TRIGGER currentmeal_insert INSTEAD OF
+INSERT ON currentmeal BEGIN
+UPDATE mealfoods
+SET Nutr_No = NULL
+WHERE Nutr_No =
+    (SELECT Nutr_No
+     FROM nutr_def
+     WHERE NutrDesc = NEW.NutrDesc);
+  INSERT
+  OR
+  REPLACE INTO mealfoods
+VALUES (
+          (SELECT currentmeal
+           FROM OPTIONS), NEW.NDB_No,
+                          CASE
+                              WHEN NEW.Gm_Wgt IS NULL THEN
+                                     (SELECT Gm_Wgt
+                                      FROM pref_Gm_Wgt
+                                      WHERE NDB_No = NEW.NDB_No)
+                              ELSE NEW.Gm_Wgt
+                          END,
+                          CASE
+                              WHEN NEW.NutrDesc IS NULL THEN NULL
+                              WHEN
+                                     (SELECT count(*)
+                                      FROM nutr_def
+                                      WHERE NutrDesc = NEW.NutrDesc
+                                        AND dv_default > 0.0) = 1 THEN
+                                     (SELECT Nutr_No
+                                      FROM nutr_def
+                                      WHERE NutrDesc = NEW.NutrDesc)
+                              WHEN
+                                     (SELECT count(*)
+                                      FROM nutr_def
+                                      WHERE Nutr_No = NEW.NutrDesc
+                                        AND dv_default > 0.0) = 1 THEN NEW.NutrDesc
+                              ELSE NULL
+                          END);
+
+END;
 
 /*
   It's simpler to delete a mealfood with currentmeal than to just delete
   it from mealfoods because you don't have to specify the meal_id.
 */
+DROP TRIGGER IF EXISTS currentmeal_delete;
 
-drop trigger if exists currentmeal_delete;
-create temp trigger currentmeal_delete instead of delete on currentmeal begin
-delete from mealfoods where meal_id = (select currentmeal from options)
-and NDB_No = OLD.NDB_No;
-end;
+
+CREATE TEMP TRIGGER currentmeal_delete INSTEAD OF
+DELETE ON currentmeal BEGIN
+DELETE
+FROM mealfoods
+WHERE meal_id =
+    (SELECT currentmeal
+     FROM OPTIONS)
+  AND NDB_No = OLD.NDB_No; END;
 
 /*
   We often want to update a Gm_Wgt in the current meal.
 */
+DROP TRIGGER IF EXISTS currentmeal_upd_Gm_Wgt;
 
-drop trigger if exists currentmeal_upd_Gm_Wgt;
-create temp trigger currentmeal_upd_Gm_Wgt instead of update of Gm_Wgt on
-currentmeal begin
-update mealfoods set Gm_Wgt = case when NEW.Gm_Wgt is null then (select Gm_Wgt from pref_Gm_Wgt where NDB_No = NEW.NDB_No) else NEW.Gm_Wgt end where NDB_No = NEW.NDB_No and
-meal_id = (select currentmeal from options);
-end;
+
+CREATE TEMP TRIGGER currentmeal_upd_Gm_Wgt INSTEAD OF
+UPDATE OF Gm_Wgt ON currentmeal BEGIN
+UPDATE mealfoods
+SET Gm_Wgt = CASE
+                 WHEN NEW.Gm_Wgt IS NULL THEN
+                        (SELECT Gm_Wgt
+                         FROM pref_Gm_Wgt
+                         WHERE NDB_No = NEW.NDB_No)
+                 ELSE NEW.Gm_Wgt
+             END
+WHERE NDB_No = NEW.NDB_No
+  AND meal_id =
+    (SELECT currentmeal
+     FROM OPTIONS);
+
+END;
 
 /*
   And finally, we often want to modify automatic portion control on the
   current meal.
 */
+DROP TRIGGER IF EXISTS currentmeal_upd_pcf;
 
-drop trigger if exists currentmeal_upd_pcf;
-create temp trigger currentmeal_upd_pcf instead of update of NutrDesc on
-currentmeal begin
-update mealfoods set Nutr_No = null 
-where Nutr_No = (select Nutr_No from nutr_def where NutrDesc = NEW.NutrDesc);
-update mealfoods set Nutr_No = (select Nutr_No from nutr_def where NutrDesc =
-NEW.NutrDesc) where NDB_No = NEW.NDB_No and
-meal_id = (select currentmeal from options);
-end;
+
+CREATE TEMP TRIGGER currentmeal_upd_pcf INSTEAD OF
+UPDATE OF NutrDesc ON currentmeal BEGIN
+UPDATE mealfoods
+SET Nutr_No = NULL
+WHERE Nutr_No =
+    (SELECT Nutr_No
+     FROM nutr_def
+     WHERE NutrDesc = NEW.NutrDesc);
+  UPDATE mealfoods
+  SET Nutr_No =
+    (SELECT Nutr_No
+     FROM nutr_def
+     WHERE NutrDesc = NEW.NutrDesc) WHERE NDB_No = NEW.NDB_No
+  AND meal_id =
+    (SELECT currentmeal
+     FROM OPTIONS); END;
 
 /*
   Here's a convenience view of customary meals, aka theusual
 */
+DROP VIEW IF EXISTS theusual;
 
-drop view if exists theusual;
-create temp view theusual as select meal_name, NDB_No, Gm_Wgt, NutrDesc from 
-z_tu natural join pref_Gm_Wgt left join nutr_def using (Nutr_No);
+
+CREATE TEMP VIEW theusual AS
+SELECT meal_name,
+       NDB_No,
+       Gm_Wgt,
+       NutrDesc
+FROM z_tu
+NATURAL JOIN pref_Gm_Wgt
+LEFT JOIN nutr_def USING (Nutr_No);
 
 /*
   We have the view, now we need the triggers.
 
   First, we handle inserts from the current meal.
 */
+DROP TRIGGER IF EXISTS theusual_insert;
 
-drop trigger if exists theusual_insert;
-create temp trigger theusual_insert instead of insert on theusual
-when NEW.meal_name is not null and NEW.NDB_No is null and NEW.Gm_Wgt is null
-and NEW.NutrDesc is null
-begin
-delete from z_tu where meal_name = NEW.meal_name;
-insert or ignore into z_tu select NEW.meal_name, mf.NDB_No, mf.Nutr_No from mealfoods mf left join nutr_def where meal_id = (select currentmeal from options);
-end;
+
+CREATE TEMP TRIGGER theusual_insert INSTEAD OF
+INSERT ON theusual WHEN NEW.meal_name IS NOT NULL
+AND NEW.NDB_No IS NULL
+AND NEW.Gm_Wgt IS NULL
+AND NEW.NutrDesc IS NULL BEGIN
+DELETE
+FROM z_tu
+WHERE meal_name = NEW.meal_name;
+  INSERT
+  OR
+  IGNORE INTO z_tu
+SELECT NEW.meal_name,
+       mf.NDB_No,
+       mf.Nutr_No
+FROM mealfoods mf
+LEFT JOIN nutr_def
+WHERE meal_id =
+    (SELECT currentmeal
+     FROM OPTIONS); END;
 
 /*
   Now we allow customary meals to be deleted.
 */
+DROP TRIGGER IF EXISTS theusual_delete;
 
-drop trigger if exists theusual_delete;
-create temp trigger theusual_delete instead of delete on theusual
-when OLD.meal_name is not null
-begin
-delete from z_tu where meal_name = OLD.meal_name;
-end;
+
+CREATE TEMP TRIGGER theusual_delete INSTEAD OF
+DELETE ON theusual WHEN OLD.meal_name IS NOT NULL BEGIN
+DELETE
+FROM z_tu
+WHERE meal_name = OLD.meal_name; END;
 
 /*
   Sorry I didn't write triggers to handle each theusual eventuality,
   but you can always work directly on z_tu for your intricate updating needs.
-*/
-
-/*
+*/ /*
   We create convenience views to report which foods in the meal analysis are
   contributing to a nutrient intake.  Use it like this (for example):
 	select * from nut_in_meals where NutrDesc = 'Protein';
@@ -272,23 +432,107 @@ end;
   view will do it.
 
 */
+DROP VIEW IF EXISTS nut_in_meals;
 
-drop view if exists nut_in_meals;
-create temp view nut_in_meals as select NutrDesc, round(sum(Gm_Wgt * Nutr_Val / 100.0 / (select mealcount from am_analysis_header) * (select meals_per_day from options)),1) as Nutr_Val, Units, mf.ndb_no, Shrt_Desc from mealfoods mf join food_des using (NDB_No) join nutr_def nd join nut_data data on mf.NDB_No = data.NDB_No and nd.Nutr_No = data.Nutr_No where meal_id >= (select firstmeal from am_analysis_header) group by mf.NDB_No, NutrDesc order by Nutr_Val desc; 
 
-drop view if exists nutdv_in_meals;
-create temp view nutdv_in_meals as select NutrDesc, cast(cast(round(sum(Gm_Wgt * Nutr_Val / dv / (select mealcount from am_analysis_header) * (select meals_per_day from options))) as int) as text) || '%' as val, mf.ndb_no, Shrt_Desc from mealfoods mf join food_des using (NDB_No) join nutr_def nd join nut_data data on mf.NDB_No = data.NDB_No and nd.Nutr_No = data.Nutr_No join am_dv on nd.Nutr_No = am_dv.Nutr_No where meal_id >= (select firstmeal from am_analysis_header) group by mf.NDB_No, NutrDesc order by cast(val as int) desc; 
+CREATE TEMP VIEW nut_in_meals AS
+SELECT NutrDesc,
+       round(sum(Gm_Wgt * Nutr_Val / 100.0 /
+                   (SELECT mealcount
+                    FROM am_analysis_header) *
+                   (SELECT meals_per_day
+                    FROM OPTIONS)), 1) AS Nutr_Val,
+       Units,
+       mf.ndb_no,
+       Shrt_Desc
+FROM mealfoods mf
+JOIN food_des USING (NDB_No)
+JOIN nutr_def nd
+JOIN nut_data DATA ON mf.NDB_No = data.NDB_No
+AND nd.Nutr_No = data.Nutr_No
+WHERE meal_id >=
+    (SELECT firstmeal
+     FROM am_analysis_header)
+GROUP BY mf.NDB_No,
+         NutrDesc
+ORDER BY Nutr_Val DESC;
 
-drop view if exists daily_food;
-create temp view daily_food as select cast(round((sum(mf.Gm_Wgt) / mealcount * meals_per_day) / origGm_Wgt * origAmount * 8.0) / 8.0 as text) || ' ' || Msre_Desc || ' ' || Shrt_Desc as food from mealfoods mf natural join food_des join pref_Gm_Wgt using (NDB_No) join am_analysis_header where meal_id between firstmeal and lastmeal group by NDB_No order by Shrt_Desc;
+DROP VIEW IF EXISTS nutdv_in_meals;
 
-drop view if exists daily_food1; create temp view daily_food1 as select cast(round(sum(8.0 * gm_wgt / 28.35 / mealcount * meals_per_day)) / 8.0 as text) || ' oz ' || Long_desc from mealfoods natural join food_des join am_analysis_header where meal_id between firstmeal and lastmeal group by ndb_no order by long_desc;
 
-drop view if exists nut_big_contrib;
-create temp view nut_big_contrib as select shrt_desc, nutrdesc, max(nutr_val), units from (select * from nut_in_meals order by nutrdesc asc, nutr_val desc) group by nutrdesc order by shrt_desc;
+CREATE TEMP VIEW nutdv_in_meals AS
+SELECT NutrDesc,
+       cast(cast(round(sum(Gm_Wgt * Nutr_Val / dv /
+                             (SELECT mealcount
+                              FROM am_analysis_header) *
+                             (SELECT meals_per_day
+                              FROM OPTIONS))) AS int) AS text) || '%' AS val,
+       mf.ndb_no,
+       Shrt_Desc
+FROM mealfoods mf
+JOIN food_des USING (NDB_No)
+JOIN nutr_def nd
+JOIN nut_data DATA ON mf.NDB_No = data.NDB_No
+AND nd.Nutr_No = data.Nutr_No
+JOIN am_dv ON nd.Nutr_No = am_dv.Nutr_No
+WHERE meal_id >=
+    (SELECT firstmeal
+     FROM am_analysis_header)
+GROUP BY mf.NDB_No,
+         NutrDesc
+ORDER BY cast(val AS int) DESC;
 
-drop view if exists nutdv_big_contrib;
-create temp view nutdv_big_contrib as select nut_big_contrib.* from nut_big_contrib natural join nutr_def where dv_default > 0.0 order by shrt_desc;
+DROP VIEW IF EXISTS daily_food;
+
+
+CREATE TEMP VIEW daily_food AS
+SELECT cast(round((sum(mf.Gm_Wgt) / mealcount * meals_per_day) / origGm_Wgt * origAmount * 8.0) / 8.0 AS text) || ' ' || Msre_Desc || ' ' || Shrt_Desc AS food
+FROM mealfoods mf
+NATURAL JOIN food_des
+JOIN pref_Gm_Wgt USING (NDB_No)
+JOIN am_analysis_header
+WHERE meal_id BETWEEN firstmeal AND lastmeal
+GROUP BY NDB_No
+ORDER BY Shrt_Desc;
+
+
+DROP VIEW IF EXISTS daily_food1;
+
+CREATE TEMP VIEW daily_food1 AS
+SELECT cast(round(sum(8.0 * gm_wgt / 28.35 / mealcount * meals_per_day)) / 8.0 AS text) || ' oz ' || Long_desc
+FROM mealfoods
+NATURAL JOIN food_des
+JOIN am_analysis_header
+WHERE meal_id BETWEEN firstmeal AND lastmeal
+GROUP BY ndb_no
+ORDER BY long_desc;
+
+
+DROP VIEW IF EXISTS nut_big_contrib;
+
+
+CREATE TEMP VIEW nut_big_contrib AS
+SELECT shrt_desc,
+       nutrdesc,
+       max(nutr_val),
+       units
+FROM
+  (SELECT *
+   FROM nut_in_meals
+   ORDER BY nutrdesc ASC, nutr_val DESC)
+GROUP BY nutrdesc
+ORDER BY shrt_desc;
+
+
+DROP VIEW IF EXISTS nutdv_big_contrib;
+
+
+CREATE TEMP VIEW nutdv_big_contrib AS
+SELECT nut_big_contrib.*
+FROM nut_big_contrib
+NATURAL JOIN nutr_def
+WHERE dv_default > 0.0
+ORDER BY shrt_desc;
 
 /*
    Now, the same as previous but for the database as a whole, both for 100 gm
@@ -297,12 +541,38 @@ create temp view nutdv_big_contrib as select nut_big_contrib.* from nut_big_cont
 	select * from nut_in_100g where NutrDesc = 'Glycine' and FdGrp_Cd =
         1900;
 */
+DROP VIEW IF EXISTS nut_in_100g;
 
-drop view if exists nut_in_100g;
-create temp view nut_in_100g as select NutrDesc, FdGrp_Cd, f.NDB_No, Long_Desc, Nutr_Val from food_des f join nutr_def n join nut_data d on f.NDB_No = d.NDB_No and n.Nutr_No = d.Nutr_No order by Nutr_Val asc;
 
-drop view if exists nut_in_100cal;
-create temp view nut_in_100cal as select NutrDesc, FdGrp_Cd, f.NDB_No, Long_Desc, 100.0 * d.Nutr_Val / c.Nutr_Val as Nutr_Val from food_des f join nutr_def n join nut_data d on f.NDB_No = d.NDB_No and n.Nutr_No = d.Nutr_No join nut_data c on f.NDB_No = c.NDB_No and c.Nutr_No = 208 order by Nutr_Val asc;
+CREATE TEMP VIEW nut_in_100g AS
+SELECT NutrDesc,
+       FdGrp_Cd,
+       f.NDB_No,
+       Long_Desc,
+       Nutr_Val
+FROM food_des f
+JOIN nutr_def n
+JOIN nut_data d ON f.NDB_No = d.NDB_No
+AND n.Nutr_No = d.Nutr_No
+ORDER BY Nutr_Val ASC;
+
+
+DROP VIEW IF EXISTS nut_in_100cal;
+
+
+CREATE TEMP VIEW nut_in_100cal AS
+SELECT NutrDesc,
+       FdGrp_Cd,
+       f.NDB_No,
+       Long_Desc,
+       100.0 * d.Nutr_Val / c.Nutr_Val AS Nutr_Val
+FROM food_des f
+JOIN nutr_def n
+JOIN nut_data d ON f.NDB_No = d.NDB_No
+AND n.Nutr_No = d.Nutr_No
+JOIN nut_data c ON f.NDB_No = c.NDB_No
+AND c.Nutr_No = 208
+ORDER BY Nutr_Val ASC;
 
 /*
   The actual autocal triggers that run the weight log application have to be
@@ -313,18 +583,14 @@ create temp view nut_in_100cal as select NutrDesc, FdGrp_Cd, f.NDB_No, Long_Desc
   a different trigger.
 
   First, the proceed or do nothing trigger.
-*/
-
-/*
+*/ /*
 drop trigger if exists autocal_proceed;
 create temp trigger autocal_proceed after insert on z_wl
 when (select autocal = 2 and weightn > 1 and (weightslope - fatslope) >= 0.0 and fatslope <= 0.0 from z_wslope, z_fslope, z_span, options)
 begin
 select null;
 end;
-*/
-
-/*
+*/ /*
   Just joking!  It doesn't do anything so we don't need it!  But as we change
   the conditions, the action changes.
 
@@ -338,44 +604,136 @@ end;
   If fat was going up and and lean was going down we make no adjustment because,
   well, we just don't know!
 */
+DROP TABLE IF EXISTS wlsave;
 
-drop table if exists wlsave;
-create temp table wlsave (weight real, fat real, wldate integer, span integer, today integer);
 
-drop trigger if exists autocal_cutting;
-create temp trigger autocal_cutting after insert on z_wl
-when (select autocal = 2 and weightn > 1 and fatslope > 0.0 and (weightslope - fatslope) > 0.0 from z_wslope, z_fslope, options)
-begin
-delete from wlsave;
-insert into wlsave select weightyintercept, fatyintercept, wldate, span, today from z_wslope, z_fslope, z_span, (select min(wldate) as wldate from z_wl where
-cleardate is null), (select strftime('%Y%m%d', 'now', 'localtime') as today);
-update z_wl set cleardate = (select today from wlsave) where cleardate is null;
-insert into z_wl select weight, round(100.0 * fat / weight,1), today, null from wlsave;
-update nutr_def set nutopt = nutopt - 20.0 where Nutr_No = 208;
-end;
+CREATE TEMP TABLE wlsave (weight real, fat real, wldate integer, span integer, today integer);
 
-drop trigger if exists autocal_bulking;
-create temp trigger autocal_bulking after insert on z_wl
-when (select autocal = 2 and weightn > 1 and fatslope < 0.0 and (weightslope - fatslope) < 0.0 from z_wslope, z_fslope, options)
-begin
-delete from wlsave;
-insert into wlsave select weightyintercept, fatyintercept, wldate, span, today from z_wslope, z_fslope, z_span, (select min(wldate) as wldate from z_wl where
-cleardate is null), (select strftime('%Y%m%d', 'now', 'localtime') as today);
-update z_wl set cleardate = (select today from wlsave) where cleardate is null;
-insert into z_wl select weight, round(100.0 * fat / weight,1), today, null from wlsave;
-update nutr_def set nutopt = nutopt + 20.0 where Nutr_No = 208;
-end;
 
-drop trigger if exists autocal_cycle_end;
-create temp trigger autocal_cycle_end after insert on z_wl
-when (select autocal = 2 and weightn > 1 and fatslope > 0.0 and (weightslope - fatslope) < 0.0 from z_wslope, z_fslope, options)
-begin
-delete from wlsave;
-insert into wlsave select weightyintercept, fatyintercept, wldate, span, today from z_wslope, z_fslope, z_span, (select min(wldate) as wldate from z_wl where
-cleardate is null), (select strftime('%Y%m%d', 'now', 'localtime') as today);
-update z_wl set cleardate = (select today from wlsave) where cleardate is null;
-insert into z_wl select weight, round(100.0 * fat / weight,1), today, null from wlsave;
-end;
+DROP TRIGGER IF EXISTS autocal_cutting;
+
+
+CREATE TEMP TRIGGER autocal_cutting AFTER
+INSERT ON z_wl WHEN
+  (SELECT autocal = 2
+   AND weightn > 1
+   AND fatslope > 0.0
+   AND (weightslope - fatslope) > 0.0
+   FROM z_wslope,
+        z_fslope,
+        OPTIONS) BEGIN
+DELETE
+FROM wlsave;
+INSERT INTO wlsave
+SELECT weightyintercept,
+       fatyintercept,
+       wldate,
+       span,
+       today
+FROM z_wslope,
+     z_fslope,
+     z_span,
+  (SELECT min(wldate) AS wldate
+   FROM z_wl
+   WHERE cleardate IS NULL),
+  (SELECT strftime('%Y%m%d', 'now', 'localtime') AS today);
+UPDATE z_wl
+SET cleardate =
+  (SELECT today
+   FROM wlsave)
+WHERE cleardate IS NULL;
+  INSERT INTO z_wl
+SELECT weight,
+       round(100.0 * fat / weight, 1),
+       today,
+       NULL
+FROM wlsave;
+UPDATE nutr_def
+SET nutopt = nutopt - 20.0
+WHERE Nutr_No = 208; END;
+
+
+DROP TRIGGER IF EXISTS autocal_bulking;
+
+
+CREATE TEMP TRIGGER autocal_bulking AFTER
+INSERT ON z_wl WHEN
+  (SELECT autocal = 2
+   AND weightn > 1
+   AND fatslope < 0.0
+   AND (weightslope - fatslope) < 0.0
+   FROM z_wslope,
+        z_fslope,
+        OPTIONS) BEGIN
+DELETE
+FROM wlsave;
+INSERT INTO wlsave
+SELECT weightyintercept,
+       fatyintercept,
+       wldate,
+       span,
+       today
+FROM z_wslope,
+     z_fslope,
+     z_span,
+  (SELECT min(wldate) AS wldate
+   FROM z_wl
+   WHERE cleardate IS NULL),
+  (SELECT strftime('%Y%m%d', 'now', 'localtime') AS today);
+UPDATE z_wl
+SET cleardate =
+  (SELECT today
+   FROM wlsave)
+WHERE cleardate IS NULL;
+  INSERT INTO z_wl
+SELECT weight,
+       round(100.0 * fat / weight, 1),
+       today,
+       NULL
+FROM wlsave;
+UPDATE nutr_def
+SET nutopt = nutopt + 20.0
+WHERE Nutr_No = 208; END;
+
+
+DROP TRIGGER IF EXISTS autocal_cycle_end;
+
+
+CREATE TEMP TRIGGER autocal_cycle_end AFTER
+INSERT ON z_wl WHEN
+  (SELECT autocal = 2
+   AND weightn > 1
+   AND fatslope > 0.0
+   AND (weightslope - fatslope) < 0.0
+   FROM z_wslope,
+        z_fslope,
+        OPTIONS) BEGIN
+DELETE
+FROM wlsave;
+INSERT INTO wlsave
+SELECT weightyintercept,
+       fatyintercept,
+       wldate,
+       span,
+       today
+FROM z_wslope,
+     z_fslope,
+     z_span,
+  (SELECT min(wldate) AS wldate
+   FROM z_wl
+   WHERE cleardate IS NULL),
+  (SELECT strftime('%Y%m%d', 'now', 'localtime') AS today);
+UPDATE z_wl
+SET cleardate =
+  (SELECT today
+   FROM wlsave)
+WHERE cleardate IS NULL;
+  INSERT INTO z_wl
+SELECT weight,
+       round(100.0 * fat / weight, 1),
+       today,
+       NULL
+FROM wlsave; END;
 
 /*
   We create a shopping list where the "n" column automatically gives a serial
@@ -383,10 +741,20 @@ end;
   Insert into the table this way:
 	INSERT into shopping values (null, 'potatoes', 'tj');
 */
+CREATE TABLE IF NOT EXISTS shopping (n integer PRIMARY KEY,
+                                                       item text, store text);
 
-CREATE TABLE if not exists shopping (n integer primary key, item text, store text);
-drop view if exists shopview;
-CREATE temp VIEW shopview as select 'Shopping List ' || group_concat(n || ': ' || item || ' (' || store || ')', ' ') from (select * from shopping order by store, item);
+
+DROP VIEW IF EXISTS shopview;
+
+
+CREATE TEMP VIEW shopview AS
+SELECT 'Shopping List ' || group_concat(n || ': ' || item || ' (' || store || ')', ' ')
+FROM
+  (SELECT *
+   FROM shopping
+   ORDER BY store,
+            item);
 
 /*
   A persistent table for food cost.  There are at least three different situations:
@@ -399,101 +767,225 @@ CREATE temp VIEW shopview as select 'Shopping List ' || group_concat(n || ': ' |
   3) food weight as bought has a lot of refuse; for instance, chicken is 3.50 a pound
      but has 30% refuse, so gm_size = 454 * 0.7, cost = 3.50.
 */
-
-create table if not exists cost (ndb_no int primary key, gm_size real, cost real);
+CREATE TABLE IF NOT EXISTS cost (ndb_no int PRIMARY KEY,
+                                                    gm_size real, cost real);
 
 /*
-  Views of the daily food cost:  listing by food per day and grand total per day 
+  Views of the daily food cost:  listing by food per day and grand total per day
   over the whole analysis period; plus total for currentmeal.
 */
+DROP VIEW IF EXISTS food_cost;
 
-drop view if exists food_cost;
-create temp view food_cost as select ndb_no, round(sum(gm_wgt / gm_size * cost * meals_per_day / mealcount),2) as cost, long_desc from mealfoods natural join food_des natural join cost join am_analysis_header where meal_id between firstmeal and lastmeal group by ndb_no order by cost desc;
-drop view if exists food_cost_cm;
-create temp view food_cost_cm as select round(sum(gm_wgt / gm_size * cost),2) as cost from mealfoods natural join cost join options where meal_id = currentmeal;
-drop view if exists food_cost_total;
-create temp view food_cost_total as select sum(cost) as cost from food_cost;
+
+CREATE TEMP VIEW food_cost AS
+SELECT ndb_no,
+       round(sum(gm_wgt / gm_size * cost * meals_per_day / mealcount), 2) AS cost,
+       long_desc
+FROM mealfoods
+NATURAL JOIN food_des
+NATURAL JOIN cost
+JOIN am_analysis_header
+WHERE meal_id BETWEEN firstmeal AND lastmeal
+GROUP BY ndb_no
+ORDER BY cost DESC;
+
+
+DROP VIEW IF EXISTS food_cost_cm;
+
+
+CREATE TEMP VIEW food_cost_cm AS
+SELECT round(sum(gm_wgt / gm_size * cost), 2) AS cost
+FROM mealfoods
+NATURAL JOIN cost
+JOIN OPTIONS
+WHERE meal_id = currentmeal;
+
+
+DROP VIEW IF EXISTS food_cost_total;
+
+
+CREATE TEMP VIEW food_cost_total AS
+SELECT sum(cost) AS cost
+FROM food_cost;
 
 /*
   A purely personal view.  max_chick is about portion control for various parts
-  of a raw cut-up chicken based on protein and fat values that will fit into the meal.  
+  of a raw cut-up chicken based on protein and fat values that will fit into the meal.
 */
+DROP VIEW IF EXISTS max_chick;
 
-drop view if exists max_chick;
-CREATE temp VIEW max_chick as with data (ndb_no, shrt_desc, pamount, famount, msre_desc) as (select f.NDB_No, Shrt_Desc, round((select dv / 3.0 - 15.0 from am_dv where nutr_no = 203) / p.Nutr_Val * 100 / origGm_Wgt * Amount * 8) / 8.0, round((select dv / 3.0 - 17.39 from am_dv where nutr_no = 204) / fat.Nutr_Val * 100 / origGm_Wgt * Amount * 8) / 8.0, Msre_Desc from food_des f join nut_data p on f.ndb_no = p.ndb_no and p.nutr_no = 203 join nut_data fat on f.ndb_no = fat.ndb_no and fat.nutr_no = 204 natural join weight where f.NDB_No in (select ndb_no from food_des where ndb_no > 99000 and Shrt_Desc like '%chick%mic%' union select 5088) and Seq = (select min(Seq) from weight where weight.NDB_No = f.NDB_No)) select ndb_no, shrt_desc, case when pamount <= famount then pamount else famount end, msre_desc from data;
+
+CREATE TEMP VIEW max_chick AS WITH DATA (ndb_no,
+                                         shrt_desc,
+                                         pamount,
+                                         famount,
+                                         msre_desc) AS
+  (SELECT f.NDB_No,
+          Shrt_Desc,
+          round(
+                  (SELECT dv / 3.0 - 15.0
+                   FROM am_dv
+                   WHERE nutr_no = 203) / p.Nutr_Val * 100 / origGm_Wgt * Amount * 8) / 8.0,
+          round(
+                  (SELECT dv / 3.0 - 17.39
+                   FROM am_dv
+                   WHERE nutr_no = 204) / fat.Nutr_Val * 100 / origGm_Wgt * Amount * 8) / 8.0,
+          Msre_Desc
+   FROM food_des f
+   JOIN nut_data p ON f.ndb_no = p.ndb_no
+   AND p.nutr_no = 203
+   JOIN nut_data fat ON f.ndb_no = fat.ndb_no
+   AND fat.nutr_no = 204
+   NATURAL JOIN weight
+   WHERE f.NDB_No IN
+       (SELECT ndb_no
+        FROM food_des
+        WHERE ndb_no > 99000
+          AND Shrt_Desc LIKE '%chick%mic%'
+        UNION SELECT 5088)
+     AND Seq =
+       (SELECT min(Seq)
+        FROM weight
+        WHERE weight.NDB_No = f.NDB_No))
+SELECT ndb_no,
+       shrt_desc,
+       CASE
+           WHEN pamount <= famount THEN pamount
+           ELSE famount
+       END,
+       msre_desc
+FROM DATA;
 
 /*
   View showing daily macros and body composition index
 */
+DROP VIEW IF EXISTS daily_macros;
 
-drop view if exists daily_macros;
-create temp view daily_macros as
-select day, round(sum(calories)) as calories, 
-cast(round(100.0 * sum(procals) / sum(calories)) as int) || '/' ||
-cast(round(100.0 * sum(chocals) / sum(calories)) as int) || '/' ||
-cast(round(100.0 * sum(fatcals) / sum(calories)) as int) as macropct,
-round(sum(protein)) as protein,
-round(sum(nfc)) as nfc, round(sum(fat)) as fat,
-bodycomp 
-from 
-(select meal_id / 100 as day, NDB_No, 
-sum(Gm_Wgt / 100.0 * cals.Nutr_Val) as calories, 
-sum(Gm_Wgt / 100.0 * pro.Nutr_Val) as protein, 
-sum(Gm_Wgt / 100.0 * crb.Nutr_Val) as nfc, 
-sum(Gm_Wgt / 100.0 * totfat.Nutr_Val) as fat,
-sum(Gm_Wgt / 100.0 * pcals.Nutr_Val) as procals,
-sum(Gm_Wgt / 100.0 * ccals.Nutr_Val) as chocals,
-sum(Gm_Wgt / 100.0 * fcals.Nutr_Val) as fatcals,
-bodycomp
-from mealfoods join nut_data cals using (NDB_No) 
-join nut_data pro using (NDB_No) 
-join nut_data crb using (NDB_No) 
-join nut_data totfat using (NDB_No) 
-join nut_data pcals using (NDB_No) 
-join nut_data ccals using (NDB_No) 
-join nut_data fcals using (NDB_No) 
-left join (select * from wlview group by wldate) on day = wldate
-where cals.Nutr_No = 208 and
-pro.Nutr_No = 203 and
-crb.Nutr_No = 2000 and
-totfat.Nutr_No = 204 and
-pcals.Nutr_No = 3000 and
-ccals.Nutr_No = 3002 and
-fcals.Nutr_No = 3001
-group by day, NDB_No) group by day;
+
+CREATE TEMP VIEW daily_macros AS
+SELECT DAY,
+       round(sum(calories)) AS calories,
+       cast(round(100.0 * sum(procals) / sum(calories)) AS int) || '/' || cast(round(100.0 * sum(chocals) / sum(calories)) AS int) || '/' || cast(round(100.0 * sum(fatcals) / sum(calories)) AS int) AS macropct,
+       round(sum(protein)) AS protein,
+       round(sum(nfc)) AS nfc,
+       round(sum(fat)) AS fat,
+       bodycomp
+FROM
+  (SELECT meal_id / 100 AS DAY,
+          NDB_No,
+          sum(Gm_Wgt / 100.0 * cals.Nutr_Val) AS calories,
+          sum(Gm_Wgt / 100.0 * pro.Nutr_Val) AS protein,
+          sum(Gm_Wgt / 100.0 * crb.Nutr_Val) AS nfc,
+          sum(Gm_Wgt / 100.0 * totfat.Nutr_Val) AS fat,
+          sum(Gm_Wgt / 100.0 * pcals.Nutr_Val) AS procals,
+          sum(Gm_Wgt / 100.0 * ccals.Nutr_Val) AS chocals,
+          sum(Gm_Wgt / 100.0 * fcals.Nutr_Val) AS fatcals,
+          bodycomp
+   FROM mealfoods
+   JOIN nut_data cals USING (NDB_No)
+   JOIN nut_data pro USING (NDB_No)
+   JOIN nut_data crb USING (NDB_No)
+   JOIN nut_data totfat USING (NDB_No)
+   JOIN nut_data pcals USING (NDB_No)
+   JOIN nut_data ccals USING (NDB_No)
+   JOIN nut_data fcals USING (NDB_No)
+   LEFT JOIN
+     (SELECT *
+      FROM wlview
+      GROUP BY wldate) ON DAY = wldate
+   WHERE cals.Nutr_No = 208
+     AND pro.Nutr_No = 203
+     AND crb.Nutr_No = 2000
+     AND totfat.Nutr_No = 204
+     AND pcals.Nutr_No = 3000
+     AND ccals.Nutr_No = 3002
+     AND fcals.Nutr_No = 3001
+   GROUP BY DAY,
+            NDB_No)
+GROUP BY DAY;
 
 /*
   This is the select that I use to look at the nutrient values for the current meal.
 */
+DROP VIEW IF EXISTS ranalysis;
 
-drop view if exists ranalysis;
-create temp view ranalysis as select NutrDesc, round(Nutr_Val, 1) || ' ' || Units, cast(cast(round(100.0 + dvpct_offset) as int) as text) || '%' from rm_analysis natural join rm_dv natural join nutr_def order by dvpct_offset desc;
+
+CREATE TEMP VIEW ranalysis AS
+SELECT NutrDesc,
+       round(Nutr_Val, 1) || ' ' || Units,
+       cast(cast(round(100.0 + dvpct_offset) AS int) AS text) || '%'
+FROM rm_analysis
+NATURAL JOIN rm_dv
+NATURAL JOIN nutr_def
+ORDER BY dvpct_offset DESC;
 
 /*
   This is the select that I use to look at the nutrient values for the
   whole analysis period.
 */
+DROP VIEW IF EXISTS analysis;
 
-drop view if exists analysis;
-create temp view analysis as select NutrDesc, round(Nutr_Val, 1) || ' ' || Units, cast(cast(round(100.0 + dvpct_offset) as int) as text) || '%' from am_analysis natural join am_dv natural join nutr_def order by dvpct_offset desc;
+
+CREATE TEMP VIEW analysis AS
+SELECT NutrDesc,
+       round(Nutr_Val, 1) || ' ' || Units,
+       cast(cast(round(100.0 + dvpct_offset) AS int) AS text) || '%'
+FROM am_analysis
+NATURAL JOIN am_dv
+NATURAL JOIN nutr_def
+ORDER BY dvpct_offset DESC;
 
 /*
   A totally unneccesary bit of fluff:  a persistent table to hold a name for the
   current eating plan.
 */
-
-create table if not exists eating_plan (plan_name text);
+CREATE TABLE IF NOT EXISTS eating_plan (plan_name text);
 
 /*
   This view spells out a more easily readable string for the current meal as defined
   in the options table.
 */
+DROP VIEW IF EXISTS cm_string;
 
-drop view if exists cm_string;
-create temp view cm_string as with cdate (cdate, meal) as (select substr(currentmeal,1,4) || '-' || substr(currentmeal,5,2) || '-' || substr(currentmeal,7,2), cast(substr(currentmeal,9,2) as int) from options) select case when w = 0 then 'Sun' when w = 1 then 'Mon' when w = 2 then 'Tue' when w = 3 then 'Wed' when w = 4 then 'Thu' when w = 5 then 'Fri' when w = 6 then 'Sat' end || ' ' || case when m = 1 then 'Jan' when m = 2 then 'Feb' when m = 3 then 'Mar' when m = 4 then 'Apr' when m = 5 then 'May' when m = 6 then 'Jun' when m = 7 then 'Jul' when m = 8 then 'Aug' when m = 9 then 'Sep' when m = 10 then 'Oct' when m = 11 then 'Nov' else 'Dec' end || ' ' || d || ', ' || y || ' #' || meal as cm_string from (select cast(strftime('%w',cdate) as int) as w, cast(strftime('%m',cdate) as int) as m, cast(strftime('%d',cdate) as int) as d, strftime('%Y',cdate) as y, meal from cdate);
 
-commit;
+CREATE TEMP VIEW cm_string AS WITH cdate (cdate, meal) AS
+  (SELECT substr(currentmeal, 1, 4) || '-' || substr(currentmeal, 5, 2) || '-' || substr(currentmeal, 7, 2),
+          cast(substr(currentmeal, 9, 2) AS int)
+   FROM OPTIONS)
+SELECT CASE
+           WHEN w = 0 THEN 'Sun'
+           WHEN w = 1 THEN 'Mon'
+           WHEN w = 2 THEN 'Tue'
+           WHEN w = 3 THEN 'Wed'
+           WHEN w = 4 THEN 'Thu'
+           WHEN w = 5 THEN 'Fri'
+           WHEN w = 6 THEN 'Sat'
+       END || ' ' || CASE
+                         WHEN m = 1 THEN 'Jan'
+                         WHEN m = 2 THEN 'Feb'
+                         WHEN m = 3 THEN 'Mar'
+                         WHEN m = 4 THEN 'Apr'
+                         WHEN m = 5 THEN 'May'
+                         WHEN m = 6 THEN 'Jun'
+                         WHEN m = 7 THEN 'Jul'
+                         WHEN m = 8 THEN 'Aug'
+                         WHEN m = 9 THEN 'Sep'
+                         WHEN m = 10 THEN 'Oct'
+                         WHEN m = 11 THEN 'Nov'
+                         ELSE 'Dec'
+                     END || ' ' || d || ', ' || y || ' #' || meal AS cm_string
+FROM
+  (SELECT cast(strftime('%w', cdate) AS int) AS w,
+          cast(strftime('%m', cdate) AS int) AS m,
+          cast(strftime('%d', cdate) AS int) AS d,
+          strftime('%Y', cdate) AS y,
+          meal
+   FROM cdate);
+
+
+COMMIT;
 
 PRAGMA user_version = 38;
+
 .separator '|'
 .prompt 'bigNUT> '

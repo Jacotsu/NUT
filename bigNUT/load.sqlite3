@@ -599,7 +599,8 @@ OR        f18d3cn3.nutr_val IS NOT NULL
 OR        f18d3cn6.nutr_val IS NOT NULL
 OR        f18d3i.nutr_val IS NOT NULL;
 
---insert SHORT6 records into nut_dataINSERT
+--insert SHORT6 records into nut_data
+INSERT
 or     REPLACE
 into   nut_data
 SELECT    f.ndb_no,
@@ -615,7 +616,8 @@ AND       f18d3cn6.nutr_no = 685
 WHERE     la.nutr_val IS NOT NULL
 OR        f18d3cn6.nutr_val IS NOT NULL;
 
---insert SHORT3 records into nut_dataINSERT
+--insert SHORT3 records into nut_data
+INSERT
 or     REPLACE
 into   nut_data
 SELECT    f.ndb_no,
@@ -631,7 +633,8 @@ AND       f18d4.nutr_no = 627
 WHERE     ala.nutr_val IS NOT NULL
 OR        f18d4.nutr_val IS NOT NULL;
 
---insert AA records into nut_dataINSERT
+--insert AA records into nut_data
+INSERT
 or     REPLACE
 into   nut_data
 SELECT    f.ndb_no,
@@ -650,7 +653,8 @@ AND       f20d4n6.nutr_no = 855
 WHERE     f20d4.nutr_val IS NOT NULL
 OR        f20d4n6.nutr_val IS NOT NULL;
 
---insert LONG6 records into nut_dataINSERT
+--insert LONG6 records into nut_data
+INSERT
 or     REPLACE
 into   nut_data
 SELECT    f.ndb_no,
@@ -677,7 +681,8 @@ OR        f20d3n6.nutr_val IS NOT NULL
 OR        f20d3.nutr_val IS NOT NULL
 OR        f22d4.nutr_val IS NOT NULL;
 
---insert EPA records into nut_dataINSERT
+--insert EPA records into nut_data
+INSERT
 or     REPLACE
 into   nut_data
 SELECT    f.ndb_no,
@@ -689,7 +694,8 @@ ON        f.ndb_no = f20d5.ndb_no
 AND       f20d5.nutr_no = 629
 WHERE     f20d5.nutr_val IS NOT NULL;
 
---insert DHA records into nut_dataINSERT
+--insert DHA records into nut_data
+INSERT
 or     REPLACE
 into   nut_data
 SELECT    f.ndb_no,
@@ -701,7 +707,8 @@ ON        f.ndb_no = f22d6.ndb_no
 AND       f22d6.nutr_no = 621
 WHERE     f22d6.nutr_val IS NOT NULL;
 
---insert LONG3 records into nut_dataINSERT
+--insert LONG3 records into nut_data
+INSERT
 or     REPLACE
 into   nut_data
 SELECT    f.ndb_no,
@@ -725,7 +732,8 @@ OR        dha.nutr_val IS NOT NULL
 OR        f20d3n3.nutr_val IS NOT NULL
 OR        f22d5.nutr_val IS NOT NULL;
 
---insert OMEGA6 records into nut_dataINSERT
+--insert OMEGA6 records into nut_data
+INSERT
 or     REPLACE
 into   nut_data
 SELECT    f.ndb_no,
@@ -741,7 +749,8 @@ AND       long6.nutr_no = 3004
 WHERE     short6.nutr_val IS NOT NULL
 OR        long6.nutr_val IS NOT NULL;
 
---insert OMEGA3 records into nut_dataINSERT
+--insert OMEGA3 records into nut_data
+INSERT
 or     REPLACE
 into   nut_data
 SELECT    f.ndb_no,
@@ -757,7 +766,8 @@ AND       long3.nutr_no = 3006
 WHERE     short3.nutr_val IS NOT NULL
 OR        long3.nutr_val IS NOT NULL;
 
---insert CHO_NONFIB records into nut_dataINSERT
+--insert CHO_NONFIB records into nut_data
+INSERT
 or     REPLACE
 into   nut_data
 SELECT    f.ndb_no,
@@ -775,7 +785,8 @@ ON        f.ndb_no = fibtg.ndb_no
 AND       fibtg.nutr_no = 291
 WHERE     chocdf.nutr_val IS NOT NULL;
 
---replace empty strings with values for macronutrient factors in food_desUPDATE food_des
+--replace empty strings with values for macronutrient factors in food_des
+UPDATE food_des
 SET    pro_factor = 4.0
 WHERE  pro_factor = ''
 OR     pro_factor IS NULL;UPDATE food_des
@@ -786,7 +797,8 @@ SET    cho_factor = 4.0
 WHERE  cho_factor = ''
 OR     cho_factor IS NULL;
 
---insert calories from macronutrients into nut_dataINSERT
+--insert calories from macronutrients into nut_data
+INSERT
 or     REPLACE
 into   nut_data
 SELECT f.ndb_no,
