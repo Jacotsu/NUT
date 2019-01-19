@@ -8,7 +8,7 @@ _ = gettext.gettext
 
 
 class Analysis():
-    def __init__(self, parent, tree_iter, defined_nutrients, data):
+    def __init__(self, parent, tree_iter, defined_nutrients):
         self._parent_treestore = parent
         self._defined_nutrients = defined_nutrients
 
@@ -167,13 +167,14 @@ class Analysis():
             next_tree_iter = None
             if key in self._defined_nutrients:
                 tmp_ntr = self._defined_nutrients[key]
+                data_to_append = [_(tmp_ntr[2]),
+                                  tmp_ntr[3],
+                                  0]
                 next_tree_iter = self._parent_treestore.append(tree_iter,
-                                                               [_(tmp_ntr[2]),
-                                                                tmp_ntr[3],
-                                                                tmp_ntr[4]])
+                                                               data_to_append)
             else:
                 next_tree_iter = self._parent_treestore.append(tree_iter,
-                                                               [_(key),0,0])
+                                                               [_(key), 0, 0])
 
             if type(item) is dict:
                 self._build_tree(next_tree_iter, item)
@@ -187,7 +188,7 @@ class Analysis():
 
 
 class Food(Analysis):
-    def __init__(self, parent, defined_nutrients, data):
+    def __init__(self, parent, defined_nutrients, name):
         self._parent_treestore = parent
-        top = self._parent_treestore.append(None, [_("Food"),1,None])
-        super(Food, self).__init__(parent, top, defined_nutrients, data)
+        top = self._parent_treestore.append(None, [_(name),1,None])
+        super(Food, self).__init__(parent, top, defined_nutrients)

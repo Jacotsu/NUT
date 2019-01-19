@@ -7,7 +7,7 @@ get_defined_nutrients = 'SELECT * FROM nutr_def;'
 
 set_nutrient_DV = 'UPDATE nutr_def SET nutopt = ? where NutrDesc = ?;'
 
-set_number_of_meals_to_analyze = 'UPDATED options SET defanal_am = 3;'
+set_number_of_meals_to_analyze = 'UPDATE options SET defanal_am = ?;'
 get_number_of_meals_to_analyze = 'SELECT defanal_am FROM options;'
 
 get_weight_unit = 'SELECT grams FROM options;'
@@ -38,6 +38,7 @@ get_macro_pct = 'SELECT macropct from am_analysis_header;'
 get_omega6_3_bal = 'SELECT n6balance from am_analysis_header;'
 
 get_food_list = 'SELECT NDB_No, Long_Desc FROM food_des;'
+get_food_from_NDB_No = 'SELECT * FROM food_des WHERE NDB_No = ?;'
 search_food = 'select NDB_No, Long_Desc from food_des where Long_Desc'\
               ' like ?;'
 get_food_sorted_by_nutrient = """
@@ -46,6 +47,16 @@ get_food_sorted_by_nutrient = """
     """
 get_food_preferred_weight = 'SELECT * FROM pref_Gm_Wgt WHERE NDB_No = ?;'
 get_food_nutrients = 'SELECT * FROM nut_data WHERE NDB_No = ?;'
+get_food_nutrients_at_pref_weight = """
+SELECT
+    NDB_No,
+    substr(Shrt_Desc, 1, 45),
+    Nutr_Val,
+    Units,
+    dv
+FROM view_foods
+WHERE NDB_No = ?;
+"""
 get_food_nutrients_based_on_weight = """
     SELECT
         meal_id,
@@ -62,3 +73,9 @@ get_meal_by_id = 'SELECT * FROM mealfoods WHERE meal_id = ?'
 get_weight_log = 'select * from wlog;'
 insert_weight_log = 'insert into wlog values (?, ?, null, null);'
 clear_weight_log = 'insert into wlsummary select \'clear\';'
+
+get_perosnal_nutrient_dv = """
+SELECT dv
+FROM am_dv
+WHERE Nutr_No = ?;
+"""

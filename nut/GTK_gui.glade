@@ -12,6 +12,12 @@
       <column type="gfloat"/>
     </columns>
   </object>
+  <object class="GtkAdjustment" id="am_meals_no">
+    <property name="upper">9999</property>
+    <property name="step_increment">1</property>
+    <property name="page_increment">10</property>
+    <signal name="value-changed" handler="analysis_meal_no_changed" swapped="no"/>
+  </object>
   <object class="GtkPopover" id="customary_meals_popover">
     <property name="can_focus">False</property>
     <child>
@@ -117,7 +123,7 @@
     <property name="upper">100</property>
     <property name="value">50</property>
     <property name="step_increment">1</property>
-    <signal name="value-changed" handler="RecordMealsSliderChanged" swapped="no"/>
+    <signal name="value-changed" handler="record_meals_slider_changed" swapped="no"/>
   </object>
   <object class="GtkEntryBuffer" id="rm_search_entry"/>
   <object class="GtkListStore" id="search_food_list">
@@ -195,6 +201,7 @@
     <property name="width_request">800</property>
     <property name="height_request">600</property>
     <property name="can_focus">False</property>
+    <signal name="destroy" handler="on_destroy" swapped="no"/>
     <child>
       <placeholder/>
     </child>
@@ -236,6 +243,7 @@
                     <property name="overwrite_mode">True</property>
                     <property name="caps_lock_warning">False</property>
                     <property name="input_purpose">number</property>
+                    <property name="adjustment">am_meals_no</property>
                     <property name="climb_rate">0.20000000000000001</property>
                     <property name="snap_to_ticks">True</property>
                     <property name="numeric">True</property>
@@ -411,6 +419,7 @@
                         <property name="receives_default">True</property>
                         <property name="halign">end</property>
                         <property name="use_stock">True</property>
+                        <signal name="clicked" handler="add_food_to_meal" swapped="no"/>
                       </object>
                       <packing>
                         <property name="expand">False</property>
@@ -523,27 +532,10 @@
                     <property name="valign">start</property>
                     <property name="orientation">vertical</property>
                     <child>
-                      <object class="GtkScale">
-                        <property name="visible">True</property>
-                        <property name="can_focus">True</property>
-                        <property name="adjustment">rm_scale_meal_selector</property>
-                        <property name="show_fill_level">True</property>
-                        <property name="restrict_to_fill_level">False</property>
-                        <property name="fill_level">0</property>
-                        <property name="round_digits">0</property>
-                        <property name="digits">0</property>
-                        <property name="has_origin">False</property>
-                      </object>
-                      <packing>
-                        <property name="expand">False</property>
-                        <property name="fill">True</property>
-                        <property name="position">0</property>
-                      </packing>
-                    </child>
-                    <child>
                       <object class="GtkButtonBox">
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
+                        <property name="halign">center</property>
                         <property name="valign">start</property>
                         <property name="layout_style">start</property>
                         <child>
@@ -584,7 +576,7 @@
                       <packing>
                         <property name="expand">False</property>
                         <property name="fill">True</property>
-                        <property name="position">1</property>
+                        <property name="position">0</property>
                       </packing>
                     </child>
                     <child>
@@ -629,7 +621,38 @@
                       <packing>
                         <property name="expand">True</property>
                         <property name="fill">True</property>
+                        <property name="position">1</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="rm_selected_meal_label">
+                        <property name="visible">True</property>
+                        <property name="can_focus">False</property>
+                        <property name="label" translatable="yes">Menu analysis</property>
+                      </object>
+                      <packing>
+                        <property name="expand">False</property>
+                        <property name="fill">True</property>
                         <property name="position">2</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkScale">
+                        <property name="visible">True</property>
+                        <property name="can_focus">True</property>
+                        <property name="adjustment">rm_scale_meal_selector</property>
+                        <property name="show_fill_level">True</property>
+                        <property name="restrict_to_fill_level">False</property>
+                        <property name="fill_level">0</property>
+                        <property name="round_digits">0</property>
+                        <property name="digits">0</property>
+                        <property name="draw_value">False</property>
+                        <property name="has_origin">False</property>
+                      </object>
+                      <packing>
+                        <property name="expand">False</property>
+                        <property name="fill">True</property>
+                        <property name="position">3</property>
                       </packing>
                     </child>
                   </object>
@@ -637,18 +660,6 @@
                     <property name="expand">False</property>
                     <property name="fill">True</property>
                     <property name="position">0</property>
-                  </packing>
-                </child>
-                <child>
-                  <object class="GtkLabel">
-                    <property name="visible">True</property>
-                    <property name="can_focus">False</property>
-                    <property name="label" translatable="yes">Menu analysis</property>
-                  </object>
-                  <packing>
-                    <property name="expand">False</property>
-                    <property name="fill">True</property>
-                    <property name="position">1</property>
                   </packing>
                 </child>
                 <child>
@@ -833,7 +844,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkSpinButton">
+                  <object class="GtkSpinButton" id="settings_total_fat_sp">
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="adjustment">settings_total_fat</property>
@@ -845,7 +856,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkSpinButton">
+                  <object class="GtkSpinButton" id="settings_protein_sp">
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="adjustment">settings_protein</property>
@@ -857,7 +868,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkSpinButton">
+                  <object class="GtkSpinButton" id="settings_non_fiber_carb_sp">
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="adjustment">settings_non_fiber_carb</property>
@@ -869,7 +880,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkSpinButton">
+                  <object class="GtkSpinButton" id="settings_fiber_sp">
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="adjustment">settings_fiber</property>
@@ -881,7 +892,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkSpinButton">
+                  <object class="GtkSpinButton" id="settings_saturated_fat_sp">
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="adjustment">settings_saturated_fat</property>
@@ -893,7 +904,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkSpinButton">
+                  <object class="GtkSpinButton" id="settings_essential_fatty_acid_sp">
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="adjustment">settings_essentail_fatty_acids</property>
@@ -1266,7 +1277,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkSpinButton">
+                  <object class="GtkSpinButton" id="settings_calories_sp">
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="valign">start</property>

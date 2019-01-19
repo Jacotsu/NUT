@@ -28,6 +28,17 @@ class DBMan:
             logging.error(decoded)
             logging.error(decode_error)
             return decoded
+    @property
+    def calories(self):
+        """
+        :return: The personal option calories
+        :rtype: float
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_defined_nutrients)
+        return {nutrient[0]: nutrient[1:]
+                for nutrient in cur}
+
 
     @property
     def defined_nutrients(self):
@@ -239,3 +250,22 @@ class DBMan:
                     (NDB_No, weight))
 
         return cur
+
+    def get_food_by_NDB_No(self, NDB_No):
+        """
+        :param NDB_No: The food NDB_no
+        :return: The food with the fNDB_No
+        :rtype: Tuple
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_food_from_NDB_No,
+                    (NDB_No,))
+
+        return cur.fetchone()[0]
+
+    def get_food_nutrients_at_pref_weight(self, NDB_No):
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_food_nutrients_at_pref_weight,
+                    (NDB_No,))
+
+        return {x[0]: x[1:] for x in cur}
