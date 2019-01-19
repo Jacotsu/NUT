@@ -15,11 +15,29 @@ set_weight_unit = 'UPDATE options set grams = ?'
 
 get_current_meal = 'SELECT currentmeal FROM options;'
 set_current_meal = 'UPDATE options set currentmeal = ?;'
+get_meal_from_offset_rel_to_current = """
+-- This gets the nth meal id relative to the current meal
+SELECT meal_id
+FROM (
+    SELECT dense_rank() over (order by meal_id) as offset, meal_id
+    FROM mealfoods
+    GROUP BY meal_id
+)
+WHERE offset = (
+    SELECT offset+? FROM (
+        SELECT dense_rank() over (order by meal_id) as offset, meal_id
+        FROM mealfoods
+        GROUP BY meal_id
+    ) WHERE meal_id = (SELECT currentmeal FROM options)
+)
+GROUP BY meal_id;
+"""
 
 get_macro_pct = 'SELECT macropct from am_analysis_header;'
 
 get_omega6_3_bal = 'SELECT n6balance from am_analysis_header;'
 
+get_food_list = 'SELECT NDB_No, Long_Desc FROM food_des;'
 search_food = 'select NDB_No, Long_Desc from food_des where Long_Desc'\
               ' like ?;'
 get_food_sorted_by_nutrient = """

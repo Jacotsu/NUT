@@ -8,6 +8,7 @@ class DBMan:
     def __init__(self, db_name='nut.db'):
         try:
             self._conn = sqlite3.connect(db_name)
+            self._conn.text_factory = self.decode_non_UTF_strings
         except sqlite3.Error as e:
             logging.error(e)
 
@@ -17,6 +18,16 @@ class DBMan:
                              1: 'g',
                              'oz': 0,
                              'g': 1}
+
+    @staticmethod
+    def decode_non_UTF_strings(bytes_array):
+        try:
+            return bytes_array.decode('UTF-8')
+        except UnicodeDecodeError as decode_error:
+            decoded = bytes_array.decode('windows-1252')
+            logging.error(decoded)
+            logging.error(decode_error)
+            return decoded
 
     @property
     def defined_nutrients(self):
@@ -83,7 +94,7 @@ class DBMan:
         return meal
 
     @current_meal.setter
-    def current_meal(self, date, meal_no):
+    def current_meal(self, meal_id):
         """
         :param date: A datetime object that contains the meal's datetime
         :param meal_no: The day meal number (first meal is 1)
@@ -91,7 +102,22 @@ class DBMan:
         with self._conn as con:
             cur = con.cursor()
             cur.execute(bignut_queries.set_current_meal,
-                        (date.strftime(f'self.time_format{meal_no}'),))
+                        (meal_id,))
+
+    def get_meal_from_offset_rel_to_current(self, offset):
+        """
+        :return: The meal id in this format %Y%m%d%meal_no
+                 the current meal if none is found
+        :rtype: String
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_meal_from_offset_rel_to_current,
+                    (offset, ))
+        meal = cur.fetchone()
+        if meal:
+            return meal[0]
+        else:
+            return self.current_meal
 
     @property
     def macro_pct(self):
@@ -178,6 +204,17 @@ class DBMan:
         cur.execute(bignut_queries.get_meal_by_id, (meal_id,))
 
         return [Food(*x[:3]) for x in cur]
+
+    @property
+    def food_list(self):
+        """
+        :return: The food's list
+        :rtype: List of tuples
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_food_list)
+        return cur
+
 
     def get_food_preferred_weight(self, NDB_No):
         """

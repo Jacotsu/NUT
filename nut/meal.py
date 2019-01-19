@@ -163,8 +163,6 @@ class Analysis():
         self._build_tree(tree_iter, tree)
 
     def _build_tree(self, tree_iter, dictionary):
-        """        """
-
         for key, item in dictionary.items():
             next_tree_iter = None
             if key in self._defined_nutrients:

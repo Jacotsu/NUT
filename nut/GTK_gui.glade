@@ -93,10 +93,6 @@
       </object>
     </child>
   </object>
-  <object class="GtkEntryCompletion" id="entrycompletion1">
-    <property name="inline_completion">True</property>
-    <property name="inline_selection">True</property>
-  </object>
   <object class="GtkTreeStore" id="rm_analysis">
     <columns>
       <!-- column-name Name -->
@@ -121,6 +117,79 @@
     <property name="upper">100</property>
     <property name="value">50</property>
     <property name="step_increment">1</property>
+    <signal name="value-changed" handler="RecordMealsSliderChanged" swapped="no"/>
+  </object>
+  <object class="GtkEntryBuffer" id="rm_search_entry"/>
+  <object class="GtkListStore" id="search_food_list">
+    <columns>
+      <!-- column-name NDB_No -->
+      <column type="guint"/>
+      <!-- column-name Long_desc -->
+      <column type="gchararray"/>
+    </columns>
+  </object>
+  <object class="GtkEntryCompletion" id="rm_search_suggestion">
+    <property name="model">search_food_list</property>
+    <property name="text_column">1</property>
+    <property name="inline_completion">True</property>
+    <property name="popup_single_match">False</property>
+    <property name="inline_selection">True</property>
+    <child>
+      <object class="GtkCellRendererText"/>
+      <attributes>
+        <attribute name="text">1</attribute>
+      </attributes>
+    </child>
+  </object>
+  <object class="GtkAdjustment" id="settings_bodyfat">
+    <property name="upper">100</property>
+    <property name="step_increment">1</property>
+    <property name="page_increment">10</property>
+  </object>
+  <object class="GtkAdjustment" id="settings_calories">
+    <property name="upper">9999</property>
+    <property name="step_increment">1</property>
+    <property name="page_increment">10</property>
+  </object>
+  <object class="GtkFileFilter" id="settings_db_file_selector">
+    <mime-types>
+      <mime-type>application/sql</mime-type>
+    </mime-types>
+  </object>
+  <object class="GtkAdjustment" id="settings_essentail_fatty_acids">
+    <property name="upper">9999</property>
+    <property name="step_increment">1</property>
+    <property name="page_increment">10</property>
+  </object>
+  <object class="GtkAdjustment" id="settings_fiber">
+    <property name="upper">9999</property>
+    <property name="step_increment">1</property>
+    <property name="page_increment">10</property>
+  </object>
+  <object class="GtkAdjustment" id="settings_non_fiber_carb">
+    <property name="upper">9999</property>
+    <property name="step_increment">1</property>
+    <property name="page_increment">10</property>
+  </object>
+  <object class="GtkAdjustment" id="settings_protein">
+    <property name="upper">9999</property>
+    <property name="step_increment">1</property>
+    <property name="page_increment">10</property>
+  </object>
+  <object class="GtkAdjustment" id="settings_saturated_fat">
+    <property name="upper">9999</property>
+    <property name="step_increment">1</property>
+    <property name="page_increment">10</property>
+  </object>
+  <object class="GtkAdjustment" id="settings_total_fat">
+    <property name="upper">9999</property>
+    <property name="step_increment">1</property>
+    <property name="page_increment">10</property>
+  </object>
+  <object class="GtkAdjustment" id="settings_weight">
+    <property name="upper">9999</property>
+    <property name="step_increment">1</property>
+    <property name="page_increment">10</property>
   </object>
   <object class="GtkWindow" id="main_window">
     <property name="width_request">800</property>
@@ -244,9 +313,7 @@
                             <property name="title" translatable="yes">DV amount</property>
                             <property name="reorderable">True</property>
                             <child>
-                              <object class="GtkCellRendererText">
-                                <property name="max_width_chars">5</property>
-                              </object>
+                              <object class="GtkCellRendererText"/>
                               <attributes>
                                 <attribute name="text">1</attribute>
                               </attributes>
@@ -321,12 +388,13 @@
                         <property name="can_focus">True</property>
                         <property name="halign">center</property>
                         <property name="hexpand">True</property>
+                        <property name="buffer">rm_search_entry</property>
                         <property name="max_width_chars">120</property>
                         <property name="primary_icon_name">edit-find-symbolic</property>
                         <property name="primary_icon_activatable">False</property>
                         <property name="primary_icon_sensitive">False</property>
                         <property name="placeholder_text" translatable="yes">Food search</property>
-                        <property name="completion">entrycompletion1</property>
+                        <property name="completion">rm_search_suggestion</property>
                         <accelerator key="f" signal="grab-focus" modifiers="GDK_CONTROL_MASK"/>
                       </object>
                       <packing>
@@ -460,6 +528,7 @@
                         <property name="can_focus">True</property>
                         <property name="adjustment">rm_scale_meal_selector</property>
                         <property name="show_fill_level">True</property>
+                        <property name="restrict_to_fill_level">False</property>
                         <property name="fill_level">0</property>
                         <property name="round_digits">0</property>
                         <property name="digits">0</property>
@@ -727,7 +796,9 @@
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="margin_bottom">4</property>
-                    <property name="title" translatable="yes"/>
+                    <property name="create_folders">False</property>
+                    <property name="filter">settings_db_file_selector</property>
+                    <property name="title" translatable="yes">Choose you database file</property>
                   </object>
                   <packing>
                     <property name="left_attach">1</property>
@@ -765,6 +836,8 @@
                   <object class="GtkSpinButton">
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
+                    <property name="adjustment">settings_total_fat</property>
+                    <property name="digits">2</property>
                   </object>
                   <packing>
                     <property name="left_attach">1</property>
@@ -775,6 +848,8 @@
                   <object class="GtkSpinButton">
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
+                    <property name="adjustment">settings_protein</property>
+                    <property name="digits">2</property>
                   </object>
                   <packing>
                     <property name="left_attach">1</property>
@@ -785,6 +860,8 @@
                   <object class="GtkSpinButton">
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
+                    <property name="adjustment">settings_non_fiber_carb</property>
+                    <property name="digits">2</property>
                   </object>
                   <packing>
                     <property name="left_attach">1</property>
@@ -795,6 +872,8 @@
                   <object class="GtkSpinButton">
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
+                    <property name="adjustment">settings_fiber</property>
+                    <property name="digits">2</property>
                   </object>
                   <packing>
                     <property name="left_attach">1</property>
@@ -805,6 +884,8 @@
                   <object class="GtkSpinButton">
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
+                    <property name="adjustment">settings_saturated_fat</property>
+                    <property name="digits">2</property>
                   </object>
                   <packing>
                     <property name="left_attach">1</property>
@@ -815,6 +896,8 @@
                   <object class="GtkSpinButton">
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
+                    <property name="adjustment">settings_essentail_fatty_acids</property>
+                    <property name="digits">2</property>
                   </object>
                   <packing>
                     <property name="left_attach">1</property>
@@ -1187,6 +1270,8 @@
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="valign">start</property>
+                    <property name="adjustment">settings_calories</property>
+                    <property name="digits">2</property>
                   </object>
                   <packing>
                     <property name="left_attach">1</property>
@@ -1232,6 +1317,8 @@
                       <object class="GtkSpinButton">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
+                        <property name="adjustment">settings_weight</property>
+                        <property name="digits">2</property>
                       </object>
                       <packing>
                         <property name="expand">True</property>
@@ -1267,6 +1354,8 @@
                       <object class="GtkSpinButton">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
+                        <property name="adjustment">settings_bodyfat</property>
+                        <property name="digits">2</property>
                       </object>
                       <packing>
                         <property name="expand">True</property>
