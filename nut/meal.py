@@ -168,23 +168,27 @@ class Analysis():
             if key in self._defined_nutrients:
                 tmp_ntr = self._defined_nutrients[key]
                 data_to_append = [_(tmp_ntr[2]),
-                                  tmp_ntr[3],
-                                  0]
+                                  0,
+                                  str(tmp_ntr[3])]
+                logging.debug(f'Adding: {pformat(data_to_append)}')
                 next_tree_iter = self._parent_treestore.append(tree_iter,
                                                                data_to_append)
             else:
                 next_tree_iter = self._parent_treestore.append(tree_iter,
-                                                               [_(key), 0, 0])
+                                                               [_(key), 0,
+                                                                str(0)])
 
             if type(item) is dict:
                 self._build_tree(next_tree_iter, item)
             elif type(item) is list:
                 for nutr in item:
                     tmp_ntr = self._defined_nutrients[nutr]
+                    data_to_append = [_(tmp_ntr[2]),
+                                      0,
+                                      str(tmp_ntr[3])]
+                    logging.debug(f'Adding: {pformat(data_to_append)}')
                     self._parent_treestore.append(next_tree_iter,
-                                                  [_(tmp_ntr[2]),
-                                                   tmp_ntr[3],
-                                                   tmp_ntr[4]])
+                                                  data_to_append)
 
 
 class Food(Analysis):

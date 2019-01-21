@@ -19,6 +19,10 @@ class DBMan:
                              'oz': 0,
                              'g': 1}
 
+        with self._conn as con:
+            cur = con.cursor()
+            cur.executescript(bignut_queries.user_init_query)
+
     @staticmethod
     def decode_non_UTF_strings(bytes_array):
         try:
@@ -28,6 +32,18 @@ class DBMan:
             logging.error(decoded)
             logging.error(decode_error)
             return decoded
+
+    @property
+    def current_meal_string(self):
+        """
+        :return: The current meal string
+        :rtype: str
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_current_meal_str)
+        return cur.fetchone()[0]
+
+
     @property
     def calories(self):
         """
@@ -38,6 +54,46 @@ class DBMan:
         cur.execute(bignut_queries.get_defined_nutrients)
         return {nutrient[0]: nutrient[1:]
                 for nutrient in cur}
+
+    @property
+    def rm_analysis_header(self):
+        """
+        :return: The record meals analysis header
+        :rtype: Tuple
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_rm_analysis_header)
+        return cur.fetchone()
+
+    @property
+    def weight_summary(self):
+        """
+        :return: The weight log summary
+        :rtype: Str
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_weight_summary)
+        return cur.fetchone()[0]
+
+    @property
+    def last_weight(self):
+        """
+        :return: The last weight
+        :rtype: float
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_last_weight)
+        return cur.fetchone()[0]
+
+    @property
+    def last_bodyfat(self):
+        """
+        :return: The last bodyfat
+        :rtype: float
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_last_bodyfat)
+        return cur.fetchone()[0]
 
 
     @property
@@ -269,3 +325,8 @@ class DBMan:
                     (NDB_No,))
 
         return {x[0]: x[1:] for x in cur}
+
+    def load_db(self, path):
+        with self._conn as con:
+            cur = con.cursor()
+            cur.executescript(bignut_queries.db_load)

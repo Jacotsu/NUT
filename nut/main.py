@@ -7,6 +7,11 @@ from GTK_gui import GTKGui
 _ = gettext.gettext
 
 
-if __name__ == '__main__':
+# Need to define a main function as a setup.py entrypoint
+def main():
     logging.getLogger().setLevel(logging.DEBUG)
-    gui = GTKGui()
+    GTKGui()
+
+
+if __name__ == '__main__':
+    main()
