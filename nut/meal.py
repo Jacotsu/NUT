@@ -167,16 +167,29 @@ class Analysis():
             next_tree_iter = None
             if key in self._defined_nutrients:
                 tmp_ntr = self._defined_nutrients[key]
-                data_to_append = [_(tmp_ntr[2]),
-                                  0,
-                                  str(tmp_ntr[3])]
+                data_to_append = []
+                try:
+                    data_to_append = [_(tmp_ntr[2]),
+                                      f'{tmp_ntr[4]:5.2f} {tmp_ntr[0]: >}',
+                                      f'{tmp_ntr[3]:5.2f} {tmp_ntr[0]: >}',
+                                      False,
+                                      False]
+                except TypeError:
+                    data_to_append = [_(tmp_ntr[2]),
+                                      f'[No data]',
+                                      f'[No data]',
+                                      False,
+                                      False]
                 logging.debug(f'Adding: {pformat(data_to_append)}')
                 next_tree_iter = self._parent_treestore.append(tree_iter,
                                                                data_to_append)
             else:
                 next_tree_iter = self._parent_treestore.append(tree_iter,
-                                                               [_(key), 0,
-                                                                str(0)])
+                                                               [_(key),
+                                                                str(0),
+                                                                str(0),
+                                                                False,
+                                                                False])
 
             if type(item) is dict:
                 self._build_tree(next_tree_iter, item)
@@ -184,8 +197,11 @@ class Analysis():
                 for nutr in item:
                     tmp_ntr = self._defined_nutrients[nutr]
                     data_to_append = [_(tmp_ntr[2]),
-                                      0,
-                                      str(tmp_ntr[3])]
+                                      str(0),
+                                      str(tmp_ntr[3] if tmp_ntr[3] != 'None'
+                                          else '[No data]'),
+                                      False,
+                                      False]
                     logging.debug(f'Adding: {pformat(data_to_append)}')
                     self._parent_treestore.append(next_tree_iter,
                                                   data_to_append)
@@ -194,5 +210,11 @@ class Analysis():
 class Food(Analysis):
     def __init__(self, parent, defined_nutrients, name):
         self._parent_treestore = parent
-        top = self._parent_treestore.append(None, [_(name),1,None])
+        # Name, daily value, quantity, show pcf, show spinbox
+        top = self._parent_treestore.append(None, [
+            _(name),
+            str(1),
+            str(15.0),
+            True,
+            True])
         super(Food, self).__init__(parent, top, defined_nutrients)

@@ -24,6 +24,12 @@ class Handler:
         db.current_meal = selected_meal
         adj_object.set_value(50)
 
+    def record_meals_set_pcf(self, cell_renderer_combo, path_string, new_iter):
+        NDB_No = cell_renderer_combo.props.model.get_value(new_iter, 0)
+        Nutrient_name = cell_renderer_combo.props.model.get_value(new_iter, 1)
+        cell_renderer_combo.set_property('text', Nutrient_name)
+        logging.debug(f'Selected PCF: {NDB_No} {Nutrient_name}')
+
     def analysis_meal_no_changed(self, adj_object):
         val = adj_object.get_value()
         logging.debug(f'Number of meal to analyze set to {val}')
@@ -185,10 +191,11 @@ class GTKGui:
                     .set_active_iter(row.iter)
 
 
-class CellRendererButton(Gtk.CellRenderer):
+class FoodTopCellRendererCellRendererButton(Gtk.CellRenderer):
     """
     This class is a custom renderer that is used to render PCF combobox,
     or DV
+    see this for info https://lazka.github.io/pgi-docs/Gtk-3.0/classes/TreeViewColumn.html#Gtk.TreeViewColumn.pack_start
     """
     def __init__(self):
         Gtk.CellRenderer.__init__(self)
