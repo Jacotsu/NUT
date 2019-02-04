@@ -66,6 +66,29 @@ class DBMan:
         return cur.fetchone()
 
     @property
+    def rm_analysis_nutrients(self):
+        """
+        :return: The record meals analysis nutrients
+        :rtype: dict
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_rm_analysis)
+        return {nutrient[0]: nutrient[1:]
+                for nutrient in cur}
+
+    @property
+    def am_analysis_nutrients(self):
+        """
+        :return: The record meals analysis nutrients
+        :rtype: dict
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_am_analysis)
+        return {nutrient[0]: nutrient[1:]
+                for nutrient in cur}
+
+
+    @property
     def weight_summary(self):
         """
         :return: The weight log summary
@@ -94,7 +117,6 @@ class DBMan:
         cur = self._conn.cursor()
         cur.execute(bignut_queries.get_last_bodyfat)
         return cur.fetchone()[0]
-
 
     @property
     def defined_nutrients(self):
@@ -206,7 +228,26 @@ class DBMan:
         cur = self._conn.cursor()
         cur.execute(bignut_queries.get_omega6_3_bal)
         bal = cur.fetchone()[0]
-        return tuple(bal.split('/'))
+        return tuple(bal.replace(" ", "").split('/'))
+
+    @property
+    def settings_omega6_3_balance(self):
+        """
+        :return: The omega-6/3 balance in this format (Omega6,Omega3) from
+            personal settings
+        :rtype: Tuple
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_omega6_3_bal)
+        bal = cur.fetchone()[0]
+        return tuple(bal.replace(" ", "").split('/'))
+
+    @omega6_3_balance.setter
+    def set_settings_omega6_3_balance(self, data):
+        """
+        :param data: A tuple that contains the omega6 and omega3 ration
+        """
+
 
     def search_food(self, long_desc):
         """

@@ -170,26 +170,32 @@ class Analysis():
                 data_to_append = []
                 try:
                     data_to_append = [_(tmp_ntr[2]),
-                                      f'{tmp_ntr[4]:5.2f} {tmp_ntr[0]: >}',
-                                      f'{tmp_ntr[3]:5.2f} {tmp_ntr[0]: >}',
                                       False,
-                                      False]
+                                      False,
+                                      _('No auto portion control'),
+                                      f'{tmp_ntr[3]:5.2f} %',
+                                      f'{tmp_ntr[4]:5.2f} {tmp_ntr[0]: >}'
+                                      ]
                 except TypeError:
                     data_to_append = [_(tmp_ntr[2]),
-                                      f'[No data]',
-                                      f'[No data]',
                                       False,
-                                      False]
+                                      False,
+                                      _('No auto portion control'),
+                                      '[No data]',
+                                      '[No data]']
                 logging.debug(f'Adding: {pformat(data_to_append)}')
                 next_tree_iter = self._parent_treestore.append(tree_iter,
                                                                data_to_append)
             else:
                 next_tree_iter = self._parent_treestore.append(tree_iter,
                                                                [_(key),
-                                                                str(0),
-                                                                str(0),
                                                                 False,
-                                                                False])
+                                                                False,
+                                                                _('No auto '
+                                                                  'portion '
+                                                                  'control'),
+                                                                '[No data]',
+                                                                '[No data]'])
 
             if type(item) is dict:
                 self._build_tree(next_tree_iter, item)
@@ -197,11 +203,13 @@ class Analysis():
                 for nutr in item:
                     tmp_ntr = self._defined_nutrients[nutr]
                     data_to_append = [_(tmp_ntr[2]),
-                                      str(0),
-                                      str(tmp_ntr[3] if tmp_ntr[3] != 'None'
-                                          else '[No data]'),
                                       False,
-                                      False]
+                                      False,
+                                      _('No auto portion control'),
+                                      f'{tmp_ntr[3]:5.2f} %'
+                                      if tmp_ntr[3] else '[No data]',
+                                      f'{tmp_ntr[4]:5.2f} {tmp_ntr[0]: >}'
+                                      if tmp_ntr[4] else '[No data]']
                     logging.debug(f'Adding: {pformat(data_to_append)}')
                     self._parent_treestore.append(next_tree_iter,
                                                   data_to_append)
@@ -210,11 +218,12 @@ class Analysis():
 class Food(Analysis):
     def __init__(self, parent, defined_nutrients, name):
         self._parent_treestore = parent
-        # Name, daily value, quantity, show pcf, show spinbox
+        # Name, show pcf, show spinbox, daily value, quantity
         top = self._parent_treestore.append(None, [
             _(name),
-            str(1),
-            str(15.0),
             True,
-            True])
+            True,
+            _('No auto portion control'),
+            '',
+            '0'])
         super(Food, self).__init__(parent, top, defined_nutrients)

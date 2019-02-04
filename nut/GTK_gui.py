@@ -3,6 +3,10 @@ from gi.repository import Gtk
 import db
 import logging
 import meal
+from matplotlib.backends.backend_gtk3agg import (
+    FigureCanvasGTK3Agg as FigureCanvas)
+from matplotlib.figure import Figure
+import numpy as np
 gi.require_version('Gtk', '3.0')
 
 
@@ -27,7 +31,7 @@ class Handler:
     def record_meals_set_pcf(self, cell_renderer_combo, path_string, new_iter):
         NDB_No = cell_renderer_combo.props.model.get_value(new_iter, 0)
         Nutrient_name = cell_renderer_combo.props.model.get_value(new_iter, 1)
-        cell_renderer_combo.set_property('text', Nutrient_name)
+        #cell_renderer_combo.props.model.set_value(new_iter, 5, Nutrient_name)
         logging.debug(f'Selected PCF: {NDB_No} {Nutrient_name}')
 
     def analysis_meal_no_changed(self, adj_object):
@@ -158,8 +162,8 @@ class GTKGui:
         #ntr['Omega-6/3 Balance'] = anal_header[8]
         meal.Food(self._rm_menu, ntr, 'test')
         meal.Food(self._rm_menu, ntr, 'test2')
-        meal.Analysis(self._rm_anal, None, ntr)
-        meal.Analysis(self._am_anal, None, ntr)
+        meal.Analysis(self._rm_anal, None, self._db.rm_analysis_nutrients)
+        meal.Analysis(self._am_anal, None, self._db.am_analysis_nutrients)
 
         self._window.show_all()
         Gtk.main()
@@ -190,6 +194,29 @@ class GTKGui:
                 self._settings_widgets['omega6_3_cb']\
                     .set_active_iter(row.iter)
 
+
+class TheStory:
+    def __init__(self):
+        pass
+
+    def draw_graph(self):
+        f = Figure(figsize=(5, 4), dpi=100)
+        a = f.add_subplot(111)
+        t = np.arange(0.0, 3.0, 0.01)
+        s = np.sin(2*np.pi*t)
+        a.plot(t, s)
+
+        sw = Gtk.ScrolledWindow()
+        win.add(sw)
+        # A scrolled window border goes outside the scrollbars and viewport
+        sw.set_border_width(10)
+
+        canvas = FigureCanvas(f)  # a Gtk.DrawingArea
+        canvas.set_size_request(800, 600)
+        sw.add_with_viewport(canvas)
+
+        win.show_all()
+        Gtk.main()
 
 class FoodTopCellRendererCellRendererButton(Gtk.CellRenderer):
     """

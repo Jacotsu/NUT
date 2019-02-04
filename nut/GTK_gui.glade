@@ -6,14 +6,16 @@
     <columns>
       <!-- column-name name -->
       <column type="gchararray"/>
-      <!-- column-name DV -->
-      <column type="gchararray"/>
-      <!-- column-name weight -->
-      <column type="gchararray"/>
       <!-- column-name show_pcf -->
       <column type="gboolean"/>
       <!-- column-name show_quantity_spin -->
       <column type="gboolean"/>
+      <!-- column-name pcf_text -->
+      <column type="gchararray"/>
+      <!-- column-name DV -->
+      <column type="gchararray"/>
+      <!-- column-name weight -->
+      <column type="gchararray"/>
     </columns>
   </object>
   <object class="GtkAdjustment" id="am_meals_no">
@@ -187,7 +189,7 @@
     <data>
       <row>
         <col id="0">0</col>
-        <col id="1" translatable="yes">no pcf</col>
+        <col id="1" translatable="yes">No auto portion control</col>
       </row>
       <row>
         <col id="0">101</col>
@@ -216,28 +218,32 @@
     <columns>
       <!-- column-name name -->
       <column type="gchararray"/>
-      <!-- column-name DV -->
-      <column type="gchararray"/>
-      <!-- column-name weight -->
-      <column type="gchararray"/>
       <!-- column-name show_pcf -->
       <column type="gboolean"/>
       <!-- column-name show_quantity_spin -->
       <column type="gboolean"/>
+      <!-- column-name pcf_text -->
+      <column type="gchararray"/>
+      <!-- column-name DV -->
+      <column type="gchararray"/>
+      <!-- column-name weight -->
+      <column type="gchararray"/>
     </columns>
   </object>
   <object class="GtkTreeStore" id="rm_menu">
     <columns>
       <!-- column-name name -->
       <column type="gchararray"/>
-      <!-- column-name DV -->
-      <column type="gchararray"/>
-      <!-- column-name weight -->
-      <column type="gchararray"/>
       <!-- column-name show_pcf -->
       <column type="gboolean"/>
       <!-- column-name show_quantity_spin -->
       <column type="gboolean"/>
+      <!-- column-name pcf_text -->
+      <column type="gchararray"/>
+      <!-- column-name DV -->
+      <column type="gchararray"/>
+      <!-- column-name weight -->
+      <column type="gchararray"/>
     </columns>
   </object>
   <object class="GtkAdjustment" id="rm_scale_meal_selector">
@@ -480,7 +486,7 @@
                                 <property name="xalign">1</property>
                               </object>
                               <attributes>
-                                <attribute name="text">1</attribute>
+                                <attribute name="text">4</attribute>
                               </attributes>
                             </child>
                           </object>
@@ -495,7 +501,7 @@
                                 <property name="xalign">1</property>
                               </object>
                               <attributes>
-                                <attribute name="text">2</attribute>
+                                <attribute name="text">5</attribute>
                               </attributes>
                             </child>
                           </object>
@@ -642,14 +648,13 @@
                                 <property name="cell_background">grey</property>
                                 <property name="xalign">1</property>
                                 <property name="editable">True</property>
-                                <property name="text">PCF</property>
                                 <property name="has_entry">False</property>
                                 <property name="model">pcf_choices</property>
                                 <property name="text_column">1</property>
                                 <signal name="changed" handler="record_meals_set_pcf" swapped="no"/>
                               </object>
                               <attributes>
-                                <attribute name="visible">3</attribute>
+                                <attribute name="visible">1</attribute>
                               </attributes>
                             </child>
                           </object>
@@ -664,7 +669,7 @@
                                 <property name="xalign">1</property>
                               </object>
                               <attributes>
-                                <attribute name="text">1</attribute>
+                                <attribute name="text">4</attribute>
                               </attributes>
                             </child>
                           </object>
@@ -681,7 +686,7 @@
                                 <property name="xalign">1</property>
                               </object>
                               <attributes>
-                                <attribute name="text">2</attribute>
+                                <attribute name="text">5</attribute>
                               </attributes>
                             </child>
                             <child>
@@ -693,7 +698,7 @@
                               </object>
                               <attributes>
                                 <attribute name="visible">4</attribute>
-                                <attribute name="adjustment">2</attribute>
+                                <attribute name="adjustment">5</attribute>
                               </attributes>
                             </child>
                           </object>
@@ -898,7 +903,7 @@
                                 <property name="xalign">1</property>
                               </object>
                               <attributes>
-                                <attribute name="text">1</attribute>
+                                <attribute name="text">4</attribute>
                               </attributes>
                             </child>
                           </object>
@@ -913,7 +918,7 @@
                                 <property name="xalign">1</property>
                               </object>
                               <attributes>
-                                <attribute name="text">2</attribute>
+                                <attribute name="text">5</attribute>
                               </attributes>
                             </child>
                           </object>
