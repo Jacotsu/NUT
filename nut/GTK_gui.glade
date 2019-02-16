@@ -457,6 +457,7 @@
                         <property name="search_column">0</property>
                         <property name="level_indentation">1</property>
                         <property name="enable_grid_lines">horizontal</property>
+                        <signal name="row-activated" handler="nutrient_clicked" swapped="no"/>
                         <child internal-child="selection">
                           <object class="GtkTreeSelection"/>
                         </child>
@@ -626,6 +627,7 @@
                         <property name="search_column">0</property>
                         <property name="level_indentation">1</property>
                         <property name="enable_grid_lines">horizontal</property>
+                        <signal name="row-activated" handler="food_clicked" swapped="no"/>
                         <child internal-child="selection">
                           <object class="GtkTreeSelection"/>
                         </child>
@@ -645,7 +647,6 @@
                             </child>
                             <child>
                               <object class="GtkCellRendererCombo">
-                                <property name="cell_background">grey</property>
                                 <property name="xalign">1</property>
                                 <property name="editable">True</property>
                                 <property name="has_entry">False</property>
@@ -655,6 +656,7 @@
                               </object>
                               <attributes>
                                 <attribute name="visible">1</attribute>
+                                <attribute name="text">3</attribute>
                               </attributes>
                             </child>
                           </object>
@@ -691,13 +693,12 @@
                             </child>
                             <child>
                               <object class="GtkCellRendererSpin">
-                                <property name="cell_background">grey</property>
                                 <property name="xalign">1</property>
                                 <property name="editable">True</property>
                                 <property name="placeholder_text">weight</property>
                               </object>
                               <attributes>
-                                <attribute name="visible">4</attribute>
+                                <attribute name="visible">2</attribute>
                                 <attribute name="adjustment">5</attribute>
                               </attributes>
                             </child>
@@ -778,51 +779,6 @@
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkButtonBox">
-                        <property name="visible">True</property>
-                        <property name="can_focus">False</property>
-                        <property name="halign">center</property>
-                        <property name="valign">start</property>
-                        <property name="baseline_position">top</property>
-                        <property name="layout_style">start</property>
-                        <child>
-                          <object class="GtkRadioButton" id="radiobutton1">
-                            <property name="label" translatable="yes">Grams</property>
-                            <property name="visible">True</property>
-                            <property name="can_focus">True</property>
-                            <property name="receives_default">False</property>
-                            <property name="active">True</property>
-                            <property name="draw_indicator">True</property>
-                          </object>
-                          <packing>
-                            <property name="expand">True</property>
-                            <property name="fill">True</property>
-                            <property name="position">0</property>
-                          </packing>
-                        </child>
-                        <child>
-                          <object class="GtkRadioButton" id="radiobutton2">
-                            <property name="label" translatable="yes">Ounces</property>
-                            <property name="visible">True</property>
-                            <property name="can_focus">True</property>
-                            <property name="receives_default">False</property>
-                            <property name="draw_indicator">True</property>
-                            <property name="group">radiobutton1</property>
-                          </object>
-                          <packing>
-                            <property name="expand">True</property>
-                            <property name="fill">True</property>
-                            <property name="position">1</property>
-                          </packing>
-                        </child>
-                      </object>
-                      <packing>
-                        <property name="expand">True</property>
-                        <property name="fill">True</property>
-                        <property name="position">1</property>
-                      </packing>
-                    </child>
-                    <child>
                       <object class="GtkLabel" id="rm_selected_meal_label">
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
@@ -875,6 +831,7 @@
                         <property name="search_column">0</property>
                         <property name="level_indentation">1</property>
                         <property name="enable_grid_lines">horizontal</property>
+                        <signal name="row-activated" handler="nutrient_clicked" swapped="no"/>
                         <child internal-child="selection">
                           <object class="GtkTreeSelection"/>
                         </child>
@@ -971,6 +928,7 @@
         <child type="tab">
           <object class="GtkLabel">
             <property name="visible">True</property>
+            <property name="sensitive">False</property>
             <property name="can_focus">False</property>
             <property name="hexpand">True</property>
           </object>
@@ -1355,7 +1313,48 @@
                   </packing>
                 </child>
                 <child>
-                  <placeholder/>
+                  <object class="GtkButtonBox">
+                    <property name="visible">True</property>
+                    <property name="can_focus">False</property>
+                    <property name="halign">center</property>
+                    <property name="valign">start</property>
+                    <property name="baseline_position">top</property>
+                    <property name="layout_style">start</property>
+                    <child>
+                      <object class="GtkRadioButton" id="radiobutton1">
+                        <property name="label" translatable="yes">Grams</property>
+                        <property name="visible">True</property>
+                        <property name="can_focus">True</property>
+                        <property name="receives_default">False</property>
+                        <property name="active">True</property>
+                        <property name="draw_indicator">True</property>
+                      </object>
+                      <packing>
+                        <property name="expand">True</property>
+                        <property name="fill">True</property>
+                        <property name="position">0</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkRadioButton" id="radiobutton2">
+                        <property name="label" translatable="yes">Ounces</property>
+                        <property name="visible">True</property>
+                        <property name="can_focus">True</property>
+                        <property name="receives_default">False</property>
+                        <property name="draw_indicator">True</property>
+                        <property name="group">radiobutton1</property>
+                      </object>
+                      <packing>
+                        <property name="expand">True</property>
+                        <property name="fill">True</property>
+                        <property name="position">1</property>
+                      </packing>
+                    </child>
+                  </object>
+                  <packing>
+                    <property name="left_attach">2</property>
+                    <property name="top_attach">0</property>
+                  </packing>
                 </child>
                 <child>
                   <placeholder/>

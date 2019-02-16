@@ -2,15 +2,18 @@ import gi
 from gi.repository import Gtk
 import db
 import logging
+import gettext
 import meal
 from matplotlib.backends.backend_gtk3agg import (
     FigureCanvasGTK3Agg as FigureCanvas)
 from matplotlib.figure import Figure
 import numpy as np
+
 gi.require_version('Gtk', '3.0')
+_ = gettext.gettext
 
 
-class Handler:
+class MainHandler:
     def __init__(self, window):
         self._window = window
 
@@ -29,8 +32,9 @@ class Handler:
         adj_object.set_value(50)
 
     def record_meals_set_pcf(self, cell_renderer_combo, path_string, new_iter):
-        NDB_No = cell_renderer_combo.props.model.get_value(new_iter, 0)
-        Nutrient_name = cell_renderer_combo.props.model.get_value(new_iter, 1)
+        pcf_list = cell_renderer_combo.props.model
+        NDB_No = pcf_list.get_value(new_iter, 0)
+        Nutrient_name = pcf_list.model.get_value(new_iter, 1)
         #cell_renderer_combo.props.model.set_value(new_iter, 5, Nutrient_name)
         logging.debug(f'Selected PCF: {NDB_No} {Nutrient_name}')
 
@@ -38,6 +42,38 @@ class Handler:
         val = adj_object.get_value()
         logging.debug(f'Number of meal to analyze set to {val}')
         self._window._db.am_analysis_meal_no = val
+
+    def nutrient_clicked(self, treeview, path, view_column):
+        """
+        This event is activated when a user double clicks a valid
+        nutrient in the treeview
+        """
+        data = treeview.get_model()
+        tree_iter = data.get_iter(path)
+        nutrient_info = data.get(tree_iter, 0)
+        nutrient_ndb = data.get(tree_iter, 1)
+        # If this is None, the nutrient is just a grouping category and
+        # doesn't have a story
+        if nutrient_ndb:
+            logging.debug(f'{nutrient_ndb} {nutrient_info} Nutrient clicked')
+            # Placeholder nutrient 203
+            story_window = TheStory(203)
+            story_window.draw_graph()
+        else:
+            logging.info(f'{nutrient_info} Nutrient group clicked')
+
+    def food_clicked(self, treeview, path, view_column):
+        """
+        This event is activated when a user double clicks a valid
+        nutrient in the treeview
+        """
+        data = treeview.get_model()
+        tree_iter = data.get_iter(path)
+        food_info = data.get(tree_iter, 0)
+        logging.debug(f'{food_info} Food clicked')
+        # Placeholder nutrient 203
+        ViewFood(203)
+
 
     def add_food_to_meal(self, button):
         #meal.Food(self._rm_menu, self._ntr, None)
@@ -108,11 +144,16 @@ class Handler:
 #2007|Omega-3
 #2008|Vitamin E
 
+class TheStoryHandler:
+    def plot_area_resize(self, widget, event):
+        logging.debug(_('The story plot area resized to ({}, {})')
+                      .format(1, 1))
+
+
 class GTKGui:
     def __init__(self):
         self._db = db.DBMan()
         self._ntr = self._db.defined_nutrients
-        self._handler = Handler(self)
 
         builder = Gtk.Builder()
         builder.add_from_file("GTK_gui.glade")
@@ -152,7 +193,7 @@ class GTKGui:
         am_meal_no_sp = builder.get_object('am_meals_no')
         am_meal_no_sp.set_value(self._db.am_analysis_meal_no)
 
-        builder.connect_signals(self._handler)
+        builder.connect_signals(MainHandler(self))
 
         ntr = self._db.defined_nutrients
         self._update_GUI_settings()
@@ -196,8 +237,24 @@ class GTKGui:
 
 
 class TheStory:
-    def __init__(self):
-        pass
+    def __init__(self, NDB_No):
+        builder = Gtk.Builder()
+        builder.add_from_file("the_story.glade")
+        self._window = builder.get_object("story_window")
+        self._graph_canvas = builder.get_object("story_graph")
+        self._db = db.DBMan()
+        self._handler = TheStoryHandler()
+        self._ntr = self._db.defined_nutrients
+
+        fd_group_list = builder.get_object("fd_group")
+        fd_group_list.append((0, _('All food groups')))
+        for food_group in self._db.food_groups:
+            fd_group_list.append(food_group)
+
+        self._window.set_title(f"The {self._ntr[NDB_No][2]} story")
+
+        builder.connect_signals(self._handler)
+        logging.debug(f"{self._ntr[NDB_No][2]} story window created")
 
     def draw_graph(self):
         f = Figure(figsize=(5, 4), dpi=100)
@@ -206,17 +263,46 @@ class TheStory:
         s = np.sin(2*np.pi*t)
         a.plot(t, s)
 
-        sw = Gtk.ScrolledWindow()
-        win.add(sw)
-        # A scrolled window border goes outside the scrollbars and viewport
-        sw.set_border_width(10)
-
         canvas = FigureCanvas(f)  # a Gtk.DrawingArea
-        canvas.set_size_request(800, 600)
-        sw.add_with_viewport(canvas)
+        self.replace_widget(self._graph_canvas, canvas)
+        self._graph_canvas = canvas
+        self._graph_canvas.set_size_request(800, 600)
 
-        win.show_all()
-        Gtk.main()
+        self._window.show_all()
+
+    @staticmethod
+    def replace_widget(old, new):
+        """
+        https://stackoverflow.com/questions/27343166/gtk3-replace-child-widget-with-another-widget
+        """
+        parent = old.get_parent()
+
+        props = {}
+        for key in Gtk.ContainerClass.list_child_properties(type(parent)):
+            props[key.name] = parent.child_get_property(old, key.name)
+
+        parent.remove(old)
+        parent.add(new)
+
+        for name, value in props.items():
+            parent.child_set_property(new, name, value)
+
+
+class ViewFood:
+    def __init__(self, NDB_No):
+        builder = Gtk.Builder()
+        builder.add_from_file("view_food_window.glade")
+        self._window = builder.get_object("view_food")
+        self._graph_canvas = builder.get_object("story_graph")
+        self._db = db.DBMan()
+        self._ntr = self._db.defined_nutrients
+
+        # Must change with actual food selected
+        self._window.set_title(_("view food"))
+        logging.debug(_("view food window created"))
+
+        self._window.show_all()
+
 
 class FoodTopCellRendererCellRendererButton(Gtk.CellRenderer):
     """

@@ -9,6 +9,8 @@ set_nutrient_DV = 'UPDATE nutr_def SET nutopt = ? where NutrDesc = ?;'
 
 set_number_of_meals_to_analyze = 'UPDATE options SET defanal_am = ?;'
 get_number_of_meals_to_analyze = 'SELECT defanal_am FROM options;'
+# to implement
+get_day_meals = ''
 
 get_weight_unit = 'SELECT grams FROM options;'
 set_weight_unit = 'UPDATE options set grams = ?'
@@ -36,8 +38,26 @@ GROUP BY meal_id;
 
 get_macro_pct = 'SELECT macropct from am_analysis_header;'
 get_rm_analysis_header = 'SELECT * from rm_analysis_header;'
+# need to add default values for non present nutrients
+get_rm_analysis = '''
+SELECT rm_analysis.Nutr_No, Units, Tagname, NutrDesc,
+    dvpct_offset + 100, Nutr_val
+FROM rm_analysis
+LEFT JOIN rm_dv on rm_analysis.Nutr_No = rm_dv.Nutr_No
+NATURAL JOIN nutr_def NATURAL JOIN rm_analysis;
+'''
+get_am_analysis = '''
+SELECT am_analysis.Nutr_No, Units, Tagname, NutrDesc,
+    dvpct_offset + 100, Nutr_val
+FROM am_analysis
+LEFT JOIN am_dv on am_analysis.Nutr_No = am_dv.Nutr_No
+NATURAL JOIN nutr_def NATURAL JOIN am_analysis;
+'''
+get_am_analysis_period = 'SELECT firstmeal, lastmeal FROM am_analysis_header;'
 
 get_omega6_3_bal = 'SELECT n6balance from am_analysis_header;'
+
+get_food_groups = 'SELECT FdGrp_Cd, FdGrp_Desc FROM fd_group;'
 
 get_food_list = 'SELECT NDB_No, Long_Desc FROM food_des;'
 get_food_from_NDB_No = 'SELECT * FROM food_des WHERE NDB_No = ?;'
@@ -69,6 +89,7 @@ get_food_nutrients_based_on_weight = """
     FROM mealfoods JOIN nut_data USING (NDB_No)
     WHERE meal_id = ? and NDB_No = ?;
     """
+get_nutrient = 'SELECT * FROM nutr_def WHERE Nutr_No = ?;'
 
 get_meal_by_id = 'SELECT * FROM mealfoods WHERE meal_id = ?'
 

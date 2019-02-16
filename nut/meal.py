@@ -214,6 +214,16 @@ class Analysis():
                     self._parent_treestore.append(next_tree_iter,
                                                   data_to_append)
 
+# NDB_No|Gm_Wgt|Nutr_No   in mealfoods
+# Nutr_No|Units|Tagname|NutrDesc|dv_default|nutopt    in NutrDesc
+# NDB_No|FdGrp_Cd|Long_Desc|Shrt_Desc|Ref_desc|Refuse|Pro_Factor|Fat_Factor|CHO_Factor
+# in food des
+
+# in treestore
+# NDB_No|Nutr_No|Long_Desc|NutrDesc|nutopt|Gm_Wgt|Units
+
+# If Nutr_No == 0 then this is not a nutrient, it's a nutrient group or food
+# if NDB_No == 0 then this is not food, it's probably a nutrient group
 
 class Food(Analysis):
     def __init__(self, parent, defined_nutrients, name):

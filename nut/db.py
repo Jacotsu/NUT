@@ -87,6 +87,15 @@ class DBMan:
         return {nutrient[0]: nutrient[1:]
                 for nutrient in cur}
 
+    @property
+    def am_analysis_period(self):
+        """
+        :return: A tuple that contains the start date and the end date
+        :rtype: tuple
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_am_analysis_period)
+        return cur.fetchone()
 
     @property
     def weight_summary(self):
@@ -149,6 +158,9 @@ class DBMan:
             cur = con.cursor()
             cur.execute(bignut_queries.set_number_of_meals_to_analyze,
                         (number_of_meals,))
+
+    def get_day_meals(self, day):
+        raise NotImplementedError
 
     @property
     def weight_unit(self):
@@ -321,6 +333,16 @@ class DBMan:
         """
         cur = self._conn.cursor()
         cur.execute(bignut_queries.get_food_list)
+        return cur
+
+    @property
+    def food_groups(self):
+        """
+        :return: The defined food groups as (FdGrp_Cd, FdGrp_Desc)
+        :rtype: Iterator of tuples
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_food_groups)
         return cur
 
 
