@@ -274,7 +274,7 @@
     <columns>
       <!-- column-name NDB_No -->
       <column type="guint"/>
-      <!-- column-name Long_desc -->
+      <!-- column-name Long_Desc -->
       <column type="gchararray"/>
     </columns>
   </object>

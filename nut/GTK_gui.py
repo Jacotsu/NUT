@@ -6,16 +6,17 @@ import gettext
 import meal
 from matplotlib.backends.backend_gtk3agg import (
     FigureCanvasGTK3Agg as FigureCanvas)
-from matplotlib.figure import Figure
 import numpy as np
+from matplotlib.figure import Figure
+from datetime import datetime
 
 gi.require_version('Gtk', '3.0')
 _ = gettext.gettext
 
 
 class MainHandler:
-    def __init__(self, window):
-        self._window = window
+    def __init__(self, manager):
+        self._manager = manager
 
     def on_destroy(self, *args):
         Gtk.main_quit()
@@ -23,11 +24,11 @@ class MainHandler:
     def record_meals_slider_changed(self, adj_object):
         val = adj_object.get_value() - 50
         # Gets current meal
-        db = self._window._db
+        db = self._manager._db
         selected_meal = str(db.get_meal_from_offset_rel_to_current(val))
         logging.debug(f'Current meal set to {selected_meal}')
-        self._window._rm_meal_label \
-            .set_text(f'Meal {self._window._db.current_meal_string}')
+        self._manager._rm_meal_label \
+            .set_text(f'Meal {self._manager._db.current_meal_string}')
         db.current_meal = selected_meal
         adj_object.set_value(50)
 
@@ -41,7 +42,7 @@ class MainHandler:
     def analysis_meal_no_changed(self, adj_object):
         val = adj_object.get_value()
         logging.debug(f'Number of meal to analyze set to {val}')
-        self._window._db.am_analysis_meal_no = val
+        self._manager._db.am_analysis_meal_no = val
 
     def nutrient_clicked(self, treeview, path, view_column):
         """
@@ -50,17 +51,15 @@ class MainHandler:
         """
         data = treeview.get_model()
         tree_iter = data.get_iter(path)
-        nutrient_info = data.get(tree_iter, 0)
-        nutrient_ndb = data.get(tree_iter, 1)
+        nutrient = data.get(tree_iter, 0, 1)
         # If this is None, the nutrient is just a grouping category and
         # doesn't have a story
-        if nutrient_ndb:
-            logging.debug(f'{nutrient_ndb} {nutrient_info} Nutrient clicked')
+        if nutrient[0]:
+            logging.debug(f'{nutrient} Nutrient clicked')
             # Placeholder nutrient 203
-            story_window = TheStory(203)
-            story_window.draw_graph()
+            story_manager = TheStory(203)
         else:
-            logging.info(f'{nutrient_info} Nutrient group clicked')
+            logging.info(f'{nutrient} Nutrient group clicked')
 
     def food_clicked(self, treeview, path, view_column):
         """
@@ -88,14 +87,14 @@ class MainHandler:
     def set_calories_dv(self, widget):
         calories = widget.get_value()
         logging.debug(f'Setting calories dv to {calories}')
-        self._window._db.set_nutrient_DV('ENERC_KCAL', calories)
+        self._manager._db.set_nutrient_DV('ENERC_KCAL', calories)
 
     def accept_measurements(self, button):
-        settings_wdgs = self._window._settings_widgets
-        self._window._db\
+        settings_wdgs = self._manager._settings_widgets
+        self._manager._db\
                 .insert_weight_log(settings_wdgs['weight_sp'].get_value(),
                                    settings_wdgs['bodyfat_sp'].get_value())
-        self._window._update_GUI_settings()
+        self._manager._update_GUI_settings()
 
 
 #208|Calories
@@ -145,9 +144,26 @@ class MainHandler:
 #2008|Vitamin E
 
 class TheStoryHandler:
+    def __init__(self, manager):
+        self._manager = manager
+
     def plot_area_resize(self, widget, event):
         logging.debug(_('The story plot area resized to ({}, {})')
                       .format(1, 1))
+
+    def start_date_selected(self, calendar):
+        date = calendar.get_date()
+        self._manager._start_date = f'{date[0]:02}{date[1]:02}{date[2]:02}'
+        logging.debug(_('Start date set to {}').format(date))
+        self._manager._update_data()
+
+    def end_date_selected(self, calendar):
+        date = calendar.get_date()
+        self._manager._end_date = f'{date[0]:02}{date[1]:02}{date[2]:02}'
+        logging.debug(_('End date set to {}').format(date))
+        self._manager._update_data()
+
+
 
 
 class GTKGui:
@@ -201,6 +217,7 @@ class GTKGui:
         anal_header = self._db.rm_analysis_header
         #ntr['Prot/Carb/Fat'] = anal_header[7]
         #ntr['Omega-6/3 Balance'] = anal_header[8]
+
         meal.Food(self._rm_menu, ntr, 'test')
         meal.Food(self._rm_menu, ntr, 'test2')
         meal.Analysis(self._rm_anal, None, self._db.rm_analysis_nutrients)
@@ -237,38 +254,68 @@ class GTKGui:
 
 
 class TheStory:
-    def __init__(self, NDB_No):
+    def __init__(self, Nutr_No):
+        self._db = db.DBMan()
+        self._Nutr_No = Nutr_No
+        self._nutrient_name = self._db.get_nutrient_name(Nutr_No)
+        self._end_date = str(self._db.current_meal)[:-2]
+        self._start_date = \
+            str(self._db.get_meal_from_offset_rel_to_current(
+                self._db.am_analysis_meal_no))[:-2]
+
         builder = Gtk.Builder()
         builder.add_from_file("the_story.glade")
+
         self._window = builder.get_object("story_window")
         self._graph_canvas = builder.get_object("story_graph")
-        self._db = db.DBMan()
-        self._handler = TheStoryHandler()
-        self._ntr = self._db.defined_nutrients
+
+        builder.connect_signals(TheStoryHandler(self))
 
         fd_group_list = builder.get_object("fd_group")
         fd_group_list.append((0, _('All food groups')))
         for food_group in self._db.food_groups:
             fd_group_list.append(food_group)
 
-        self._window.set_title(f"The {self._ntr[NDB_No][2]} story")
+        self._window.set_title(_("The {} story")
+                               .format(_(self._nutrient_name)))
 
-        builder.connect_signals(self._handler)
-        logging.debug(f"{self._ntr[NDB_No][2]} story window created")
-
-    def draw_graph(self):
-        f = Figure(figsize=(5, 4), dpi=100)
-        a = f.add_subplot(111)
-        t = np.arange(0.0, 3.0, 0.01)
-        s = np.sin(2*np.pi*t)
-        a.plot(t, s)
-
-        canvas = FigureCanvas(f)  # a Gtk.DrawingArea
-        self.replace_widget(self._graph_canvas, canvas)
-        self._graph_canvas = canvas
-        self._graph_canvas.set_size_request(800, 600)
+        logging.debug(_("{} story window created")
+                      .format(_(self._nutrient_name)))
+        self._setup_plot()
+        self._update_data()
 
         self._window.show_all()
+
+    def _setup_plot(self):
+        figure = Figure(figsize=(5, 4), dpi=100)
+        ax = figure.add_subplot(111)
+        ax.set_ylabel(_('{} intake').format(_(self._nutrient_name)))
+        ax.set_xlabel(_('Date'))
+        self._plot_lines, = ax.plot_date([datetime.strptime('20190102', '%Y%m%d'),datetime.strptime('20190103', '%Y%m%d'),datetime.strptime('20190104', '%Y%m%d')], [1,2,3], 'o-')
+
+        canvas = FigureCanvas(figure)  # a Gtk.DrawingArea
+
+        self.replace_widget(self._graph_canvas, canvas)
+        self._graph_canvas = canvas
+
+        self._graph_canvas.set_size_request(800, 600)
+
+    def _update_data(self):
+        logging.debug(_("Updating story plot"))
+        data = self._db.get_nutrient_story(self._Nutr_No,
+                                           self._start_date,
+                                           self._end_date)
+        # Need to fix this code
+        x_data = []
+        y_data = []
+        for point in data:
+            x_data.append(datetime.strptime(str(point[0]), '%Y%m%d'))
+            y_data.append(point[1])
+        logging.debug(x_data)
+        logging.debug(y_data)
+        self._plot_lines.set_data(np.array(x_data),
+                                  np.array(y_data))
+        self._graph_canvas.draw()
 
     @staticmethod
     def replace_widget(old, new):
@@ -301,27 +348,12 @@ class ViewFood:
         self._window.set_title(_("view food"))
         logging.debug(_("view food window created"))
 
+        self._searchable_food_list = builder.get_object("search_food_list")
+        for food in self._db.food_list:
+            self._searchable_food_list.append(food)
+        logging.debug(_("Food list loaded in ViewFood window"))
+
         self._window.show_all()
 
-
-class FoodTopCellRendererCellRendererButton(Gtk.CellRenderer):
-    """
-    This class is a custom renderer that is used to render PCF combobox,
-    or DV
-    see this for info https://lazka.github.io/pgi-docs/Gtk-3.0/classes/TreeViewColumn.html#Gtk.TreeViewColumn.pack_start
-    """
-    def __init__(self):
-        Gtk.CellRenderer.__init__(self)
-
-    def do_get_size(self, widget, cell_area):
-        buttonHeight = cell_area.height
-        buttonWidth = buttonHeight
-        return (0, 0, buttonWidth, buttonHeight)
-
-    def do_render(self, window, widget, background_area, cell_area,
-                  expose_area, flags):
-        style = widget.get_style()
-        x, y, buttonWidth, buttonHeight = self.get_size()
-        style.paint_box(window, widget.get_state(), Gtk.SHADOW_ETCHED_OUT,
-                        expose_area, widget, None, 0, 0, buttonWidth,
-                        buttonHeight)
+    def _load_food(self, NDB_No):
+        raise NotImplementedError

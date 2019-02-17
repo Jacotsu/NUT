@@ -69,10 +69,11 @@ get_food_sorted_by_nutrient = """
     """
 get_food_preferred_weight = 'SELECT * FROM pref_Gm_Wgt WHERE NDB_No = ?;'
 get_food_nutrients = 'SELECT * FROM nut_data WHERE NDB_No = ?;'
+# To rplace substr with col numb
 get_food_nutrients_at_pref_weight = """
 SELECT
     NDB_No,
-    substr(Shrt_Desc, 1, 45),
+    'substr(Shrt_Desc, 1, 45)',
     Nutr_Val,
     Units,
     dv
@@ -91,6 +92,24 @@ get_food_nutrients_based_on_weight = """
     """
 get_nutrient = 'SELECT * FROM nutr_def WHERE Nutr_No = ?;'
 
+# need to implement imperial version
+# Parameters: nutrient id, start date, end date
+# Parameters Types: Nutr_No, %Y%m%d, %Y%m%d
+get_nutrient_story = '''
+SELECT day, ROUND(SUM(meal_total_nutrient))
+FROM (
+    SELECT meal_id/100 as day,
+        SUM(Gm_Wgt / 100.0 * nutrient.Nutr_Val) AS meal_total_nutrient
+    FROM mealfoods JOIN nut_data nutrient USING (NDB_No)
+    WHERE nutrient.Nutr_No = ?
+        AND meal_id >= ? || 00
+        AND meal_id <= ? || 99
+    GROUP by day, NDB_No)
+GROUP by day;
+'''
+get_nutrient_name = 'SELECT NutrDesc FROM nutr_def WHERE Nutr_No = ?;'
+
+
 get_meal_by_id = 'SELECT * FROM mealfoods WHERE meal_id = ?'
 
 get_weight_log = 'select * from wlog;'
@@ -100,7 +119,7 @@ get_last_bodyfat = 'SELECT bodyfat FROM wlog ORDER BY wldate DESC LIMIT 1;'
 insert_weight_log = 'insert into wlog values (?, ?, null, null);'
 clear_weight_log = 'insert into wlsummary select \'clear\';'
 
-get_perosnal_nutrient_dv = """
+get_personal_nutrient_dv = """
 SELECT dv
 FROM am_dv
 WHERE Nutr_No = ?;

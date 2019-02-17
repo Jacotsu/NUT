@@ -130,8 +130,14 @@ class DBMan:
     @property
     def defined_nutrients(self):
         """
-        :return: The defined nutrients
-        :rtype: Sql cursor
+        Selects
+        Nutr_No|Units|Tagname|NutrDesc|dv_default|nutopt
+        from nutr_def
+
+        :return: A list of dictionaries containing the nutrients in the
+            following form {'Nutr_No': (Units,
+                Tagname, NutrDesc, dv_default, nutopt)}
+        :rtype: list
         """
         cur = self._conn.cursor()
         cur.execute(bignut_queries.get_defined_nutrients)
@@ -357,6 +363,12 @@ class DBMan:
 
         return cur.fetchone()[0]
 
+    def get_nutrient_name(self, Nutr_No):
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_nutrient_name, (Nutr_No,))
+
+        return str(cur.fetchone()[0])
+
     def get_food_nutrients_based_on_weight(self, NDB_No, weight):
         """
         :param NDB_No: The food NDB_no
@@ -381,6 +393,20 @@ class DBMan:
                     (NDB_No,))
 
         return cur.fetchone()[0]
+
+    def get_nutrient_story(self, Nutr_No, start_date, end_date):
+        """
+        :param Nutr_No: The nutrient number
+        :param start_date: The start date in %Y%m%d format
+        :param end_date: The end date in %Y%m%d format
+        :return: An iterator that returns the following tuples
+            (meal_id, nutrient_value)
+        :rtype: Iterator
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_nutrient_story,
+                    (Nutr_No, start_date, end_date))
+        return cur
 
     def get_food_nutrients_at_pref_weight(self, NDB_No):
         cur = self._conn.cursor()
