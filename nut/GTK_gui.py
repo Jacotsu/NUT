@@ -163,6 +163,9 @@ class TheStoryHandler:
         logging.debug(_('End date set to {}').format(date))
         self._manager._update_data()
 
+    def get_data(self, tmp):
+        raise NotImplementedError
+
 
 
 
@@ -268,16 +271,17 @@ class TheStory:
 
         self._window = builder.get_object("story_window")
         self._graph_canvas = builder.get_object("story_graph")
+        self._ts_nutrient_header = builder.get_object("ts_nutrient_header")
 
         builder.connect_signals(TheStoryHandler(self))
 
         fd_group_list = builder.get_object("fd_group")
-        fd_group_list.append((0, _('All food groups')))
         for food_group in self._db.food_groups:
             fd_group_list.append(food_group)
 
         self._window.set_title(_("The {} story")
                                .format(_(self._nutrient_name)))
+        self._ts_nutrient_header.set_title(_(self._nutrient_name))
 
         logging.debug(_("{} story window created")
                       .format(_(self._nutrient_name)))
@@ -289,32 +293,40 @@ class TheStory:
     def _setup_plot(self):
         figure = Figure(figsize=(5, 4), dpi=100)
         ax = figure.add_subplot(111)
-        ax.set_ylabel(_('{} intake').format(_(self._nutrient_name)))
+        ax.tick_params(axis='x', labelrotation=30)
+        ax.set_autoscale_on(True)
+
+        ax.set_ylabel(_('{} intake ({})').format(_(self._nutrient_name),
+                                                 'unit'))
         ax.set_xlabel(_('Date'))
-        self._plot_lines, = ax.plot_date([datetime.strptime('20190102', '%Y%m%d'),datetime.strptime('20190103', '%Y%m%d'),datetime.strptime('20190104', '%Y%m%d')], [1,2,3], 'o-')
+        self._plot_lines, = ax.plot_date([], [], 'o-')
 
         canvas = FigureCanvas(figure)  # a Gtk.DrawingArea
 
         self.replace_widget(self._graph_canvas, canvas)
         self._graph_canvas = canvas
 
-        self._graph_canvas.set_size_request(800, 600)
+        self._graph_canvas.set_size_request(400, 650)
 
     def _update_data(self):
-        logging.debug(_("Updating story plot"))
+        logging.debug(_("Updating story plot from {} to {}"
+                        .format(self._start_date, self._end_date)))
         data = self._db.get_nutrient_story(self._Nutr_No,
                                            self._start_date,
                                            self._end_date)
-        # Need to fix this code
+        # Need to improve this code
         x_data = []
         y_data = []
         for point in data:
-            x_data.append(datetime.strptime(str(point[0]), '%Y%m%d'))
+            x_data.append(point[0])
             y_data.append(point[1])
-        logging.debug(x_data)
-        logging.debug(y_data)
-        self._plot_lines.set_data(np.array(x_data),
-                                  np.array(y_data))
+        self._plot_lines.set_data(x_data,
+                                  y_data)
+
+        # REMEMBER TO RELIM THE AXES
+        ax = self._plot_lines.figure.axes[0]
+        ax.relim()
+        ax.autoscale_view(True, True, True)
         self._graph_canvas.draw()
 
     @staticmethod

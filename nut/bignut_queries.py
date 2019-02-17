@@ -102,11 +102,59 @@ FROM (
         SUM(Gm_Wgt / 100.0 * nutrient.Nutr_Val) AS meal_total_nutrient
     FROM mealfoods JOIN nut_data nutrient USING (NDB_No)
     WHERE nutrient.Nutr_No = ?
-        AND meal_id >= ? || 00
-        AND meal_id <= ? || 99
+        AND meal_id >= ? || '00'
+        AND meal_id <= ? || '99'
     GROUP by day, NDB_No)
 GROUP by day;
 '''
+
+foods_ranked_per_100_grams = '''
+SELECT NDB_No, Long_Desc, Gm_Wgt, Nutr_val
+FROM food_des
+NATURAL JOIN nut_data
+WHERE Nutr_No = :Nutr_val AND
+    CASE :FdGrp_Cd
+        -- If the parameter is 0, no group filter should be applied
+        WHEN 0 then 1
+        ELSE FdGrp_Cd = :FdGrp_Cd
+    END
+ORDER BY Nutr_val DESC;
+'''
+
+foods_ranked_per_100_calories = '''
+SELECT NDB_No, Long_Desc, Gm_Wgt, Nutr_val
+FROM food_des
+NATURAL JOIN nut_data
+WHERE Nutr_No = :Nutr_val AND
+    CASE :FdGrp_Cd
+        -- If the parameter is 0, no group filter should be applied
+        WHEN 0 then 1
+        ELSE FdGrp_Cd = :FdGrp_Cd
+    END
+ORDER BY Nutr_val DESC;
+
+'''
+
+foods_ranked_per_1_aproximate_serving = '''
+'''
+foods_ranked_per_daily_recorded_meals = '''
+SELECT mealfoods.NDB_No,
+    Long_desc,
+    Gm_Wgt,
+    (Gm_Wgt/100*nut_data.Nutr_Val) as nutrient
+FROM mealfoods
+JOIN nut_data
+ON mealfoods.NDB_No=nut_data.NDB_No
+NATURAL JOIN food_des
+WHERE nut_data.Nutr_No = :Nutr_No AND
+    CASE :FdGrp_Cd
+        -- If the parameter is 0, no group filter should be applied
+        WHEN 0 then 1
+        ELSE FdGrp_Cd = :FdGrp_Cd
+    END
+ORDER BY nutrient DESC;
+'''
+
 get_nutrient_name = 'SELECT NutrDesc FROM nutr_def WHERE Nutr_No = ?;'
 
 

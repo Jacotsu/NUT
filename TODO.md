@@ -23,14 +23,18 @@
 
 - [ ] Allow custom recipe deletion
 
+- [ ] Implement recipe save
+
 ### View nutrient story
 
-- [ ] Plot nutrient data with mathplotlib
-  - [ ] Fix Mathplotlib canvas drawing
+- [X] Add inlined food search in food story
+  - [ ] Implement food group filtering as TreeListStoreFilter
 
-- [ ] Add inlined food filter in food story
+- [X] Let user choose nutrient story period from calendars
+  - [ ] Clamp calendar to only valid values
 
-- [ ] Let user choose analysis period from story section
+- [X] Plot nutrient data with mathplotlib
+  - [X] Fix Mathplotlib canvas drawing
 
 ### Personal options
 
@@ -43,6 +47,8 @@
 - [ ] Replace inline string formatting with format method so that gettext can work properly
 
 - [ ] Keep all the logic in SQL
+  - [ ] Properly parametrize queries
+  - [ ] Harden db manager and queries
 
 - [ ] Write tests
 

@@ -9,6 +9,12 @@
       <!-- column-name FdGrp_Desc -->
       <column type="gchararray"/>
     </columns>
+    <data>
+      <row>
+        <col id="0">0</col>
+        <col id="1" translatable="yes">All food groups</col>
+      </row>
+    </data>
   </object>
   <object class="GtkListStore" id="food_ranking_choices">
     <columns>
@@ -30,7 +36,43 @@
       </row>
     </data>
   </object>
-  <object class="GtkListStore" id="story_food"/>
+  <object class="GtkListStore" id="story_food">
+    <columns>
+      <!-- column-name NDB_No -->
+      <column type="guint"/>
+      <!-- column-name Long_Desc -->
+      <column type="gchararray"/>
+      <!-- column-name Gm_Wgt -->
+      <column type="gfloat"/>
+      <!-- column-name Gm_Wgt_unit -->
+      <column type="gchararray"/>
+      <!-- column-name Nutr_val -->
+      <column type="gfloat"/>
+      <!-- column-name Nutr_val_unit -->
+      <column type="gchararray"/>
+    </columns>
+    <data>
+      <row>
+        <col id="0">0</col>
+        <col id="1" translatable="yes"/>
+        <col id="2">0</col>
+        <col id="3" translatable="yes"/>
+        <col id="4">0</col>
+        <col id="5" translatable="yes"/>
+      </row>
+      <row>
+        <col id="0">0</col>
+        <col id="1" translatable="yes"/>
+        <col id="2">100</col>
+        <col id="3" translatable="yes"/>
+        <col id="4">200</col>
+        <col id="5" translatable="yes"/>
+      </row>
+    </data>
+  </object>
+  <object class="GtkTreeModelFilter" id="filtered_story_food">
+    <property name="child_model">story_food</property>
+  </object>
   <object class="GtkWindow" id="story_window">
     <property name="can_focus">False</property>
     <property name="title" translatable="yes">The story</property>
@@ -59,6 +101,7 @@
                   <object class="GtkBox">
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
+                    <property name="orientation">vertical</property>
                     <child>
                       <object class="GtkComboBox">
                         <property name="visible">True</property>
@@ -86,6 +129,7 @@
                         <property name="hexpand">True</property>
                         <property name="model">fd_group</property>
                         <property name="active">0</property>
+                        <property name="id_column">1</property>
                         <child>
                           <object class="GtkCellRendererText"/>
                           <attributes>
@@ -106,22 +150,6 @@
                     <property name="position">0</property>
                   </packing>
                 </child>
-                <child>
-                  <object class="GtkSearchEntry">
-                    <property name="visible">True</property>
-                    <property name="can_focus">True</property>
-                    <property name="hexpand">True</property>
-                    <property name="primary_icon_name">edit-find-symbolic</property>
-                    <property name="primary_icon_activatable">False</property>
-                    <property name="primary_icon_sensitive">False</property>
-                    <property name="placeholder_text" translatable="yes">Filter food</property>
-                  </object>
-                  <packing>
-                    <property name="expand">True</property>
-                    <property name="fill">True</property>
-                    <property name="position">1</property>
-                  </packing>
-                </child>
               </object>
               <packing>
                 <property name="expand">False</property>
@@ -140,7 +168,8 @@
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="model">story_food</property>
-                    <property name="search_column">0</property>
+                    <property name="search_column">1</property>
+                    <property name="show_expanders">False</property>
                     <property name="level_indentation">1</property>
                     <property name="enable_grid_lines">horizontal</property>
                     <child internal-child="selection">
@@ -154,11 +183,11 @@
                         <property name="clickable">True</property>
                         <property name="reorderable">True</property>
                         <property name="sort_indicator">True</property>
-                        <property name="sort_column_id">0</property>
+                        <property name="sort_column_id">1</property>
                         <child>
                           <object class="GtkCellRendererText"/>
                           <attributes>
-                            <attribute name="text">0</attribute>
+                            <attribute name="text">1</attribute>
                           </attributes>
                         </child>
                       </object>
@@ -167,30 +196,46 @@
                       <object class="GtkTreeViewColumn">
                         <property name="resizable">True</property>
                         <property name="title" translatable="yes">Quantity</property>
+                        <property name="clickable">True</property>
                         <property name="reorderable">True</property>
                         <property name="sort_indicator">True</property>
+                        <property name="sort_order">descending</property>
+                        <property name="sort_column_id">2</property>
                         <child>
-                          <object class="GtkCellRendererText">
+                          <object class="GtkCellRendererSpin">
+                            <property name="xalign">1</property>
+                          </object>
+                          <attributes>
+                            <attribute name="text">2</attribute>
+                          </attributes>
+                        </child>
+                        <child>
+                          <object class="GtkCellRendererText"/>
+                          <attributes>
+                            <attribute name="text">3</attribute>
+                          </attributes>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkTreeViewColumn" id="ts_nutrient_header">
+                        <property name="resizable">True</property>
+                        <property name="title" translatable="yes">Nutrient</property>
+                        <property name="clickable">True</property>
+                        <property name="reorderable">True</property>
+                        <property name="sort_indicator">True</property>
+                        <property name="sort_order">descending</property>
+                        <property name="sort_column_id">4</property>
+                        <child>
+                          <object class="GtkCellRendererSpin">
                             <property name="xalign">1</property>
                           </object>
                           <attributes>
                             <attribute name="text">4</attribute>
                           </attributes>
                         </child>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkTreeViewColumn">
-                        <property name="resizable">True</property>
-                        <property name="title" translatable="yes">Calories</property>
-                        <property name="clickable">True</property>
-                        <property name="reorderable">True</property>
-                        <property name="sort_indicator">True</property>
-                        <property name="sort_column_id">2</property>
                         <child>
-                          <object class="GtkCellRendererText">
-                            <property name="xalign">1</property>
-                          </object>
+                          <object class="GtkCellRendererText"/>
                           <attributes>
                             <attribute name="text">5</attribute>
                           </attributes>

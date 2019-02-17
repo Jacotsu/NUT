@@ -1,6 +1,7 @@
 import sqlite3
 import bignut_queries
 import logging
+from datetime import datetime
 from food import Food
 
 
@@ -406,7 +407,8 @@ class DBMan:
         cur = self._conn.cursor()
         cur.execute(bignut_queries.get_nutrient_story,
                     (Nutr_No, start_date, end_date))
-        return cur
+        return map(lambda x: (datetime.strptime(str(x[0]), '%Y%m%d'), x[1]),
+                   cur)
 
     def get_food_nutrients_at_pref_weight(self, NDB_No):
         cur = self._conn.cursor()
