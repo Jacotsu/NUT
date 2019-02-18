@@ -352,6 +352,21 @@ class DBMan:
         cur.execute(bignut_queries.get_food_groups)
         return cur
 
+    def get_ranked_foods(self, Nutr_val, rank_choice=0, FdGrp_Cd=0):
+        """
+        :return: The foods belonging to the FdGrp_Cd
+        :rtype: Iterator of tuples
+        """
+        cur = self._conn.cursor()
+        rank_choices = {
+            0: bignut_queries.foods_ranked_per_100_grams,
+            1: bignut_queries.foods_ranked_per_100_calories,
+            2: bignut_queries.foods_ranked_per_daily_recorded_meals,
+            3: bignut_queries.foods_ranked_per_1_aproximate_serving
+        }
+        query_params = {'Nutr_val': Nutr_val, 'FdGrp_Cd': FdGrp_Cd}
+        cur.execute(rank_choices[rank_choice], query_params)
+        return cur
 
     def get_food_preferred_weight(self, NDB_No):
         """

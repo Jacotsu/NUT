@@ -20,25 +20,33 @@
     <columns>
       <!-- column-name Ranking_choice -->
       <column type="gchararray"/>
+      <!-- column-name id -->
+      <column type="guint"/>
     </columns>
     <data>
       <row>
         <col id="0" translatable="yes">Foods Ranked per 100 Grams</col>
+        <col id="1">0</col>
       </row>
       <row>
         <col id="0" translatable="yes">Foods Ranked per 100 Calories</col>
+        <col id="1">1</col>
       </row>
       <row>
         <col id="0" translatable="yes">Foods Ranked per Daily Recorded Meals</col>
+        <col id="1">2</col>
       </row>
       <row>
         <col id="0" translatable="yes">Foods Ranked per one approximate Serving</col>
+        <col id="1">3</col>
       </row>
     </data>
   </object>
   <object class="GtkListStore" id="story_food">
     <columns>
       <!-- column-name NDB_No -->
+      <column type="guint"/>
+      <!-- column-name FdGrp_Cd -->
       <column type="guint"/>
       <!-- column-name Long_Desc -->
       <column type="gchararray"/>
@@ -51,27 +59,6 @@
       <!-- column-name Nutr_val_unit -->
       <column type="gchararray"/>
     </columns>
-    <data>
-      <row>
-        <col id="0">0</col>
-        <col id="1" translatable="yes"/>
-        <col id="2">0</col>
-        <col id="3" translatable="yes"/>
-        <col id="4">0</col>
-        <col id="5" translatable="yes"/>
-      </row>
-      <row>
-        <col id="0">0</col>
-        <col id="1" translatable="yes"/>
-        <col id="2">100</col>
-        <col id="3" translatable="yes"/>
-        <col id="4">200</col>
-        <col id="5" translatable="yes"/>
-      </row>
-    </data>
-  </object>
-  <object class="GtkTreeModelFilter" id="filtered_story_food">
-    <property name="child_model">story_food</property>
   </object>
   <object class="GtkWindow" id="story_window">
     <property name="can_focus">False</property>
@@ -103,12 +90,13 @@
                     <property name="can_focus">False</property>
                     <property name="orientation">vertical</property>
                     <child>
-                      <object class="GtkComboBox">
+                      <object class="GtkComboBox" id="food_rank_cb">
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
                         <property name="hexpand">True</property>
                         <property name="model">food_ranking_choices</property>
                         <property name="active">2</property>
+                        <signal name="changed" handler="update_data" swapped="no"/>
                         <child>
                           <object class="GtkCellRendererText"/>
                           <attributes>
@@ -123,13 +111,14 @@
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkComboBox">
+                      <object class="GtkComboBox" id="fd_group_cb">
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
                         <property name="hexpand">True</property>
                         <property name="model">fd_group</property>
                         <property name="active">0</property>
                         <property name="id_column">1</property>
+                        <signal name="changed" handler="update_data" swapped="no"/>
                         <child>
                           <object class="GtkCellRendererText"/>
                           <attributes>
@@ -172,6 +161,7 @@
                     <property name="show_expanders">False</property>
                     <property name="level_indentation">1</property>
                     <property name="enable_grid_lines">horizontal</property>
+                    <signal name="row-activated" handler="food_clicked" swapped="no"/>
                     <child internal-child="selection">
                       <object class="GtkTreeSelection"/>
                     </child>
@@ -185,9 +175,11 @@
                         <property name="sort_indicator">True</property>
                         <property name="sort_column_id">1</property>
                         <child>
-                          <object class="GtkCellRendererText"/>
+                          <object class="GtkCellRendererText">
+                            <property name="ellipsize">end</property>
+                          </object>
                           <attributes>
-                            <attribute name="text">1</attribute>
+                            <attribute name="text">2</attribute>
                           </attributes>
                         </child>
                       </object>
@@ -206,13 +198,13 @@
                             <property name="xalign">1</property>
                           </object>
                           <attributes>
-                            <attribute name="text">2</attribute>
+                            <attribute name="text">3</attribute>
                           </attributes>
                         </child>
                         <child>
                           <object class="GtkCellRendererText"/>
                           <attributes>
-                            <attribute name="text">3</attribute>
+                            <attribute name="text">4</attribute>
                           </attributes>
                         </child>
                       </object>
@@ -231,13 +223,13 @@
                             <property name="xalign">1</property>
                           </object>
                           <attributes>
-                            <attribute name="text">4</attribute>
+                            <attribute name="text">5</attribute>
                           </attributes>
                         </child>
                         <child>
                           <object class="GtkCellRendererText"/>
                           <attributes>
-                            <attribute name="text">5</attribute>
+                            <attribute name="text">6</attribute>
                           </attributes>
                         </child>
                       </object>

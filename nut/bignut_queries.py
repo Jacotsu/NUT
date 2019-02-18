@@ -109,9 +109,10 @@ GROUP by day;
 '''
 
 foods_ranked_per_100_grams = '''
-SELECT NDB_No, Long_Desc, Gm_Wgt, Nutr_val
+SELECT NDB_No, FdGrp_Cd, Long_Desc, 100, 'g', Nutr_val, Units
 FROM food_des
 NATURAL JOIN nut_data
+NATURAL JOIN nutr_def
 WHERE Nutr_No = :Nutr_val AND
     CASE :FdGrp_Cd
         -- If the parameter is 0, no group filter should be applied
@@ -122,9 +123,10 @@ ORDER BY Nutr_val DESC;
 '''
 
 foods_ranked_per_100_calories = '''
-SELECT NDB_No, Long_Desc, Gm_Wgt, Nutr_val
+SELECT NDB_No, FdGrp_Cd, Long_Desc, Gm_Wgt, 100, Nutr_val, Units
 FROM food_des
 NATURAL JOIN nut_data
+NATURAL JOIN nutr_def
 WHERE Nutr_No = :Nutr_val AND
     CASE :FdGrp_Cd
         -- If the parameter is 0, no group filter should be applied
@@ -132,20 +134,24 @@ WHERE Nutr_No = :Nutr_val AND
         ELSE FdGrp_Cd = :FdGrp_Cd
     END
 ORDER BY Nutr_val DESC;
-
 '''
 
 foods_ranked_per_1_aproximate_serving = '''
 '''
+
+# Must implement period restriction
 foods_ranked_per_daily_recorded_meals = '''
 SELECT mealfoods.NDB_No,
+    FdGrp_Cd,
     Long_desc,
     Gm_Wgt,
-    (Gm_Wgt/100*nut_data.Nutr_Val) as nutrient
+    (Gm_Wgt/100*nut_data.Nutr_Val) as nutrient,
+    Units
 FROM mealfoods
 JOIN nut_data
 ON mealfoods.NDB_No=nut_data.NDB_No
 NATURAL JOIN food_des
+NATURAL JOIN nutr_def
 WHERE nut_data.Nutr_No = :Nutr_No AND
     CASE :FdGrp_Cd
         -- If the parameter is 0, no group filter should be applied

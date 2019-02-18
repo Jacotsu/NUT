@@ -154,19 +154,44 @@ class TheStoryHandler:
     def start_date_selected(self, calendar):
         date = calendar.get_date()
         self._manager._start_date = f'{date[0]:02}{date[1]:02}{date[2]:02}'
-        logging.debug(_('Start date set to {}').format(date))
+        logging.debug(_('Start date set to {}')
+                      .format(self._manager._start_date))
         self._manager._update_data()
 
     def end_date_selected(self, calendar):
         date = calendar.get_date()
         self._manager._end_date = f'{date[0]:02}{date[1]:02}{date[2]:02}'
-        logging.debug(_('End date set to {}').format(date))
+        logging.debug(_('End date set to {}').format(self._manager._end_date))
         self._manager._update_data()
 
-    def get_data(self, tmp):
-        raise NotImplementedError
+    def food_clicked(self, treeview, path, view_column):
+        """
+        This event is activated when a user double clicks a valid
+        nutrient in the treeview
+        """
+        data = treeview.get_model()
+        tree_iter = data.get_iter(path)
+        food_info = data.get(tree_iter, 0)
+        logging.debug(f'{food_info} Food clicked')
+        # Placeholder nutrient 203
+        ViewFood(203)
 
 
+    def update_data(self, *args):
+        FdGrp_Cd_iter = self._manager._fd_group_cb.get_active_iter()
+        FdGrp_Cd = self._manager._fd_group.get_value(FdGrp_Cd_iter, 0)
+
+        rank_iter = self._manager._food_rank_cb.get_active_iter()
+        rank = self._manager._food_rank_choices.get_value(rank_iter, 1)
+
+        foods = self._manager._db.get_ranked_foods(self._manager._Nutr_No,
+                                                   rank,
+                                                   FdGrp_Cd)
+
+        # Need to improve performance
+        self._manager._story_food.clear()
+        for food in foods:
+            self._manager._story_food.append(food)
 
 
 class GTKGui:
@@ -271,6 +296,11 @@ class TheStory:
 
         self._window = builder.get_object("story_window")
         self._graph_canvas = builder.get_object("story_graph")
+        self._fd_group = builder.get_object("fd_group")
+        self._fd_group_cb = builder.get_object("fd_group_cb")
+        self._food_rank_choices = builder.get_object("food_ranking_choices")
+        self._food_rank_cb = builder.get_object("food_rank_cb")
+        self._story_food = builder.get_object("story_food")
         self._ts_nutrient_header = builder.get_object("ts_nutrient_header")
 
         builder.connect_signals(TheStoryHandler(self))
