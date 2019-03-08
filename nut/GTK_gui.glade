@@ -2,20 +2,27 @@
 <!-- Generated with glade 3.22.1 -->
 <interface>
   <requires lib="gtk+" version="3.20"/>
+  <object class="GtkAdjustment" id="adjustment1">
+    <property name="upper">100</property>
+    <property name="step_increment">1</property>
+    <property name="page_increment">10</property>
+  </object>
   <object class="GtkTreeStore" id="am_analysis">
     <columns>
+      <!-- column-name id -->
+      <column type="guint"/>
       <!-- column-name name -->
       <column type="gchararray"/>
-      <!-- column-name show_pcf -->
+      <!-- column-name is_food -->
       <column type="gboolean"/>
-      <!-- column-name show_quantity_spin -->
-      <column type="gboolean"/>
-      <!-- column-name pcf_text -->
-      <column type="gchararray"/>
-      <!-- column-name DV -->
-      <column type="gchararray"/>
+      <!-- column-name pcf_nutrient -->
+      <column type="guint"/>
       <!-- column-name weight -->
+      <column type="gfloat"/>
+      <!-- column-name weight_unit -->
       <column type="gchararray"/>
+      <!-- column-name daily_value -->
+      <column type="gfloat"/>
     </columns>
   </object>
   <object class="GtkAdjustment" id="am_meals_no">
@@ -216,34 +223,38 @@
   </object>
   <object class="GtkTreeStore" id="rm_analysis">
     <columns>
+      <!-- column-name id -->
+      <column type="guint"/>
       <!-- column-name name -->
       <column type="gchararray"/>
-      <!-- column-name show_pcf -->
+      <!-- column-name is_food -->
       <column type="gboolean"/>
-      <!-- column-name show_quantity_spin -->
-      <column type="gboolean"/>
-      <!-- column-name pcf_text -->
-      <column type="gchararray"/>
-      <!-- column-name DV -->
-      <column type="gchararray"/>
+      <!-- column-name pcf_nutrient -->
+      <column type="guint"/>
       <!-- column-name weight -->
+      <column type="gfloat"/>
+      <!-- column-name weight_unit -->
       <column type="gchararray"/>
+      <!-- column-name daily_value -->
+      <column type="gfloat"/>
     </columns>
   </object>
   <object class="GtkTreeStore" id="rm_menu">
     <columns>
+      <!-- column-name id -->
+      <column type="guint"/>
       <!-- column-name name -->
       <column type="gchararray"/>
-      <!-- column-name show_pcf -->
+      <!-- column-name is_food -->
       <column type="gboolean"/>
-      <!-- column-name show_quantity_spin -->
-      <column type="gboolean"/>
-      <!-- column-name pcf_text -->
-      <column type="gchararray"/>
-      <!-- column-name DV -->
-      <column type="gchararray"/>
+      <!-- column-name pcf_nutrient -->
+      <column type="guint"/>
       <!-- column-name weight -->
+      <column type="gfloat"/>
+      <!-- column-name weight_unit -->
       <column type="gchararray"/>
+      <!-- column-name daily_value -->
+      <column type="gfloat"/>
     </columns>
   </object>
   <object class="GtkAdjustment" id="rm_scale_meal_selector">
@@ -450,7 +461,7 @@
                     <property name="vexpand">True</property>
                     <property name="shadow_type">in</property>
                     <child>
-                      <object class="GtkTreeView">
+                      <object class="GtkTreeView" id="am_analysis_treeview">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <property name="model">am_analysis</property>
@@ -469,10 +480,11 @@
                             <property name="clickable">True</property>
                             <property name="reorderable">True</property>
                             <property name="sort_indicator">True</property>
+                            <property name="sort_column_id">1</property>
                             <child>
                               <object class="GtkCellRendererText"/>
                               <attributes>
-                                <attribute name="text">0</attribute>
+                                <attribute name="text">1</attribute>
                               </attributes>
                             </child>
                           </object>
@@ -480,15 +492,17 @@
                         <child>
                           <object class="GtkTreeViewColumn">
                             <property name="resizable">True</property>
-                            <property name="title" translatable="yes">DV amount</property>
+                            <property name="title" translatable="yes">DV</property>
                             <property name="reorderable">True</property>
                             <child>
-                              <object class="GtkCellRendererText">
+                              <object class="GtkCellRendererSpin">
                                 <property name="xalign">1</property>
                               </object>
-                              <attributes>
-                                <attribute name="text">4</attribute>
-                              </attributes>
+                            </child>
+                            <child>
+                              <object class="GtkCellRendererText">
+                                <property name="text">%</property>
+                              </object>
                             </child>
                           </object>
                         </child>
@@ -497,10 +511,15 @@
                             <property name="resizable">True</property>
                             <property name="title" translatable="yes">Amount</property>
                             <property name="reorderable">True</property>
+                            <property name="sort_indicator">True</property>
+                            <property name="sort_column_id">4</property>
                             <child>
-                              <object class="GtkCellRendererText">
+                              <object class="GtkCellRendererSpin">
                                 <property name="xalign">1</property>
                               </object>
+                            </child>
+                            <child>
+                              <object class="GtkCellRendererText"/>
                               <attributes>
                                 <attribute name="text">5</attribute>
                               </attributes>
@@ -620,7 +639,7 @@
                     <property name="vexpand">True</property>
                     <property name="shadow_type">in</property>
                     <child>
-                      <object class="GtkTreeView">
+                      <object class="GtkTreeView" id="rm_menu_treeview">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <property name="model">rm_menu</property>
@@ -638,25 +657,25 @@
                             <property name="expand">True</property>
                             <property name="reorderable">True</property>
                             <property name="sort_indicator">True</property>
-                            <property name="sort_column_id">0</property>
+                            <property name="sort_column_id">1</property>
                             <child>
                               <object class="GtkCellRendererText"/>
                               <attributes>
-                                <attribute name="text">0</attribute>
+                                <attribute name="text">1</attribute>
                               </attributes>
                             </child>
                             <child>
                               <object class="GtkCellRendererCombo">
                                 <property name="xalign">1</property>
                                 <property name="editable">True</property>
+                                <property name="text">pcf</property>
                                 <property name="has_entry">False</property>
                                 <property name="model">pcf_choices</property>
                                 <property name="text_column">1</property>
                                 <signal name="changed" handler="record_meals_set_pcf" swapped="no"/>
                               </object>
                               <attributes>
-                                <attribute name="visible">1</attribute>
-                                <attribute name="text">3</attribute>
+                                <attribute name="visible">2</attribute>
                               </attributes>
                             </child>
                           </object>
@@ -664,15 +683,19 @@
                         <child>
                           <object class="GtkTreeViewColumn">
                             <property name="resizable">True</property>
-                            <property name="title" translatable="yes">DV amount</property>
+                            <property name="title" translatable="yes">DV</property>
                             <property name="reorderable">True</property>
                             <child>
-                              <object class="GtkCellRendererText">
+                              <object class="GtkCellRendererSpin">
                                 <property name="xalign">1</property>
+                                <property name="editable">True</property>
+                                <property name="digits">2</property>
                               </object>
-                              <attributes>
-                                <attribute name="text">4</attribute>
-                              </attributes>
+                            </child>
+                            <child>
+                              <object class="GtkCellRendererText">
+                                <property name="text">%</property>
+                              </object>
                             </child>
                           </object>
                         </child>
@@ -682,24 +705,24 @@
                             <property name="title" translatable="yes">Amount</property>
                             <property name="reorderable">True</property>
                             <property name="sort_indicator">True</property>
-                            <property name="sort_column_id">2</property>
-                            <child>
-                              <object class="GtkCellRendererText">
-                                <property name="xalign">1</property>
-                              </object>
-                              <attributes>
-                                <attribute name="text">5</attribute>
-                              </attributes>
-                            </child>
+                            <property name="sort_column_id">4</property>
                             <child>
                               <object class="GtkCellRendererSpin">
                                 <property name="xalign">1</property>
-                                <property name="editable">True</property>
+                                <property name="digits">2</property>
+                              </object>
+                              <attributes>
+                                <attribute name="adjustment">4</attribute>
+                              </attributes>
+                            </child>
+                            <child>
+                              <object class="GtkCellRendererText">
+                                <property name="xalign">1</property>
                                 <property name="placeholder_text">weight</property>
                               </object>
                               <attributes>
                                 <attribute name="visible">2</attribute>
-                                <attribute name="adjustment">5</attribute>
+                                <attribute name="text">5</attribute>
                               </attributes>
                             </child>
                           </object>
@@ -824,7 +847,7 @@
                     <property name="vexpand">True</property>
                     <property name="shadow_type">in</property>
                     <child>
-                      <object class="GtkTreeView">
+                      <object class="GtkTreeView" id="rm_analysis_treeview">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <property name="model">rm_analysis</property>
@@ -845,7 +868,7 @@
                             <child>
                               <object class="GtkCellRendererText"/>
                               <attributes>
-                                <attribute name="text">0</attribute>
+                                <attribute name="text">1</attribute>
                               </attributes>
                             </child>
                           </object>
@@ -853,15 +876,17 @@
                         <child>
                           <object class="GtkTreeViewColumn">
                             <property name="resizable">True</property>
-                            <property name="title" translatable="yes">DV amount</property>
+                            <property name="title" translatable="yes">DV</property>
                             <property name="reorderable">True</property>
                             <child>
-                              <object class="GtkCellRendererText">
+                              <object class="GtkCellRendererSpin">
                                 <property name="xalign">1</property>
                               </object>
-                              <attributes>
-                                <attribute name="text">4</attribute>
-                              </attributes>
+                            </child>
+                            <child>
+                              <object class="GtkCellRendererText">
+                                <property name="text">%</property>
+                              </object>
                             </child>
                           </object>
                         </child>
@@ -870,10 +895,15 @@
                             <property name="resizable">True</property>
                             <property name="title" translatable="yes">Amount</property>
                             <property name="reorderable">True</property>
+                            <property name="sort_indicator">True</property>
+                            <property name="sort_column_id">4</property>
                             <child>
-                              <object class="GtkCellRendererText">
+                              <object class="GtkCellRendererSpin">
                                 <property name="xalign">1</property>
                               </object>
+                            </child>
+                            <child>
+                              <object class="GtkCellRendererText"/>
                               <attributes>
                                 <attribute name="text">5</attribute>
                               </attributes>

@@ -7,6 +7,16 @@ from pprint import pformat
 gi.require_version('Gtk', '3.0')
 _ = gettext.gettext
 
+def set_float_precision(col, cell, model, iterator, func_data):
+    data = model.get(iterator, func_data['column_no'])[0]
+    if data:
+        cell.set_property('text', '{:5.2f}'.format(data))
+    else:
+        cell.set_property('text', _('[No Data]'))
+
+#xcolumn.set_cell_data_func(xrenderer, \
+#    lambda col, cell, model, iter, unused:
+#        cell.set_property("text", "%g" % model.get(iter, 0)[0]))
 
 class Analysis():
     def __init__(self, parent, tree_iter, defined_nutrients):
@@ -170,50 +180,54 @@ class Analysis():
                 tmp_ntr = self._defined_nutrients[key]
                 data_to_append = []
                 try:
-                    data_to_append = [_(tmp_ntr[2]),
+                    data_to_append = [key,
+                                      _(tmp_ntr[2]),
                                       False,
-                                      False,
-                                      _('No auto portion control'),
-                                      f'{tmp_ntr[3]:5.2f} %',
-                                      f'{tmp_ntr[4]:5.2f} {tmp_ntr[0]: >}'
+                                      0,
+                                      tmp_ntr[4],
+                                      tmp_ntr[0],
+                                      0.0
                                       ]
                 except TypeError:
-                    data_to_append = [_(tmp_ntr[2]),
+                    data_to_append = [key,
+                                      _(tmp_ntr[2]),
                                       False,
-                                      False,
-                                      _('No auto portion control'),
-                                      '[No data]',
-                                      '[No data]']
+                                      0,
+                                      None,
+                                      '',
+                                      None]
                 logging.debug(f'Adding: {pformat(data_to_append)}')
                 next_tree_iter = self._parent_treestore.append(tree_iter,
                                                                data_to_append)
             else:
                 next_tree_iter = self._parent_treestore.append(tree_iter,
-                                                               [_(key),
+                                                               [0,
+                                                                _(f'{key}'),
                                                                 False,
-                                                                False,
-                                                                _('No auto '
-                                                                  'portion '
-                                                                  'control'),
-                                                                '[No data]',
-                                                                '[No data]'])
+                                                                0,
+                                                                0.0,
+                                                                '',
+                                                                0.0])
 
             if type(item) is dict:
                 self._build_tree(next_tree_iter, item)
             elif type(item) is list:
                 for nutr in item:
-                    tmp_ntr = self._defined_nutrients[nutr]
-                    data_to_append = [_(tmp_ntr[2]),
-                                      False,
-                                      False,
-                                      _('No auto portion control'),
-                                      f'{tmp_ntr[3]:5.2f} %'
-                                      if tmp_ntr[3] else '[No data]',
-                                      f'{tmp_ntr[4]:5.2f} {tmp_ntr[0]: >}'
-                                      if tmp_ntr[4] else '[No data]']
-                    logging.debug(f'Adding: {pformat(data_to_append)}')
-                    self._parent_treestore.append(next_tree_iter,
-                                                  data_to_append)
+                    try:
+                        tmp_ntr = self._defined_nutrients[nutr]
+                        data_to_append = [nutr,
+                                          _(tmp_ntr[2]),
+                                          False,
+                                          0,
+                                          tmp_ntr[3],
+                                          tmp_ntr[0],
+                                          tmp_ntr[4]]
+
+                        logging.debug(f'Adding: {pformat(data_to_append)}')
+                        self._parent_treestore.append(next_tree_iter,
+                                                      data_to_append)
+                    except KeyError:
+                        pass
 
 # NDB_No|Gm_Wgt|Nutr_No   in mealfoods
 # Nutr_No|Units|Tagname|NutrDesc|dv_default|nutopt    in nutr_def
@@ -221,7 +235,8 @@ class Analysis():
 # in food des
 
 # in treestore
-# NDB_No|Nutr_No|Long_Desc|NutrDesc|PCF_Nutr_No|nutopt|Gm_Wgt|Units|Ref_desc|Refuse
+# NDB_No|Nutr_No|Description|PCF_Nutr_No|Gm_Wgt|'g'|Volume|'cm3'|Nutr_Val|nutr_def.Units
+# select * from mealfoods JOIN nut_data on mealfoods.NDB_No
 
 # If Nutr_No == 0 then this is not a nutrient, it's a nutrient group or food
 # if NDB_No == 0 then this is not food, it's probably a nutrient group
@@ -234,11 +249,15 @@ class Food(Analysis):
         self._db = db.DBMan()
         self._NDB_No = None
         # Name, show pcf, show spinbox, daily value, quantity
-        top = self._parent_treestore.append(None, [
+        food_to_append = [
+            1,
             _(name),
             True,
-            True,
-            _('No auto portion control'),
-            '',
-            '0'])
+            0,
+            123.4,
+            'lel',
+            88
+        ]
+
+        top = self._parent_treestore.append(None, food_to_append)
         super(Food, self).__init__(parent, top, defined_nutrients)

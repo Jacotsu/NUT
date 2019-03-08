@@ -16,6 +16,7 @@ get_weight_unit = 'SELECT grams FROM options;'
 set_weight_unit = 'UPDATE options set grams = ?'
 
 get_current_meal = 'SELECT currentmeal FROM options;'
+get_current_meal_food = 'SELECT * FROM currentmeal;'
 get_current_meal_str = 'SELECT cm_string FROM cm_string;'
 set_current_meal = 'UPDATE options set currentmeal = ?;'
 get_meal_from_offset_rel_to_current = """
@@ -69,16 +70,16 @@ get_food_sorted_by_nutrient = """
     """
 get_food_preferred_weight = 'SELECT * FROM pref_Gm_Wgt WHERE NDB_No = ?;'
 get_food_nutrients = 'SELECT * FROM nut_data WHERE NDB_No = ?;'
-# To rplace substr with col numb
 get_food_nutrients_at_pref_weight = """
 SELECT
     NDB_No,
-    'substr(Shrt_Desc, 1, 45)',
+    Nutr_Val,
+    NutrDesc,
     Nutr_Val,
     Units,
     dv
 FROM view_foods
-WHERE NDB_No = ?;
+WHERE NDB_No = :NDB_No;
 """
 get_food_nutrients_based_on_weight = """
     SELECT

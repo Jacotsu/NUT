@@ -201,6 +201,17 @@ class DBMan:
         meal = cur.fetchone()[0]
         return meal
 
+    @property
+    def current_meal_menu(self):
+        """
+        :return: The current meal menu
+        :rtype: cursor
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_current_meal_food)
+        return cur
+
+
     @current_meal.setter
     def current_meal(self, meal_id):
         """
@@ -408,7 +419,7 @@ class DBMan:
         cur.execute(bignut_queries.get_food_from_NDB_No,
                     (NDB_No,))
 
-        return cur.fetchone()[0]
+        return cur.fetchone()
 
     def get_nutrient_story(self, Nutr_No, start_date, end_date):
         """
@@ -428,7 +439,7 @@ class DBMan:
     def get_food_nutrients_at_pref_weight(self, NDB_No):
         cur = self._conn.cursor()
         cur.execute(bignut_queries.get_food_nutrients_at_pref_weight,
-                    (NDB_No,))
+                    {'NDB_No': NDB_No})
 
         return {x[0]: x[1:] for x in cur}
 

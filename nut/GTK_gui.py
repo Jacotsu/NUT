@@ -70,8 +70,8 @@ class MainHandler:
         tree_iter = data.get_iter(path)
         food_info = data.get(tree_iter, 0)
         logging.debug(f'{food_info} Food clicked')
-        # Placeholder nutrient 203
-        ViewFood(203)
+        # Placeholder food 20421 pasta dry
+        ViewFood(20421)
 
 
     def add_food_to_meal(self, button):
@@ -167,14 +167,14 @@ class TheStoryHandler:
     def food_clicked(self, treeview, path, view_column):
         """
         This event is activated when a user double clicks a valid
-        nutrient in the treeview
+        food in the treeview
         """
         data = treeview.get_model()
         tree_iter = data.get_iter(path)
         food_info = data.get(tree_iter, 0)
         logging.debug(f'{food_info} Food clicked')
-        # Placeholder nutrient 203
-        ViewFood(203)
+        # Placeholder nutrient 20421 pasta
+        ViewFood(20421)
 
 
     def update_data(self, *args):
@@ -246,13 +246,32 @@ class GTKGui:
         #ntr['Prot/Carb/Fat'] = anal_header[7]
         #ntr['Omega-6/3 Balance'] = anal_header[8]
 
-        meal.Food(self._rm_menu, ntr, 'test')
-        meal.Food(self._rm_menu, ntr, 'test2')
+        self._set_cells_data_func(builder)
+
+        for food in self._db.current_meal_menu:
+            meal.Food(self._rm_menu,
+                      self._db.get_food_nutrients_at_pref_weight(food[0]),
+                      food[1])
+
         meal.Analysis(self._rm_anal, None, self._db.rm_analysis_nutrients)
         meal.Analysis(self._am_anal, None, self._db.am_analysis_nutrients)
 
         self._window.show_all()
         Gtk.main()
+
+    def _set_cells_data_func(self, builder):
+        views_to_set = ['rm_menu_treeview',
+                        'rm_analysis_treeview',
+                        'am_analysis_treeview']
+        for view_name in views_to_set:
+            view = builder.get_object(view_name)
+            cols = view.get_columns()
+            cols[1].set_cell_data_func(cols[1].get_cells()[0],
+                                       meal.set_float_precision,
+                                       {'column_no': 6})
+            cols[2].set_cell_data_func(cols[2].get_cells()[0],
+                                       meal.set_float_precision,
+                                       {'column_no': 4})
 
     def _update_GUI_settings(self):
         nutrients = self._ntr
@@ -317,8 +336,23 @@ class TheStory:
                       .format(_(self._nutrient_name)))
         self._setup_plot()
         self._update_data()
+        self._set_cells_data_func(builder)
 
         self._window.show_all()
+
+    def _set_cells_data_func(self, builder):
+        views_to_set = ['story_food_view']
+        for view_name in views_to_set:
+            view = builder.get_object(view_name)
+            cols = view.get_columns()
+            cols[1].set_cell_data_func(cols[1].get_cells()[0],
+                                       meal.set_float_precision,
+                                       {'column_no': 4})
+            cols[2].set_cell_data_func(cols[2].get_cells()[0],
+                                       meal.set_float_precision,
+                                       {'column_no': 2})
+
+
 
     def _setup_plot(self):
         figure = Figure(figsize=(5, 4), dpi=100)
@@ -382,19 +416,22 @@ class ViewFood:
         builder = Gtk.Builder()
         builder.add_from_file("view_food_window.glade")
         self._window = builder.get_object("view_food")
-        self._graph_canvas = builder.get_object("story_graph")
+        self._vf_analysis = builder.get_object("vf_analysis")
         self._db = db.DBMan()
-        self._ntr = self._db.defined_nutrients
 
         # Must change with actual food selected
-        self._window.set_title(_("view food"))
-        logging.debug(_("view food window created"))
+        self._food = self._db.get_food_by_NDB_No(NDB_No)
+        self._window.set_title(_("Viewing {}").format(self._food[2]))
+        logging.debug(_("View {} window created").format(self._food[2]))
 
         self._searchable_food_list = builder.get_object("search_food_list")
         for food in self._db.food_list:
             self._searchable_food_list.append(food)
-        logging.debug(_("Food list loaded in ViewFood window"))
+        logging.debug(_("Food list loaded in view {} window")
+                      .format(self._food[2]))
 
+        # NDB_No, Ntr_val, name, weight, DV
+        meal.Analysis(self._vf_analysis, None, self._db.defined_nutrients)
         self._window.show_all()
 
     def _load_food(self, NDB_No):

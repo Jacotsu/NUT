@@ -44,6 +44,8 @@
 
 - [ ] Parametrize file load in db load query
 
+- [ ] Normalize all query results
+
 - [ ] Replace inline string formatting with format method so that gettext can work properly
 
 - [ ] Keep all the logic in SQL

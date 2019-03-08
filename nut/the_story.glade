@@ -42,22 +42,18 @@
       </row>
     </data>
   </object>
-  <object class="GtkListStore" id="story_food">
+  <object class="GtkTreeStore" id="story_food">
     <columns>
-      <!-- column-name NDB_No -->
+      <!-- column-name id -->
       <column type="guint"/>
-      <!-- column-name FdGrp_Cd -->
-      <column type="guint"/>
-      <!-- column-name Long_Desc -->
+      <!-- column-name name -->
       <column type="gchararray"/>
-      <!-- column-name Gm_Wgt -->
+      <!-- column-name weight -->
       <column type="gfloat"/>
-      <!-- column-name Gm_Wgt_unit -->
+      <!-- column-name weight_unit -->
       <column type="gchararray"/>
-      <!-- column-name Nutr_val -->
+      <!-- column-name daily_value -->
       <column type="gfloat"/>
-      <!-- column-name Nutr_val_unit -->
-      <column type="gchararray"/>
     </columns>
   </object>
   <object class="GtkWindow" id="story_window">
@@ -70,7 +66,7 @@
       <object class="GtkPaned">
         <property name="visible">True</property>
         <property name="can_focus">True</property>
-        <property name="position">500</property>
+        <property name="position">394</property>
         <property name="position_set">True</property>
         <property name="wide_handle">True</property>
         <child>
@@ -153,7 +149,7 @@
                 <property name="vexpand">True</property>
                 <property name="shadow_type">in</property>
                 <child>
-                  <object class="GtkTreeView">
+                  <object class="GtkTreeView" id="story_food_view">
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="model">story_food</property>
@@ -196,6 +192,7 @@
                         <child>
                           <object class="GtkCellRendererSpin">
                             <property name="xalign">1</property>
+                            <property name="digits">2</property>
                           </object>
                           <attributes>
                             <attribute name="text">3</attribute>
@@ -204,7 +201,7 @@
                         <child>
                           <object class="GtkCellRendererText"/>
                           <attributes>
-                            <attribute name="text">4</attribute>
+                            <attribute name="text">3</attribute>
                           </attributes>
                         </child>
                       </object>
@@ -221,13 +218,16 @@
                         <child>
                           <object class="GtkCellRendererSpin">
                             <property name="xalign">1</property>
+                            <property name="digits">2</property>
                           </object>
                           <attributes>
                             <attribute name="text">5</attribute>
                           </attributes>
                         </child>
                         <child>
-                          <object class="GtkCellRendererText"/>
+                          <object class="GtkCellRendererText">
+                            <property name="width_chars">3</property>
+                          </object>
                           <attributes>
                             <attribute name="text">6</attribute>
                           </attributes>
@@ -243,17 +243,6 @@
                 <property name="position">1</property>
               </packing>
             </child>
-          </object>
-          <packing>
-            <property name="resize">False</property>
-            <property name="shrink">True</property>
-          </packing>
-        </child>
-        <child>
-          <object class="GtkBox">
-            <property name="visible">True</property>
-            <property name="can_focus">False</property>
-            <property name="orientation">vertical</property>
             <child>
               <object class="GtkBox">
                 <property name="visible">True</property>
@@ -344,21 +333,20 @@
               <packing>
                 <property name="expand">False</property>
                 <property name="fill">True</property>
-                <property name="position">0</property>
+                <property name="position">2</property>
               </packing>
             </child>
-            <child>
-              <object class="GtkDrawingArea" id="story_graph">
-                <property name="visible">True</property>
-                <property name="can_focus">False</property>
-                <signal name="configure-event" handler="plot_area_resize" swapped="no"/>
-              </object>
-              <packing>
-                <property name="expand">False</property>
-                <property name="fill">True</property>
-                <property name="position">1</property>
-              </packing>
-            </child>
+          </object>
+          <packing>
+            <property name="resize">False</property>
+            <property name="shrink">True</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkDrawingArea" id="story_graph">
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+            <signal name="configure-event" handler="plot_area_resize" swapped="no"/>
           </object>
           <packing>
             <property name="resize">True</property>
