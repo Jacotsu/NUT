@@ -249,43 +249,42 @@ DROP TRIGGER IF EXISTS currentmeal_insert;
 
 
 CREATE TEMP TRIGGER currentmeal_insert INSTEAD OF
-INSERT ON currentmeal BEGIN
-UPDATE mealfoods
-SET Nutr_No = NULL
-WHERE Nutr_No =
-    (SELECT Nutr_No
-     FROM nutr_def
-     WHERE NutrDesc = NEW.NutrDesc);
-  INSERT
-  OR
-  REPLACE INTO mealfoods
-VALUES (
-          (SELECT currentmeal
-           FROM OPTIONS), NEW.NDB_No,
-                          CASE
-                              WHEN NEW.Gm_Wgt IS NULL THEN
-                                     (SELECT Gm_Wgt
-                                      FROM pref_Gm_Wgt
-                                      WHERE NDB_No = NEW.NDB_No)
-                              ELSE NEW.Gm_Wgt
-                          END,
-                          CASE
-                              WHEN NEW.NutrDesc IS NULL THEN NULL
-                              WHEN
-                                     (SELECT count(*)
-                                      FROM nutr_def
-                                      WHERE NutrDesc = NEW.NutrDesc
-                                        AND dv_default > 0.0) = 1 THEN
-                                     (SELECT Nutr_No
-                                      FROM nutr_def
-                                      WHERE NutrDesc = NEW.NutrDesc)
-                              WHEN
-                                     (SELECT count(*)
-                                      FROM nutr_def
-                                      WHERE Nutr_No = NEW.NutrDesc
-                                        AND dv_default > 0.0) = 1 THEN NEW.NutrDesc
-                              ELSE NULL
-                          END);
+INSERT ON currentmeal
+BEGIN
+    UPDATE mealfoods SET Nutr_No = NULL
+    WHERE Nutr_No =
+        (SELECT Nutr_No
+         FROM nutr_def
+         WHERE NutrDesc = NEW.NutrDesc);
+      INSERT
+      OR
+      REPLACE INTO mealfoods
+    VALUES ((SELECT currentmeal FROM OPTIONS),
+            NEW.NDB_No,
+            CASE
+                WHEN NEW.Gm_Wgt IS NULL THEN
+                       (SELECT Gm_Wgt
+                        FROM pref_Gm_Wgt
+                        WHERE NDB_No = NEW.NDB_No)
+                ELSE NEW.Gm_Wgt
+            END,
+            CASE
+                WHEN NEW.NutrDesc IS NULL THEN NULL
+                WHEN
+                       (SELECT count(*)
+                        FROM nutr_def
+                        WHERE NutrDesc = NEW.NutrDesc
+                          AND dv_default > 0.0) = 1 THEN
+                       (SELECT Nutr_No
+                        FROM nutr_def
+                        WHERE NutrDesc = NEW.NutrDesc)
+                WHEN
+                       (SELECT count(*)
+                        FROM nutr_def
+                        WHERE Nutr_No = NEW.NutrDesc
+                          AND dv_default > 0.0) = 1 THEN NEW.NutrDesc
+                ELSE NULL
+            END);
 
 END;
 
@@ -297,13 +296,12 @@ DROP TRIGGER IF EXISTS currentmeal_delete;
 
 
 CREATE TEMP TRIGGER currentmeal_delete INSTEAD OF
-DELETE ON currentmeal BEGIN
-DELETE
-FROM mealfoods
-WHERE meal_id =
-    (SELECT currentmeal
-     FROM OPTIONS)
-  AND NDB_No = OLD.NDB_No; END;
+DELETE ON currentmeal
+BEGIN
+    DELETE FROM mealfoods
+    WHERE meal_id = (SELECT currentmeal FROM OPTIONS)
+    AND NDB_No = OLD.NDB_No;
+END;
 
 /*
   We often want to update a Gm_Wgt in the current meal.

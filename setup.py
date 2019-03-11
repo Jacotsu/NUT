@@ -37,17 +37,19 @@ classifiers = [
 ]
 
 setup(
-    name='NUT_nutrition',
-    version=find_version("nut/__init__.py"),
+    name='nut_nutrition',
+    version=find_version("nut_nutrition/__init__.py"),
     url="https://github.com/Jacotsu/NUT",
     author="Jim Jozwiak, Raffaele Di Campli",
     author_email="dcdrj.pub@gmail.com",
     license='GPLv2+',
     install_requires=[
-        'dataclasses'
+        'dataclasses',
+        'pytest',
+        'matplotlib'
     ],
     python_requires='>=3.7',
-    packages=['nut'],
+    packages=['nut_nutrition'],
     package_data={'': ['GTK_gui.glade']},
     include_package_data=True,
     description="Track your nutrient intake",
@@ -55,7 +57,7 @@ setup(
     classifiers=classifiers,
     entry_points={
         'gui_scripts': [
-            'nut-gui=nut.main:main'
+            'nut-gui=nut_nutrition.main:main'
         ]
     }
 )

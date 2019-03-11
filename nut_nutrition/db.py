@@ -390,6 +390,45 @@ class DBMan:
 
         return cur.fetchone()[0]
 
+    def insert_food_into_meal(self,
+                              NDB_No,
+                              Gm_Wgt=None,
+                              pcf_Nutr_No=None,
+                              meal_id=None):
+        """
+        :param NDB_No: The food NDB_No
+        :param Gm_Wgt: The food weight in grams, if None defaults to the
+                       last preferred weight
+        :param pcf_Nutr_No: The Nutr_No to use as pcf
+        :param meal_id: The meal id, if None defaults to the current meal
+        """
+        with self._conn as con:
+            cur = con.cursor()
+            query_params = {'NDB_No': NDB_No,
+                            'meal_id': meal_id,
+                            'Gm_Wgt': Gm_Wgt,
+                            'pcf_Nutr_No': pcf_Nutr_No}
+            cur.execute(bignut_queries.insert_food_into_meal,
+                        query_params)
+
+    def remove_food_from_meal(self, NDB_No, meal_id=None):
+        """
+        :param NDB_No: The food NDB_No
+        :param meal_id: The meal id, if none is specified the current meal
+                        is assumed
+        """
+        if not meal_id:
+            meal_id = self.current_meal
+
+        with self._conn as con:
+            cur = con.cursor()
+            query_params = {'NDB_No': NDB_No,
+                            'meal_id': meal_id}
+            cur.execute(bignut_queries.remove_food_from_meal,
+                        query_params)
+
+
+
     def get_nutrient_name(self, Nutr_No):
         cur = self._conn.cursor()
         cur.execute(bignut_queries.get_nutrient_name, (Nutr_No,))

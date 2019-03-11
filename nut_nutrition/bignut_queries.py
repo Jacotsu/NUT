@@ -60,6 +60,29 @@ get_omega6_3_bal = 'SELECT n6balance from am_analysis_header;'
 
 get_food_groups = 'SELECT FdGrp_Cd, FdGrp_Desc FROM fd_group;'
 
+insert_food_into_meal = '''
+INSERT OR REPLACE INTO mealfoods
+    VALUES (CASE
+                WHEN :meal_id IS NULL THEN
+                    (SELECT currentmeal FROM OPTIONS)
+                ELSE :meal_id
+            END,
+            :NDB_No,
+            CASE
+                WHEN :Gm_Wgt IS NULL THEN
+                    (SELECT Gm_Wgt
+                     FROM pref_Gm_Wgt
+                     WHERE NDB_No = :NDB_No)
+                ELSE :Gm_Wgt
+            END,
+            :pcf_Nutr_No);
+'''
+remove_food_from_meal = '''
+DELETE FROM mealfoods
+WHERE meal_id = :meal_id AND NDB_No = :NDB_No;
+'''
+
+
 get_food_list = 'SELECT NDB_No, Long_Desc FROM food_des;'
 get_food_from_NDB_No = 'SELECT * FROM food_des WHERE NDB_No = ?;'
 search_food = 'select NDB_No, Long_Desc from food_des where Long_Desc'\
