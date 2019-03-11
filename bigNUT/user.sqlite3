@@ -1,18 +1,21 @@
 /*
   User initiated stuff goes here.  The following PRAGMA is essential at each
   invocation, but most of the stuff in this file isn't strictly necessary.  If it is
-  necessary, with the exception of automatic portion control and weight log, it should go into 
+  necessary, with the exception of automatic portion control and weight log, it should go into
   logic.sqlite3.  Just about everything in this init file is and should be "temp" so
   it goes away for you if you close the database connection, but it doesn't go away for the
   other connections that came in with the same user init.  The only exceptions are the
   shopping list and cost table which need to be persistent and therefore real tables.
-*/ PRAGMA recursive_triggers = 1;
+*/
+
+PRAGMA recursive_triggers = 1;
 
 BEGIN;
 
 /*
-  HEERE BEGYNNETH AUTOMATIC PORTION CONTROL (PCF)
-*/ /*
+----------------------------------------- HEERE BEGYNNETH AUTOMATIC PORTION CONTROL (PCF) ---------------------------------------
+*/
+/*
   If a mealfoods replace causes the delete trigger to start, we get a
   recursive nightmare.  So we need a before insert trigger.
 */
@@ -23,9 +26,10 @@ CREATE TEMP TRIGGER before_mealfoods_insert_pcf
 BEFORE
 INSERT ON mealfoods WHEN
   (SELECT block_mealfoods_insert_trigger
-   FROM z_trig_ctl) = 0 BEGIN
-UPDATE z_trig_ctl
-SET block_mealfoods_delete_trigger = 1; END;
+   FROM z_trig_ctl) = 0
+BEGIN
+	UPDATE z_trig_ctl SET block_mealfoods_delete_trigger = 1;
+END;
 
 /*
   A mealfoods insert trigger
@@ -39,15 +43,13 @@ INSERT ON mealfoods WHEN NEW.meal_id =
    FROM OPTIONS)
 AND
   (SELECT block_mealfoods_insert_trigger
-   FROM z_trig_ctl) = 0 BEGIN
-UPDATE z_trig_ctl
-SET rm_analysis = 1;
-UPDATE z_trig_ctl
-SET am_analysis = 1;
-UPDATE z_trig_ctl
-SET am_dv = 1;
-UPDATE z_trig_ctl
-SET PCF_processing = 1; END;
+   FROM z_trig_ctl) = 0
+BEGIN
+	UPDATE z_trig_ctl SET rm_analysis = 1;
+	UPDATE z_trig_ctl SET am_analysis = 1;
+	UPDATE z_trig_ctl SET am_dv = 1;
+	UPDATE z_trig_ctl SET PCF_processing = 1;
+END;
 
 /*
   A mealfoods update trigger
@@ -58,15 +60,13 @@ DROP TRIGGER IF EXISTS mealfoods_update_pcf;
 CREATE TEMP TRIGGER mealfoods_update_pcf AFTER
 UPDATE ON mealfoods WHEN OLD.meal_id =
   (SELECT currentmeal
-   FROM OPTIONS) BEGIN
-UPDATE z_trig_ctl
-SET rm_analysis = 1;
-UPDATE z_trig_ctl
-SET am_analysis = 1;
-UPDATE z_trig_ctl
-SET am_dv = 1;
-UPDATE z_trig_ctl
-SET PCF_processing = 1; END;
+   FROM OPTIONS)
+BEGIN
+	UPDATE z_trig_ctl SET rm_analysis = 1;
+	UPDATE z_trig_ctl SET am_analysis = 1;
+	UPDATE z_trig_ctl SET am_dv = 1;
+	UPDATE z_trig_ctl SET PCF_processing = 1;
+END;
 
 /*
   A mealfoods delete trigger.  One of the bizarre consequences of these
@@ -86,17 +86,14 @@ DELETE ON mealfoods WHEN OLD.meal_id =
    FROM OPTIONS)
 AND
   (SELECT block_mealfoods_delete_trigger
-   FROM z_trig_ctl) = 0 BEGIN
-UPDATE z_trig_ctl
-SET am_analysis_header = 1;
-UPDATE z_trig_ctl
-SET rm_analysis = 1;
-UPDATE z_trig_ctl
-SET am_analysis = 1;
-UPDATE z_trig_ctl
-SET am_dv = 1;
-UPDATE z_trig_ctl
-SET PCF_processing = 1; END;
+   FROM z_trig_ctl) = 0
+BEGIN
+	UPDATE z_trig_ctl SET am_analysis_header = 1;
+	UPDATE z_trig_ctl SET rm_analysis = 1;
+	UPDATE z_trig_ctl SET am_analysis = 1;
+	UPDATE z_trig_ctl SET am_dv = 1;
+	UPDATE z_trig_ctl SET PCF_processing = 1;
+END;
 
 /*
   Another thing that can start automatic portion control is changing the
@@ -107,34 +104,32 @@ DROP TRIGGER IF EXISTS update_nutopt_pcf;
 
 
 CREATE TEMP TRIGGER update_nutopt_pcf AFTER
-UPDATE OF nutopt ON nutr_def BEGIN
-UPDATE z_trig_ctl
-SET rm_analysis = 1;
-UPDATE z_trig_ctl
-SET am_analysis = 1;
-UPDATE z_trig_ctl
-SET am_dv = 1;
-UPDATE z_trig_ctl
-SET PCF_processing = 1; END;
+UPDATE OF nutopt ON nutr_def
+BEGIN
+	UPDATE z_trig_ctl SET rm_analysis = 1;
+	UPDATE z_trig_ctl SET am_analysis = 1;
+	UPDATE z_trig_ctl SET am_dv = 1;
+	UPDATE z_trig_ctl SET PCF_processing = 1;
+END;
 
 
 DROP TRIGGER IF EXISTS update_FAPU1_pcf;
 
 
 CREATE TEMP TRIGGER update_FAPU1_pcf AFTER
-UPDATE OF FAPU1 ON OPTIONS BEGIN
-UPDATE z_trig_ctl
-SET rm_analysis = 1;
-UPDATE z_trig_ctl
-SET am_analysis = 1;
-UPDATE z_trig_ctl
-SET am_dv = 1;
-UPDATE z_trig_ctl
-SET PCF_processing = 1; END;
+UPDATE OF FAPU1 ON OPTIONS
+BEGIN
+	UPDATE z_trig_ctl SET rm_analysis = 1;
+	UPDATE z_trig_ctl SET am_analysis = 1;
+	UPDATE z_trig_ctl SET am_dv = 1;
+	UPDATE z_trig_ctl SET PCF_processing = 1;
+END;
 
 /*
-  HEERE ENDETH AUTOMATIC PORTION CONTROL (PCF)
-*/ /*
+--------------------------------------  HEERE ENDETH AUTOMATIC PORTION CONTROL (PCF) ----------------------------------------------
+*/
+
+/*
   We often want to grab the preferred weight for a food so we create a special
   view that dishes it up!  This view delivers the preferred Gm_Wgt and the
   newly computed Amount of the serving unit.  The preferred weight is never
@@ -186,16 +181,18 @@ DROP TRIGGER IF EXISTS pref_weight_Amount;
 
 
 CREATE TEMP TRIGGER pref_weight_Amount INSTEAD OF
-UPDATE OF Amount ON pref_Gm_Wgt WHEN NEW.Amount > 0.0 BEGIN
-UPDATE weight
-SET Gm_Wgt = origGm_Wgt * NEW.Amount / Amount
-WHERE NDB_No = NEW.NDB_No
-  AND Seq =
-    (SELECT min(Seq)
-     FROM weight
-     WHERE NDB_No = NEW.NDB_No);
-  UPDATE currentmeal
-  SET Gm_Wgt = NULL WHERE NDB_No = NEW.NDB_No; END;
+UPDATE OF Amount ON pref_Gm_Wgt
+WHEN NEW.Amount > 0.0
+BEGIN
+    UPDATE weight SET Gm_Wgt = origGm_Wgt * NEW.Amount / Amount
+	WHERE NDB_No = NEW.NDB_No
+	  AND Seq =
+	    (SELECT min(Seq)
+	     FROM weight
+	     WHERE NDB_No = NEW.NDB_No);
+	  UPDATE currentmeal SET Gm_Wgt = NULL
+	  WHERE NDB_No = NEW.NDB_No;
+END;
 
 /*
   Using the preferred weight, we can View Foods in various ways.
@@ -382,21 +379,23 @@ CREATE TEMP TRIGGER theusual_insert INSTEAD OF
 INSERT ON theusual WHEN NEW.meal_name IS NOT NULL
 AND NEW.NDB_No IS NULL
 AND NEW.Gm_Wgt IS NULL
-AND NEW.NutrDesc IS NULL BEGIN
-DELETE
-FROM z_tu
-WHERE meal_name = NEW.meal_name;
-  INSERT
-  OR
-  IGNORE INTO z_tu
-SELECT NEW.meal_name,
-       mf.NDB_No,
-       mf.Nutr_No
-FROM mealfoods mf
-LEFT JOIN nutr_def
-WHERE meal_id =
-    (SELECT currentmeal
-     FROM OPTIONS); END;
+AND NEW.NutrDesc IS NULL
+BEGIN
+    DELETE
+    FROM z_tu
+    WHERE meal_name = NEW.meal_name;
+      INSERT
+      OR
+      IGNORE INTO z_tu
+    SELECT NEW.meal_name,
+           mf.NDB_No,
+           mf.Nutr_No
+    FROM mealfoods mf
+    LEFT JOIN nutr_def
+    WHERE meal_id =
+        (SELECT currentmeal
+         FROM OPTIONS);
+END;
 
 /*
   Now we allow customary meals to be deleted.
@@ -405,15 +404,18 @@ DROP TRIGGER IF EXISTS theusual_delete;
 
 
 CREATE TEMP TRIGGER theusual_delete INSTEAD OF
-DELETE ON theusual WHEN OLD.meal_name IS NOT NULL BEGIN
-DELETE
-FROM z_tu
-WHERE meal_name = OLD.meal_name; END;
+DELETE ON theusual WHEN OLD.meal_name IS NOT NULL
+BEGIN
+    DELETE
+    FROM z_tu
+    WHERE meal_name = OLD.meal_name;
+END;
 
 /*
   Sorry I didn't write triggers to handle each theusual eventuality,
   but you can always work directly on z_tu for your intricate updating needs.
-*/ /*
+*/
+/*
   We create convenience views to report which foods in the meal analysis are
   contributing to a nutrient intake.  Use it like this (for example):
 	select * from nut_in_meals where NutrDesc = 'Protein';
@@ -583,14 +585,16 @@ ORDER BY Nutr_Val ASC;
   a different trigger.
 
   First, the proceed or do nothing trigger.
-*/ /*
+*/
+/*
 drop trigger if exists autocal_proceed;
 create temp trigger autocal_proceed after insert on z_wl
 when (select autocal = 2 and weightn > 1 and (weightslope - fatslope) >= 0.0 and fatslope <= 0.0 from z_wslope, z_fslope, z_span, options)
 begin
 select null;
 end;
-*/ /*
+*/
+/*
   Just joking!  It doesn't do anything so we don't need it!  But as we change
   the conditions, the action changes.
 
@@ -621,36 +625,38 @@ INSERT ON z_wl WHEN
    AND (weightslope - fatslope) > 0.0
    FROM z_wslope,
         z_fslope,
-        OPTIONS) BEGIN
-DELETE
-FROM wlsave;
-INSERT INTO wlsave
-SELECT weightyintercept,
-       fatyintercept,
-       wldate,
-       span,
-       today
-FROM z_wslope,
-     z_fslope,
-     z_span,
-  (SELECT min(wldate) AS wldate
-   FROM z_wl
-   WHERE cleardate IS NULL),
-  (SELECT strftime('%Y%m%d', 'now', 'localtime') AS today);
-UPDATE z_wl
-SET cleardate =
-  (SELECT today
-   FROM wlsave)
-WHERE cleardate IS NULL;
-  INSERT INTO z_wl
-SELECT weight,
-       round(100.0 * fat / weight, 1),
-       today,
-       NULL
-FROM wlsave;
-UPDATE nutr_def
-SET nutopt = nutopt - 20.0
-WHERE Nutr_No = 208; END;
+        OPTIONS)
+BEGIN
+    DELETE
+    FROM wlsave;
+    INSERT INTO wlsave
+    SELECT weightyintercept,
+           fatyintercept,
+           wldate,
+           span,
+           today
+    FROM z_wslope,
+         z_fslope,
+         z_span,
+      (SELECT min(wldate) AS wldate
+       FROM z_wl
+       WHERE cleardate IS NULL),
+      (SELECT strftime('%Y%m%d', 'now', 'localtime') AS today);
+    UPDATE z_wl
+    SET cleardate =
+      (SELECT today
+       FROM wlsave)
+    WHERE cleardate IS NULL;
+      INSERT INTO z_wl
+    SELECT weight,
+           round(100.0 * fat / weight, 1),
+           today,
+           NULL
+    FROM wlsave;
+    UPDATE nutr_def
+    SET nutopt = nutopt - 20.0
+    WHERE Nutr_No = 208;
+END;
 
 
 DROP TRIGGER IF EXISTS autocal_bulking;
@@ -664,36 +670,38 @@ INSERT ON z_wl WHEN
    AND (weightslope - fatslope) < 0.0
    FROM z_wslope,
         z_fslope,
-        OPTIONS) BEGIN
-DELETE
-FROM wlsave;
-INSERT INTO wlsave
-SELECT weightyintercept,
-       fatyintercept,
-       wldate,
-       span,
-       today
-FROM z_wslope,
-     z_fslope,
-     z_span,
-  (SELECT min(wldate) AS wldate
-   FROM z_wl
-   WHERE cleardate IS NULL),
-  (SELECT strftime('%Y%m%d', 'now', 'localtime') AS today);
-UPDATE z_wl
-SET cleardate =
-  (SELECT today
-   FROM wlsave)
-WHERE cleardate IS NULL;
-  INSERT INTO z_wl
-SELECT weight,
-       round(100.0 * fat / weight, 1),
-       today,
-       NULL
-FROM wlsave;
-UPDATE nutr_def
-SET nutopt = nutopt + 20.0
-WHERE Nutr_No = 208; END;
+        OPTIONS)
+BEGIN
+    DELETE
+    FROM wlsave;
+    INSERT INTO wlsave
+    SELECT weightyintercept,
+           fatyintercept,
+           wldate,
+           span,
+           today
+    FROM z_wslope,
+         z_fslope,
+         z_span,
+      (SELECT min(wldate) AS wldate
+       FROM z_wl
+       WHERE cleardate IS NULL),
+      (SELECT strftime('%Y%m%d', 'now', 'localtime') AS today);
+    UPDATE z_wl
+    SET cleardate =
+      (SELECT today
+       FROM wlsave)
+    WHERE cleardate IS NULL;
+      INSERT INTO z_wl
+    SELECT weight,
+           round(100.0 * fat / weight, 1),
+           today,
+           NULL
+    FROM wlsave;
+    UPDATE nutr_def
+    SET nutopt = nutopt + 20.0
+    WHERE Nutr_No = 208;
+END;
 
 
 DROP TRIGGER IF EXISTS autocal_cycle_end;
@@ -707,33 +715,35 @@ INSERT ON z_wl WHEN
    AND (weightslope - fatslope) < 0.0
    FROM z_wslope,
         z_fslope,
-        OPTIONS) BEGIN
-DELETE
-FROM wlsave;
-INSERT INTO wlsave
-SELECT weightyintercept,
-       fatyintercept,
-       wldate,
-       span,
-       today
-FROM z_wslope,
-     z_fslope,
-     z_span,
-  (SELECT min(wldate) AS wldate
-   FROM z_wl
-   WHERE cleardate IS NULL),
-  (SELECT strftime('%Y%m%d', 'now', 'localtime') AS today);
-UPDATE z_wl
-SET cleardate =
-  (SELECT today
-   FROM wlsave)
-WHERE cleardate IS NULL;
-  INSERT INTO z_wl
-SELECT weight,
-       round(100.0 * fat / weight, 1),
-       today,
-       NULL
-FROM wlsave; END;
+        OPTIONS)
+BEGIN
+    DELETE
+    FROM wlsave;
+    INSERT INTO wlsave
+    SELECT weightyintercept,
+           fatyintercept,
+           wldate,
+           span,
+           today
+    FROM z_wslope,
+         z_fslope,
+         z_span,
+      (SELECT min(wldate) AS wldate
+       FROM z_wl
+       WHERE cleardate IS NULL),
+      (SELECT strftime('%Y%m%d', 'now', 'localtime') AS today);
+    UPDATE z_wl
+    SET cleardate =
+      (SELECT today
+       FROM wlsave)
+    WHERE cleardate IS NULL;
+      INSERT INTO z_wl
+    SELECT weight,
+           round(100.0 * fat / weight, 1),
+           today,
+           NULL
+    FROM wlsave;
+END;
 
 /*
   We create a shopping list where the "n" column automatically gives a serial
