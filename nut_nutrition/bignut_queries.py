@@ -60,6 +60,7 @@ get_omega6_3_bal = 'SELECT n6balance from am_analysis_header;'
 
 get_food_groups = 'SELECT FdGrp_Cd, FdGrp_Desc FROM fd_group;'
 
+
 insert_food_into_meal = '''
 INSERT OR REPLACE INTO mealfoods
     VALUES (CASE
@@ -84,9 +85,9 @@ WHERE meal_id = :meal_id AND NDB_No = :NDB_No;
 
 
 get_food_list = 'SELECT NDB_No, Long_Desc FROM food_des;'
-get_food_from_NDB_No = 'SELECT * FROM food_des WHERE NDB_No = ?;'
+get_food_from_NDB_No = 'SELECT * FROM food_des WHERE NDB_No = :NDB_No;'
 search_food = 'select NDB_No, Long_Desc from food_des where Long_Desc'\
-              ' like ?;'
+        ' like :long_desc;'
 get_food_sorted_by_nutrient = """
     SELECT Long_Desc FROM fd_group NATURAL JOIN food_des NATURAL JOIN nut_data
     WHERE FdGrp_Desc like ? AND Nutr_No = ? ORDER BY Nutr_Val desc;

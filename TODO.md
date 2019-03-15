@@ -7,7 +7,7 @@
 
 - [ ] Highlight missing/excess nutrients
 
-- [ ] Custom cell renderer for treeviews
+- [X] Custom cell renderer for treeviews (Now float precision is properly set)
 
 - [ ] Let user choose analysis period from calendars
 
@@ -28,7 +28,7 @@
 ### View nutrient story
 
 - [X] Add inlined food search in food story
-  - [ ] Implement food group filtering as TreeListStoreFilter
+  - [X] Implement food group filtering as TreeListStoreFilter (Implemented as search widget)
 
 - [X] Let user choose nutrient story period from calendars
   - [ ] Clamp calendar to only valid values
@@ -47,6 +47,8 @@
 - [ ] Normalize all query results
 
 - [ ] Replace inline string formatting with format method so that gettext can work properly
+
+- [ ] Increase performance by parallelizing queries
 
 - [ ] Keep all the logic in SQL
   - [ ] Properly parametrize queries

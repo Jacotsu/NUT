@@ -6,7 +6,6 @@ import gettext
 import meal
 from matplotlib.backends.backend_gtk3agg import (
     FigureCanvasGTK3Agg as FigureCanvas)
-import numpy as np
 from matplotlib.figure import Figure
 from datetime import datetime
 
@@ -22,6 +21,12 @@ class MainHandler:
         Gtk.main_quit()
 
     def record_meals_slider_changed(self, adj_object):
+        """
+        When the meal selection is changed this function selects the meal
+        that is at distance n from the current meal, where n is the number
+        of the steps from the center of the sliders. Then the slider is
+        reset to the center
+        """
         val = adj_object.get_value() - 50
         # Gets current meal
         db = self._manager._db
@@ -31,6 +36,7 @@ class MainHandler:
             .set_text(f'Meal {self._manager._db.current_meal_string}')
         db.current_meal = selected_meal
         adj_object.set_value(50)
+        self._manager._update_current_meal_menu()
 
     def record_meals_set_pcf(self, cell_renderer_combo, path_string, new_iter):
         pcf_list = cell_renderer_combo.props.model
@@ -40,9 +46,14 @@ class MainHandler:
         logging.debug(f'Selected PCF: {NDB_No} {Nutrient_name}')
 
     def analysis_meal_no_changed(self, adj_object):
+        """
+        When the number of meals to be analyzed is changed this function
+        updates the database and the analysis view
+        """
         val = adj_object.get_value()
         logging.debug(f'Number of meal to analyze set to {val}')
         self._manager._db.am_analysis_meal_no = val
+        self._manager._update_am_analysis()
 
     def nutrient_clicked(self, treeview, path, view_column):
         """
@@ -63,20 +74,38 @@ class MainHandler:
 
     def food_clicked(self, treeview, path, view_column):
         """
-        This event is activated when a user double clicks a valid
-        nutrient in the treeview
+        When a food nutrient is clicked this function will shown the story
+        of the nutrient relative to the analysis period
         """
         data = treeview.get_model()
         tree_iter = data.get_iter(path)
-        food_info = data.get(tree_iter, 0)
-        logging.debug(f'{food_info} Food clicked')
-        # Placeholder food 20421 pasta dry
-        ViewFood(20421)
+        NDB_No = data.get(tree_iter, 0)[0]
+        logging.debug(f'{NDB_No} Food clicked')
+        ViewFood(NDB_No)
 
+    def view_searched_food(self, widget):
+        """
+        When a food description is entered in the search field and the view
+        button is clicked, matching foods will be viewed
+        """
+        long_desc = self._manager._rm_search_entry.get_text()
+        logging.debug(f'Selected {long_desc}')
+        for food in self._manager._db.search_food(long_desc):
+            logging.debug(f'Inserted {food}')
+            ViewFood(food[0])
 
-    def add_food_to_meal(self, button):
-        #meal.Food(self._rm_menu, self._ntr, None)
-        logging.debug('Add food clicked')
+    def add_food_to_meal(self, widget):
+        """
+        When a food description is entered in the search field and the add
+        button is clicked, or the enter key is pressed all the
+        matching foods will be added to the current meal
+        """
+        long_desc = self._manager._rm_search_entry.get_text()
+        logging.debug(f'Selected {long_desc}')
+        for food in self._manager._db.search_food(long_desc):
+            logging.debug(f'Inserted {food}')
+            self._manager._db.insert_food_into_meal(food[0])
+        self._manager._update_current_meal_menu()
 
     def view_food(self, button):
         logging.debug('View food clicked')
@@ -176,7 +205,6 @@ class TheStoryHandler:
         # Placeholder nutrient 20421 pasta
         ViewFood(20421)
 
-
     def update_data(self, *args):
         FdGrp_Cd_iter = self._manager._fd_group_cb.get_active_iter()
         FdGrp_Cd = self._manager._fd_group.get_value(FdGrp_Cd_iter, 0)
@@ -205,6 +233,7 @@ class GTKGui:
         self._window = builder.get_object("main_window")
         self._rm_menu = builder.get_object("rm_menu")
         self._rm_anal = builder.get_object("rm_analysis")
+        self._rm_search_entry = builder.get_object("rm_search_entry")
         self._am_anal = builder.get_object("am_analysis")
         self._rm_meal_label = builder.get_object("rm_selected_meal_label")
 
@@ -239,7 +268,6 @@ class GTKGui:
 
         builder.connect_signals(MainHandler(self))
 
-        ntr = self._db.defined_nutrients
         self._update_GUI_settings()
 
         anal_header = self._db.rm_analysis_header
@@ -247,17 +275,42 @@ class GTKGui:
         #ntr['Omega-6/3 Balance'] = anal_header[8]
 
         self._set_cells_data_func(builder)
-
-        for food in self._db.current_meal_menu:
-            meal.Food(self._rm_menu,
-                      self._db.get_food_nutrients_at_pref_weight(food[0]),
-                      food[1])
-
-        meal.Analysis(self._rm_anal, None, self._db.rm_analysis_nutrients)
-        meal.Analysis(self._am_anal, None, self._db.am_analysis_nutrients)
+        self._update_current_meal_menu()
+        self._update_am_analysis()
 
         self._window.show_all()
         Gtk.main()
+
+    def _update_current_meal_menu(self):
+        """
+        This function updates the visualization of the current menu meal, the
+        database is left untouched
+        """
+        self._rm_menu.clear()
+        for food in self._db.current_meal_menu:
+            meal.Food(self._rm_menu,
+                      food[0],
+                      self._db.get_food_nutrients_at_pref_weight(food[0]),
+                      food[1])
+        self._update_rm_analysis()
+
+    def _update_rm_analysis(self):
+        """
+        This function updates the visualization of the current menu meal
+        analysis, the database is left untouched
+        """
+        self._rm_anal.clear()
+        self._rm_meal_label\
+                .set_text(f'Analysis of meal: {self._db.current_meal_string}')
+        meal.Analysis(self._rm_anal, None, self._db.rm_analysis_nutrients)
+
+    def _update_am_analysis(self):
+        """
+        This function updates the visualization of the current period
+        analysis, the database is left untouched
+        """
+        self._am_anal.clear()
+        meal.Analysis(self._am_anal, None, self._db.am_analysis_nutrients)
 
     def _set_cells_data_func(self, builder):
         views_to_set = ['rm_menu_treeview',
@@ -431,7 +484,9 @@ class ViewFood:
                       .format(self._food[2]))
 
         # NDB_No, Ntr_val, name, weight, DV
-        meal.Analysis(self._vf_analysis, None, self._db.defined_nutrients)
+        meal.Analysis(self._vf_analysis,
+                      None,
+                      self._db.get_food_nutrients_at_pref_weight(NDB_No))
         self._window.show_all()
 
     def _load_food(self, NDB_No):

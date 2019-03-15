@@ -1,7 +1,6 @@
 import gi
 import gettext
 import logging
-import db
 from pprint import pformat
 
 gi.require_version('Gtk', '3.0')
@@ -244,13 +243,12 @@ class Analysis():
 
 
 class Food(Analysis):
-    def __init__(self, parent, defined_nutrients, name):
+    def __init__(self, parent, NDB_No, defined_nutrients, name):
         self._parent_treestore = parent
-        self._db = db.DBMan()
         self._NDB_No = None
         # Name, show pcf, show spinbox, daily value, quantity
         food_to_append = [
-            1,
+            NDB_No,
             _(name),
             True,
             0,

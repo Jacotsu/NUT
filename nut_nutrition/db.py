@@ -35,17 +35,6 @@ class DBMan:
             return decoded
 
     @property
-    def current_meal_string(self):
-        """
-        :return: The current meal string
-        :rtype: str
-        """
-        cur = self._conn.cursor()
-        cur.execute(bignut_queries.get_current_meal_str)
-        return cur.fetchone()[0]
-
-
-    @property
     def calories(self):
         """
         :return: The personal option calories
@@ -201,17 +190,6 @@ class DBMan:
         meal = cur.fetchone()[0]
         return meal
 
-    @property
-    def current_meal_menu(self):
-        """
-        :return: The current meal menu
-        :rtype: cursor
-        """
-        cur = self._conn.cursor()
-        cur.execute(bignut_queries.get_current_meal_food)
-        return cur
-
-
     @current_meal.setter
     def current_meal(self, meal_id):
         """
@@ -222,6 +200,26 @@ class DBMan:
             cur = con.cursor()
             cur.execute(bignut_queries.set_current_meal,
                         (meal_id,))
+
+    @property
+    def current_meal_string(self):
+        """
+        :return: The current meal string
+        :rtype: str
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_current_meal_str)
+        return cur.fetchone()[0]
+
+    @property
+    def current_meal_menu(self):
+        """
+        :return: The current meal menu
+        :rtype: cursor
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_current_meal_food)
+        return cur
 
     def get_meal_from_offset_rel_to_current(self, offset):
         """
@@ -278,7 +276,6 @@ class DBMan:
         :param data: A tuple that contains the omega6 and omega3 ration
         """
 
-
     def search_food(self, long_desc):
         """
         :param long_desc: A string that contains the partial or complete
@@ -289,7 +286,8 @@ class DBMan:
         sql_like_string = f'%{long_desc}%'.replace(' ', '%')
         with self._conn as con:
             cur = con.cursor()
-            cur.execute(bignut_queries.search_food, (sql_like_string,))
+            cur.execute(bignut_queries.search_food,
+                        {'long_desc': sql_like_string})
             return cur
 
     def get_weight_log(self):
@@ -456,7 +454,7 @@ class DBMan:
         """
         cur = self._conn.cursor()
         cur.execute(bignut_queries.get_food_from_NDB_No,
-                    (NDB_No,))
+                    {'NDB_No': NDB_No})
 
         return cur.fetchone()
 
