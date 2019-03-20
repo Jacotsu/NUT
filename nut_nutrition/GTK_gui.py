@@ -4,10 +4,11 @@ import db
 import logging
 import gettext
 import meal
+from pprint import pformat
+from utils import set_cells_data_func, set_pcf_combobox_cells_data_func
 from matplotlib.backends.backend_gtk3agg import (
     FigureCanvasGTK3Agg as FigureCanvas)
 from matplotlib.figure import Figure
-from datetime import datetime
 
 gi.require_version('Gtk', '3.0')
 _ = gettext.gettext
@@ -55,10 +56,19 @@ class MainHandler:
 
     def record_meals_set_pcf(self, cell_renderer_combo, path_string, new_iter):
         pcf_list = cell_renderer_combo.props.model
-        NDB_No = pcf_list.get_value(new_iter, 0)
-        Nutrient_name = pcf_list.model.get_value(new_iter, 1)
-        #cell_renderer_combo.props.model.set_value(new_iter, 5, Nutrient_name)
+        Nutr_No = pcf_list.get_value(new_iter, 0)
+        Nutrient_name = pcf_list.get_value(new_iter, 1)
+
+        # When you edit the pcf, the gtk treeview should select only
+        # the row that you're editing, so this code seems to be rialiable
+        selection = self._manager._rm_menu_treeview.get_selection()
+        treestore, selected_treepaths = selection.get_selected_rows()
+        food = treestore[selected_treepaths[0]]
+
+        NDB_No = food[0]
+        self._manager._db.set_food_pcf(NDB_No, Nutr_No)
         logging.debug(f'Selected PCF: {NDB_No} {Nutrient_name}')
+        self._manager._update_current_meal_menu()
 
     def analysis_meal_no_changed(self, adj_object):
         """
@@ -82,8 +92,7 @@ class MainHandler:
         # doesn't have a story
         if nutrient[0]:
             logging.debug(f'{nutrient} Nutrient clicked')
-            # Placeholder nutrient 203
-            story_manager = TheStory(203)
+            TheStory(nutrient[0])
         else:
             logging.info(f'{nutrient} Nutrient group clicked')
 
@@ -136,56 +145,10 @@ class MainHandler:
     def accept_measurements(self, button):
         settings_wdgs = self._manager._settings_widgets
         self._manager._db\
-                .insert_weight_log(settings_wdgs['weight_sp'].get_value(),
-                                   settings_wdgs['bodyfat_sp'].get_value())
+            .insert_weight_log(settings_wdgs['weight_sp'].get_value(),
+                               settings_wdgs['bodyfat_sp'].get_value())
         self._manager._update_GUI_settings()
 
-
-#208|Calories
-#204|Total Fat
-#203|Protein
-#2000|Non-Fiber Carb
-#291|Fiber
-#606|Sat Fat
-#Essential fatty acids
-#
-#
-#205|Total Carb
-#301|Calcium
-#303|Iron
-#304|Magnesium
-#305|Phosphorus
-#306|Potassium
-#307|Sodium
-#309|Zinc
-#312|Copper
-#315|Manganese
-#317|Selenium
-#319|Retinol
-#320|Vitamin A
-#328|Vitamin D
-#401|Vitamin C
-#404|Thiamin
-#405|Riboflavin
-#406|Niacin
-#410|Panto. Acid
-#415|Vitamin B6
-#417|Folate
-#418|Vitamin B12
-#421|Choline
-#430|Vitamin K1
-#516|Glycine
-#601|Cholesterol
-#645|Mono Fat
-#646|Poly Fat
-#2001|LA
-#2002|AA
-#2003|ALA
-#2004|EPA
-#2005|DHA
-#2006|Omega-6
-#2007|Omega-3
-#2008|Vitamin E
 
 class TheStoryHandler:
     def __init__(self, manager):
@@ -247,10 +210,12 @@ class GTKGui:
 
         self._window = builder.get_object("main_window")
         self._rm_menu = builder.get_object("rm_menu")
+        self._rm_menu_treeview = builder.get_object("rm_menu_treeview")
         self._rm_anal = builder.get_object("rm_analysis")
         self._rm_search_entry = builder.get_object("rm_search_entry")
         self._am_anal = builder.get_object("am_analysis")
         self._rm_meal_label = builder.get_object("rm_selected_meal_label")
+        self._pcf_choices_cb = builder.get_object("pcf_choices")
 
         self._settings_widgets = {
             'weight_sp': builder.get_object('weight_sp_setting'),
@@ -285,16 +250,53 @@ class GTKGui:
 
         self._update_GUI_settings()
 
-        anal_header = self._db.rm_analysis_header
-        #ntr['Prot/Carb/Fat'] = anal_header[7]
-        #ntr['Omega-6/3 Balance'] = anal_header[8]
-
-        self._set_cells_data_func(builder)
+        pcf_choices = [203,  # Protein
+                       2000,  # Non-Fiber Carb
+                       204,  # Total Fat
+                       320,  # Vitamin A
+                       404,  # Thiamin
+                       405,  # Riboflavin
+                       406,  # Niacin
+                       410,  # Panto. Acid
+                       415,  # Vitamin B6
+                       417,  # Folate
+                       418,  # Vitamin B12
+                       421,  # Choline
+                       401,  # Vitamin C
+                       328,  # Vitamin D
+                       2008,  # Vitamin E
+                       430,  # Vitamin K1
+                       301,  # Calcium
+                       312,  # Copper
+                       303,  # Iron
+                       304,  # Magnesium
+                       315,  # Manganese
+                       305,  # Phosphorus
+                       306,  # Potassium
+                       317,  # Selenium
+                       307,  # Sodium
+                       309,  # Zinc
+                       516,  # Glycine
+                       319,  # Retinol
+                       291  # Fiber
+                       ]
+        self._load_pcf_choiches(pcf_choices)
+        set_cells_data_func(builder, ['rm_menu_treeview',
+                                      'rm_analysis_treeview',
+                                      'am_analysis_treeview']
+                            )
+        set_pcf_combobox_cells_data_func(builder, ['rm_menu_treeview'])
         self._update_current_meal_menu()
         self._update_am_analysis()
 
         self._window.show_all()
         Gtk.main()
+
+    def _load_pcf_choiches(self, choices):
+        for Nutr_No in choices:
+            self._pcf_choices_cb.append((Nutr_No,
+                                        _(self._db.get_nutrient_name(Nutr_No)))
+                                        )
 
     def _update_current_meal_menu(self):
         """
@@ -308,7 +310,8 @@ class GTKGui:
                       food[0],
                       self._db.get_food_nutrients(food[0]),
                       food[1],
-                      food[2])
+                      food[2],
+                      food[3])
         self._update_rm_analysis()
 
     def _update_rm_analysis(self):
@@ -328,20 +331,6 @@ class GTKGui:
         """
         self._am_anal.clear()
         meal.Analysis(self._am_anal, None, self._db.am_analysis_nutrients)
-
-    def _set_cells_data_func(self, builder):
-        views_to_set = ['rm_menu_treeview',
-                        'rm_analysis_treeview',
-                        'am_analysis_treeview']
-        for view_name in views_to_set:
-            view = builder.get_object(view_name)
-            cols = view.get_columns()
-            cols[1].set_cell_data_func(cols[1].get_cells()[0],
-                                       meal.set_float_precision,
-                                       {'column_no': 6})
-            cols[2].set_cell_data_func(cols[2].get_cells()[0],
-                                       meal.set_float_precision,
-                                       {'column_no': 4})
 
     def _update_GUI_settings(self):
         nutrients = self._ntr
@@ -406,23 +395,9 @@ class TheStory:
                       .format(_(self._nutrient_name)))
         self._setup_plot()
         self._update_data()
-        self._set_cells_data_func(builder)
+        set_cells_data_func(builder, ['story_food_view'])
 
         self._window.show_all()
-
-    def _set_cells_data_func(self, builder):
-        views_to_set = ['story_food_view']
-        for view_name in views_to_set:
-            view = builder.get_object(view_name)
-            cols = view.get_columns()
-            cols[1].set_cell_data_func(cols[1].get_cells()[0],
-                                       meal.set_float_precision,
-                                       {'column_no': 4})
-            cols[2].set_cell_data_func(cols[2].get_cells()[0],
-                                       meal.set_float_precision,
-                                       {'column_no': 2})
-
-
 
     def _setup_plot(self):
         figure = Figure(figsize=(5, 4), dpi=100)
@@ -454,6 +429,8 @@ class TheStory:
         for point in data:
             x_data.append(point[0])
             y_data.append(point[1])
+
+        logging.debug(f'Story data: {x_data} {y_data}')
         self._plot_lines.set_data(x_data,
                                   y_data)
 
@@ -500,7 +477,7 @@ class ViewFood:
         logging.debug(_("Food list loaded in view {} window")
                       .format(self._food[2]))
 
-        # NDB_No, Ntr_val, name, weight, DV
+        set_cells_data_func(builder, ['vf_analysis_treeview'])
         meal.Analysis(self._vf_analysis,
                       None,
                       self._db.get_food_nutrients(NDB_No))

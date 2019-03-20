@@ -53,6 +53,7 @@
 - [ ] Keep all the logic in SQL
   - [ ] Properly parametrize queries
   - [ ] Harden db manager and queries
+  - [ ] Fix `database or disk is full` errors
 
 - [ ] Write tests
 

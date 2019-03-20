@@ -5,7 +5,16 @@
 
 get_defined_nutrients = 'SELECT * FROM nutr_def;'
 
-set_nutrient_DV = 'UPDATE nutr_def SET nutopt = ? where NutrDesc = ?;'
+set_nutrient_dv = '''
+UPDATE nutr_def
+SET
+    CASE WHEN :nutopt IS NOT NULL THEN
+        nutopt = :nutopt
+    ELSE
+        nutopt = 0
+    END
+WHERE Nutr_No = :Nutr_No;
+'''
 
 set_number_of_meals_to_analyze = 'UPDATE options SET defanal_am = ?;'
 get_number_of_meals_to_analyze = 'SELECT defanal_am FROM options;'
@@ -17,7 +26,7 @@ set_weight_unit = 'UPDATE options set grams = ?'
 
 get_current_meal = 'SELECT currentmeal FROM options;'
 get_current_meal_food = '''
-SELECT mf.NDB_No AS NDB_No, Long_Desc, mf.Gm_Wgt
+SELECT mf.NDB_No AS NDB_No, Long_Desc, mf.Gm_Wgt, Nutr_No
 FROM mealfoods mf
 NATURAL JOIN food_des
 LEFT JOIN pref_Gm_Wgt pGW USING (NDB_No)
@@ -70,6 +79,16 @@ get_omega6_3_bal = 'SELECT n6balance from am_analysis_header;'
 
 get_food_groups = 'SELECT FdGrp_Cd, FdGrp_Desc FROM fd_group;'
 
+set_food_pcf = '''
+UPDATE mealfoods
+SET Nutr_No = :Nutr_No
+WHERE CASE
+        WHEN :meal_id IS NULL THEN
+            (SELECT currentmeal FROM OPTIONS)
+        ELSE
+            :meal_id
+        END AND NDB_No = :NDB_No;
+'''
 
 insert_food_into_meal = '''
 INSERT OR REPLACE INTO mealfoods
@@ -143,9 +162,9 @@ FROM (
     SELECT meal_id/100 as day,
         SUM(Gm_Wgt / 100.0 * nutrient.Nutr_Val) AS meal_total_nutrient
     FROM mealfoods JOIN nut_data nutrient USING (NDB_No)
-    WHERE nutrient.Nutr_No = ?
-        AND meal_id >= ? || '00'
-        AND meal_id <= ? || '99'
+    WHERE nutrient.Nutr_No = :Nutr_No
+        AND meal_id >= :start_date || '00'
+        AND meal_id <= :end_date || '99'
     GROUP by day, NDB_No)
 GROUP by day;
 '''

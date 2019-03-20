@@ -6,16 +6,6 @@ from pprint import pformat
 gi.require_version('Gtk', '3.0')
 _ = gettext.gettext
 
-def set_float_precision(col, cell, model, iterator, func_data):
-    data = model.get(iterator, func_data['column_no'])[0]
-    if data:
-        cell.set_property('text', '{:5.2f}'.format(data))
-    else:
-        cell.set_property('text', _('[No Data]'))
-
-#xcolumn.set_cell_data_func(xrenderer, \
-#    lambda col, cell, model, iter, unused:
-#        cell.set_property("text", "%g" % model.get(iter, 0)[0]))
 
 class Analysis():
     def __init__(self, parent, tree_iter, defined_nutrients):
@@ -244,7 +234,8 @@ class Analysis():
 
 
 class Food(Analysis):
-    def __init__(self, parent, NDB_No, defined_nutrients, name, weight):
+    def __init__(self, parent, NDB_No, defined_nutrients, name, weight,
+                 pcf_Nutr_No=0):
         self._parent_treestore = parent
         self._NDB_No = None
         food_to_append = [
@@ -254,7 +245,7 @@ class Food(Analysis):
             # Is food
             True,
             # PCF
-            0,
+            pcf_Nutr_No,
             # Weight
             weight,
             # Weights unit

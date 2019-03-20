@@ -310,7 +310,7 @@ class DBMan:
             cur = con.cursor()
             cur.execute(bignut_queries.insert_weight_log,
                         (weight,
-                        body_fat_perc))
+                         body_fat_perc))
 
     def clear_weight_log(self):
         """
@@ -320,15 +320,17 @@ class DBMan:
             cur = con.cursor()
             cur.execute(bignut_queries.clear_weight_log)
 
-    def set_nutrient_DV(self, nutrient_desc, value):
+    def set_nutrient_dv(self, Nutr_No, value=None):
         """
-        :param nutrient_desc: The nutrient description
-        :param value: The new daily value
+        Sets the daily nutrient value in grams
+        :param nutrient_desc: The nutrient number
+        :param value: The new daily value, if None the limit is removed
         """
         with self._conn as con:
             cur = con.cursor()
-            cur.execute(bignut_queries.set_nutrient_DV,
-                        (value, nutrient_desc))
+            query_params = {'nutopt': value, 'Nutr_No': Nutr_No}
+            cur.execute(bignut_queries.set_nutrient_dv,
+                        query_params)
 
     def get_meal_by_id(self, meal_id):
         """
@@ -388,6 +390,24 @@ class DBMan:
 
         return cur.fetchone()[0]
 
+    def set_food_pcf(self,
+                     NDB_No,
+                     pcf_Nutr_No=None,
+                     meal_id=None):
+        """
+        :param NDB_No: The food NDB_No
+        :param pcf_Nutr_No: The Nutr_No to use as pcf, If None the pcf is
+        removed
+        :param meal_id: The meal id, if None defaults to the current meal
+        """
+        with self._conn as con:
+            cur = con.cursor()
+            query_params = {'NDB_No': NDB_No,
+                            'meal_id': meal_id,
+                            'Nutr_No': pcf_Nutr_No}
+            cur.execute(bignut_queries.set_food_pcf,
+                        query_params)
+
     def insert_food_into_meal(self,
                               NDB_No,
                               Gm_Wgt=None,
@@ -422,8 +442,6 @@ class DBMan:
             cur.execute(bignut_queries.remove_food_from_meal,
                         query_params)
 
-
-
     def get_nutrient_name(self, Nutr_No):
         cur = self._conn.cursor()
         cur.execute(bignut_queries.get_nutrient_name, (Nutr_No,))
@@ -452,8 +470,11 @@ class DBMan:
         :rtype: Iterator
         """
         cur = self._conn.cursor()
+        query_params = {'Nutr_No': Nutr_No,
+                        'start_date': start_date,
+                        'end_date': end_date}
         cur.execute(bignut_queries.get_nutrient_story,
-                    (Nutr_No, start_date, end_date))
+                    query_params)
         return map(lambda x: (datetime.strptime(str(x[0]), '%Y%m%d'), x[1]),
                    cur)
 
