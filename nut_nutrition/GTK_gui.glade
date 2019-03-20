@@ -465,7 +465,7 @@
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <property name="model">am_analysis</property>
-                        <property name="search_column">0</property>
+                        <property name="search_column">1</property>
                         <property name="level_indentation">1</property>
                         <property name="enable_grid_lines">horizontal</property>
                         <signal name="row-activated" handler="nutrient_clicked" swapped="no"/>
@@ -644,9 +644,11 @@
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <property name="model">rm_menu</property>
-                        <property name="search_column">0</property>
+                        <property name="search_column">1</property>
                         <property name="level_indentation">1</property>
+                        <property name="rubber_banding">True</property>
                         <property name="enable_grid_lines">horizontal</property>
+                        <signal name="key-press-event" handler="backspace_pressed_in_rm_meal_menu" swapped="no"/>
                         <signal name="row-activated" handler="food_clicked" swapped="no"/>
                         <child internal-child="selection">
                           <object class="GtkTreeSelection"/>
@@ -852,7 +854,7 @@
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <property name="model">rm_analysis</property>
-                        <property name="search_column">0</property>
+                        <property name="search_column">1</property>
                         <property name="level_indentation">1</property>
                         <property name="enable_grid_lines">horizontal</property>
                         <signal name="row-activated" handler="nutrient_clicked" swapped="no"/>

@@ -415,9 +415,6 @@ class DBMan:
         :param meal_id: The meal id, if none is specified the current meal
                         is assumed
         """
-        if not meal_id:
-            meal_id = self.current_meal
-
         with self._conn as con:
             cur = con.cursor()
             query_params = {'NDB_No': NDB_No,
@@ -432,19 +429,6 @@ class DBMan:
         cur.execute(bignut_queries.get_nutrient_name, (Nutr_No,))
 
         return str(cur.fetchone()[0])
-
-    def get_food_nutrients_based_on_weight(self, NDB_No, weight):
-        """
-        :param NDB_No: The food NDB_no
-        :param weight: The weight in grams
-        :return: The sql cursor with the nutrients
-        :rtype: Sql cursor
-        """
-        cur = self._conn.cursor()
-        cur.execute(bignut_queries.get_food_nutrients_based_on_weight,
-                    (NDB_No, weight))
-
-        return cur
 
     def get_food_by_NDB_No(self, NDB_No):
         """
@@ -473,11 +457,19 @@ class DBMan:
         return map(lambda x: (datetime.strptime(str(x[0]), '%Y%m%d'), x[1]),
                    cur)
 
-    def get_food_nutrients_at_pref_weight(self, NDB_No):
+    def get_food_nutrients(self, NDB_No, weight=None):
+        """
+        :param NDB_No: The food NDB_no
+        :param weight: The weight in grams, if None the preferred weight is
+        assumed
+        :return: The sql cursor with the nutrients
+        :rtype: Sql cursor
+        """
         cur = self._conn.cursor()
-        cur.execute(bignut_queries.get_food_nutrients_at_pref_weight,
-                    {'NDB_No': NDB_No})
 
+        cur.execute(bignut_queries.get_food_nutrients,
+                    {'NDB_No': NDB_No,
+                     'Gm_Wgt': weight})
         return {x[0]: x[1:] for x in cur}
 
     def load_db(self, path):

@@ -16,7 +16,17 @@ get_weight_unit = 'SELECT grams FROM options;'
 set_weight_unit = 'UPDATE options set grams = ?'
 
 get_current_meal = 'SELECT currentmeal FROM options;'
-get_current_meal_food = 'SELECT * FROM currentmeal;'
+get_current_meal_food = '''
+SELECT mf.NDB_No AS NDB_No, Long_Desc, mf.Gm_Wgt
+FROM mealfoods mf
+NATURAL JOIN food_des
+LEFT JOIN pref_Gm_Wgt pGW USING (NDB_No)
+LEFT JOIN nutr_def USING (Nutr_No)
+WHERE meal_id = (SELECT currentmeal FROM OPTIONS)
+ORDER BY Shrt_Desc;
+'''
+
+
 get_current_meal_str = 'SELECT cm_string FROM cm_string;'
 set_current_meal = 'UPDATE options set currentmeal = ?;'
 get_meal_from_offset_rel_to_current = """
@@ -41,15 +51,15 @@ get_macro_pct = 'SELECT macropct from am_analysis_header;'
 get_rm_analysis_header = 'SELECT * from rm_analysis_header;'
 # need to add default values for non present nutrients
 get_rm_analysis = '''
-SELECT rm_analysis.Nutr_No, Units, Tagname, NutrDesc,
-    dvpct_offset + 100, Nutr_val
+SELECT rm_analysis.Nutr_No, Nutr_val, Units, NutrDesc,
+    dvpct_offset + 100
 FROM rm_analysis
 LEFT JOIN rm_dv on rm_analysis.Nutr_No = rm_dv.Nutr_No
 NATURAL JOIN nutr_def NATURAL JOIN rm_analysis;
 '''
 get_am_analysis = '''
-SELECT am_analysis.Nutr_No, Units, Tagname, NutrDesc,
-    dvpct_offset + 100, Nutr_val
+SELECT am_analysis.Nutr_No, Nutr_val, Units, NutrDesc,
+    dvpct_offset + 100
 FROM am_analysis
 LEFT JOIN am_dv on am_analysis.Nutr_No = am_dv.Nutr_No
 NATURAL JOIN nutr_def NATURAL JOIN am_analysis;
@@ -78,11 +88,17 @@ INSERT OR REPLACE INTO mealfoods
             END,
             :pcf_Nutr_No);
 '''
+
 remove_food_from_meal = '''
 DELETE FROM mealfoods
-WHERE meal_id = :meal_id AND NDB_No = :NDB_No;
+WHERE
+    CASE WHEN :meal_id IS NOT NULL THEN
+        meal_id = :meal_id
+    ELSE
+        meal_id = (SELECT currentmeal FROM OPTIONS)
+    END
+    AND NDB_No = :NDB_No;
 '''
-
 
 get_food_list = 'SELECT NDB_No, Long_Desc FROM food_des;'
 get_food_from_NDB_No = 'SELECT * FROM food_des WHERE NDB_No = :NDB_No;'
@@ -93,28 +109,29 @@ get_food_sorted_by_nutrient = """
     WHERE FdGrp_Desc like ? AND Nutr_No = ? ORDER BY Nutr_Val desc;
     """
 get_food_preferred_weight = 'SELECT * FROM pref_Gm_Wgt WHERE NDB_No = ?;'
-get_food_nutrients = 'SELECT * FROM nut_data WHERE NDB_No = ?;'
-get_food_nutrients_at_pref_weight = """
+get_food_nutrients = '''
 SELECT
-    NDB_No,
-    Nutr_Val,
-    NutrDesc,
-    Nutr_Val,
+    Nutr_No,
+    CASE WHEN :Gm_Wgt IS NULL THEN
+        Nutr_Val
+    ELSE
+        Nutr_Val/100*:Gm_Wgt
+    END as Nutr_Val,
     Units,
-    dv
-FROM view_foods
+    NutrDesc,
+    CASE WHEN :Gm_Wgt IS NULL THEN
+        Nutr_Val / am_dv.dv * 100
+    ELSE
+        Nutr_Val * :Gm_Wgt / am_dv.dv
+    END AS dv
+FROM nutr_def
+NATURAL JOIN nut_data
+LEFT JOIN am_dv USING (Nutr_No)
+NATURAL JOIN food_des
+NATURAL JOIN pref_Gm_Wgt
 WHERE NDB_No = :NDB_No;
-"""
-get_food_nutrients_based_on_weight = """
-    SELECT
-        meal_id,
-        NDB_No,
-        Gm_Wgt,
-        nut_data.Nutr_No,
-        Nutr_Val/100*Gm_Wgt
-    FROM mealfoods JOIN nut_data USING (NDB_No)
-    WHERE meal_id = ? and NDB_No = ?;
-    """
+'''
+
 get_nutrient = 'SELECT * FROM nutr_def WHERE Nutr_No = ?;'
 
 # need to implement imperial version

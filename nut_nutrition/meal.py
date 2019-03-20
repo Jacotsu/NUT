@@ -173,6 +173,7 @@ class Analysis():
         self._build_tree(tree_iter, tree)
 
     def _build_tree(self, tree_iter, dictionary):
+        # ('g', 'F24D1C', '24:1c', None, 0.0)
         for key, item in dictionary.items():
             next_tree_iter = None
             if key in self._defined_nutrients:
@@ -183,9 +184,9 @@ class Analysis():
                                       _(tmp_ntr[2]),
                                       False,
                                       0,
-                                      tmp_ntr[4],
                                       tmp_ntr[0],
-                                      0.0
+                                      tmp_ntr[1],
+                                      tmp_ntr[3]
                                       ]
                 except TypeError:
                     data_to_append = [key,
@@ -218,9 +219,9 @@ class Analysis():
                                           _(tmp_ntr[2]),
                                           False,
                                           0,
-                                          tmp_ntr[3],
                                           tmp_ntr[0],
-                                          tmp_ntr[4]]
+                                          tmp_ntr[1],
+                                          tmp_ntr[3]]
 
                         logging.debug(f'Adding: {pformat(data_to_append)}')
                         self._parent_treestore.append(next_tree_iter,
@@ -243,18 +244,23 @@ class Analysis():
 
 
 class Food(Analysis):
-    def __init__(self, parent, NDB_No, defined_nutrients, name):
+    def __init__(self, parent, NDB_No, defined_nutrients, name, weight):
         self._parent_treestore = parent
         self._NDB_No = None
-        # Name, show pcf, show spinbox, daily value, quantity
         food_to_append = [
             NDB_No,
+            # Food Name
             _(name),
+            # Is food
             True,
+            # PCF
             0,
-            123.4,
-            'lel',
-            88
+            # Weight
+            weight,
+            # Weights unit
+            'g',
+            # Daily value, unused for food
+            0
         ]
 
         top = self._parent_treestore.append(None, food_to_append)

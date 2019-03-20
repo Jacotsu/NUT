@@ -20,6 +20,21 @@ class MainHandler:
     def on_destroy(self, *args):
         Gtk.main_quit()
 
+    def backspace_pressed_in_rm_meal_menu(self, widget, key_event):
+        # Backspace
+        if key_event.get_keycode()[1] == 119:
+            selection = widget.get_selection()
+            treestore, selected_treepaths = selection.get_selected_rows()
+            for path in selected_treepaths:
+                food = treestore[path]
+                db = self._manager._db
+                db.remove_food_from_meal(food[0])
+                logging.debug(f'Deleted {food[0,1]} from  current meal')
+            self._manager._update_current_meal_menu()
+
+        # Propagate event
+        return False
+
     def record_meals_slider_changed(self, adj_object):
         """
         When the meal selection is changed this function selects the meal
@@ -288,10 +303,12 @@ class GTKGui:
         """
         self._rm_menu.clear()
         for food in self._db.current_meal_menu:
+            logging.debug(f'Inserting food into menu: {food}')
             meal.Food(self._rm_menu,
                       food[0],
-                      self._db.get_food_nutrients_at_pref_weight(food[0]),
-                      food[1])
+                      self._db.get_food_nutrients(food[0]),
+                      food[1],
+                      food[2])
         self._update_rm_analysis()
 
     def _update_rm_analysis(self):
@@ -486,7 +503,7 @@ class ViewFood:
         # NDB_No, Ntr_val, name, weight, DV
         meal.Analysis(self._vf_analysis,
                       None,
-                      self._db.get_food_nutrients_at_pref_weight(NDB_No))
+                      self._db.get_food_nutrients(NDB_No))
         self._window.show_all()
 
     def _load_food(self, NDB_No):
