@@ -21,8 +21,8 @@ class MainHandler:
     def on_destroy(self, *args):
         Gtk.main_quit()
 
-    def backspace_pressed_in_rm_meal_menu(self, widget, key_event):
-        # Backspace
+    def delete_pressed_in_rm_meal_menu(self, widget, key_event):
+        # Delete
         if key_event.get_keycode()[1] == 119:
             selection = widget.get_selection()
             treestore, selected_treepaths = selection.get_selected_rows()
@@ -138,9 +138,9 @@ class MainHandler:
         logging.debug(f'Setting omega6-3 balance to')
 
     def set_calories_dv(self, widget):
-        calories = widget.get_value()
+        calories = widget.get_adjustment().get_value()
         logging.debug(f'Setting calories dv to {calories}')
-        self._manager._db.set_nutrient_DV('ENERC_KCAL', calories)
+        self._manager._db.set_nutrient_dv('ENERC_KCAL', calories)
 
     def accept_measurements(self, button):
         settings_wdgs = self._manager._settings_widgets

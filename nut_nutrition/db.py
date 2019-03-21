@@ -196,10 +196,12 @@ class DBMan:
         :param date: A datetime object that contains the meal's datetime
         :param meal_no: The day meal number (first meal is 1)
         """
+
         with self._conn as con:
             cur = con.cursor()
             cur.execute(bignut_queries.set_current_meal,
                         (meal_id,))
+
 
     @property
     def current_meal_string(self):

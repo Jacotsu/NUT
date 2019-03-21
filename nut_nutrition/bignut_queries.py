@@ -7,11 +7,11 @@ get_defined_nutrients = 'SELECT * FROM nutr_def;'
 
 set_nutrient_dv = '''
 UPDATE nutr_def
-SET
+SET nutopt =
     CASE WHEN :nutopt IS NOT NULL THEN
-        nutopt = :nutopt
+        :nutopt
     ELSE
-        nutopt = 0
+        0
     END
 WHERE Nutr_No = :Nutr_No;
 '''
