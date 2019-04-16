@@ -410,6 +410,24 @@ class DBMan:
             cur.execute(bignut_queries.set_food_pcf,
                         query_params)
 
+    def set_food_amount(self,
+                        NDB_No,
+                        amount=None,
+                        meal_id=None):
+        """
+        :param NDB_No: The food NDB_No
+        :param amount: The amount of food in grams
+        :param meal_id: The meal id, if None defaults to the current meal
+        """
+        with self._conn as con:
+            cur = con.cursor()
+            query_params = {'NDB_No': NDB_No,
+                            'meal_id': meal_id,
+                            'Gm_Wgt': amount}
+            cur.execute(bignut_queries.set_food_amount,
+                        query_params)
+
+
     def insert_food_into_meal(self,
                               NDB_No,
                               Gm_Wgt=None,

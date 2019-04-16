@@ -89,6 +89,17 @@ WHERE CASE
             :meal_id
         END AND NDB_No = :NDB_No;
 '''
+set_food_amount = '''
+UPDATE mealfoods
+SET Gm_Wgt = :Gm_Wgt
+WHERE CASE
+        WHEN :meal_id IS NULL THEN
+            (SELECT currentmeal FROM OPTIONS)
+        ELSE
+            :meal_id
+        END AND NDB_No = :NDB_No;
+'''
+
 
 insert_food_into_meal = '''
 INSERT OR REPLACE INTO mealfoods

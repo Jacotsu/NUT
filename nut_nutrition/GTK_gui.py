@@ -1,16 +1,16 @@
 import gi
+gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk
 import db
 import logging
 import gettext
 import meal
-from pprint import pformat
-from utils import set_cells_data_func, set_pcf_combobox_cells_data_func
+from utils import (set_cells_data_func, set_float_precision,
+                   set_pcf_combobox_text, get_selected_food)
 from matplotlib.backends.backend_gtk3agg import (
     FigureCanvasGTK3Agg as FigureCanvas)
 from matplotlib.figure import Figure
 
-gi.require_version('Gtk', '3.0')
 _ = gettext.gettext
 
 
@@ -59,15 +59,20 @@ class MainHandler:
         Nutr_No = pcf_list.get_value(new_iter, 0)
         Nutrient_name = pcf_list.get_value(new_iter, 1)
 
-        # When you edit the pcf, the gtk treeview should select only
-        # the row that you're editing, so this code seems to be rialiable
-        selection = self._manager._rm_menu_treeview.get_selection()
-        treestore, selected_treepaths = selection.get_selected_rows()
-        food = treestore[selected_treepaths[0]]
+        food = get_selected_food(self._manager._rm_menu_treeview)
 
         NDB_No = food[0]
         self._manager._db.set_food_pcf(NDB_No, Nutr_No)
-        logging.debug(f'Selected PCF: {NDB_No} {Nutrient_name}')
+        logging.info(f'Set PCF: {NDB_No} {Nutrient_name}')
+        self._manager._update_current_meal_menu()
+
+    def record_meals_set_amount(self, adjustment, user_data=None):
+        new_amount = adjustment.get_value()
+        food = get_selected_food(self._manager._rm_menu_treeview)
+
+        NDB_No = food[0]
+        self._manager._db.set_food_amount(NDB_No, new_amount)
+        logging.info(f'Set food amount: {food[0,1]} {new_amount} {food[5]}')
         self._manager._update_current_meal_menu()
 
     def analysis_meal_no_changed(self, adj_object):
@@ -76,7 +81,7 @@ class MainHandler:
         updates the database and the analysis view
         """
         val = adj_object.get_value()
-        logging.debug(f'Number of meal to analyze set to {val}')
+        logging.info(f'Number of meal to analyze set to {val}')
         self._manager._db.am_analysis_meal_no = val
         self._manager._update_am_analysis()
 
@@ -103,9 +108,9 @@ class MainHandler:
         """
         data = treeview.get_model()
         tree_iter = data.get_iter(path)
-        NDB_No = data.get(tree_iter, 0)[0]
-        logging.debug(f'{NDB_No} Food clicked')
-        ViewFood(NDB_No)
+        data = data.get(tree_iter, 0)
+        logging.debug(f'{data[0]} Food clicked')
+        ViewFood(data[0])
 
     def view_searched_food(self, widget):
         """
@@ -281,11 +286,18 @@ class GTKGui:
                        291  # Fiber
                        ]
         self._load_pcf_choiches(pcf_choices)
-        set_cells_data_func(builder, ['rm_menu_treeview',
-                                      'rm_analysis_treeview',
-                                      'am_analysis_treeview']
+        set_cells_data_func(builder,
+                            ['rm_menu_treeview',
+                             'rm_analysis_treeview',
+                             'am_analysis_treeview'],
+                            set_float_precision,
+                            {(1, 0): 6,
+                             (2, 0): 4}
                             )
-        set_pcf_combobox_cells_data_func(builder, ['rm_menu_treeview'])
+        set_cells_data_func(builder,
+                            ['rm_menu_treeview'],
+                            set_pcf_combobox_text,
+                            {(0, 1): 3})
         self._update_current_meal_menu()
         self._update_am_analysis()
 
@@ -321,7 +333,7 @@ class GTKGui:
         """
         self._rm_anal.clear()
         self._rm_meal_label\
-                .set_text(f'Analysis of meal: {self._db.current_meal_string}')
+            .set_text(f'Analysis of meal: {self._db.current_meal_string}')
         meal.Analysis(self._rm_anal, None, self._db.rm_analysis_nutrients)
 
     def _update_am_analysis(self):
@@ -395,7 +407,12 @@ class TheStory:
                       .format(_(self._nutrient_name)))
         self._setup_plot()
         self._update_data()
-        set_cells_data_func(builder, ['story_food_view'])
+        set_cells_data_func(builder,
+                            ['story_food_view'],
+                            set_float_precision,
+                            {(1, 0): 6,
+                             (2, 0): 4}
+                            )
 
         self._window.show_all()
 
@@ -477,7 +494,12 @@ class ViewFood:
         logging.debug(_("Food list loaded in view {} window")
                       .format(self._food[2]))
 
-        set_cells_data_func(builder, ['vf_analysis_treeview'])
+        set_cells_data_func(builder,
+                            ['vf_analysis_treeview'],
+                            set_float_precision,
+                            {(1, 0): 6,
+                             (2, 0): 4}
+                            )
         meal.Analysis(self._vf_analysis,
                       None,
                       self._db.get_food_nutrients(NDB_No))

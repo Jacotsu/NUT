@@ -1,9 +1,9 @@
 import gi
+gi.require_version('Gtk', '3.0')
 import gettext
 import logging
 from pprint import pformat
 
-gi.require_version('Gtk', '3.0')
 _ = gettext.gettext
 
 
