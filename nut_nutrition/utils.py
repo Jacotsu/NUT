@@ -129,8 +129,9 @@ def download_usda_and_unzip(dest_path):
     zip_ref.extractall(dest_path)
     zip_ref.close()
 
+
 def cleanup_usda(path):
     globs = ['*.txt', '*.zip', '*.pdf']
     for gl in globs:
-        for hgx in glob.glob(globs):
+        for hgx in glob.glob(os.path.join(path, gl)):
             os.remove(hgx)
