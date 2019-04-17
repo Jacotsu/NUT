@@ -110,9 +110,15 @@ class MainHandler:
         """
         data = treeview.get_model()
         tree_iter = data.get_iter(path)
-        data = data.get(tree_iter, 0)
-        logging.debug(f'{data[0]} Food clicked')
-        ViewFood(data[0])
+        is_food = data.get(tree_iter, 2)[0]
+        element = data.get(tree_iter, 0)
+        if is_food:
+            logging.debug(f'{element[0]} Food clicked')
+            ViewFood(element[0])
+        else:
+            logging.debug(f'{element[0]} Nutrient clicked')
+            TheStory(element[0])
+
 
     def view_searched_food(self, widget):
         """
@@ -299,18 +305,24 @@ class GTKGui:
         # The order is important
         food_display_function = chain_functions([set_float_precision,
                                                  hide_if_no_data_and_its_food])
+        # Hides the DV associated with foods because it makes sense only
+        # for nutrients
         set_cells_data_func(builder,
                             ['rm_menu_treeview'],
                             food_display_function,
                             {(1, 0): 6}
                             )
 
+        # Hides the % sign if no data is available
         set_cells_data_func(builder,
-                            ['rm_menu_treeview'],
+                            ['rm_menu_treeview',
+                             'rm_analysis_treeview',
+                             'am_analysis_treeview'],
                             hide_text_if_no_data,
                             {(1, 1): 6}
                             )
 
+        # Sets the appropriate text to reflect the selected pcf
         set_cells_data_func(builder,
                             ['rm_menu_treeview'],
                             set_pcf_combobox_text,

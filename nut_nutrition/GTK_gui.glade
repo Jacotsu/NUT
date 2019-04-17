@@ -697,7 +697,6 @@
                             <child>
                               <object class="GtkCellRendererSpin">
                                 <property name="xalign">1</property>
-                                <property name="editable">True</property>
                                 <property name="digits">2</property>
                               </object>
                             </child>
@@ -1000,7 +999,8 @@
                     <property name="halign">end</property>
                     <property name="margin_right">4</property>
                     <property name="margin_bottom">4</property>
-                    <property name="label" translatable="yes">Database file</property>
+                    <property name="label" translatable="yes">Import database file</property>
+                    <property name="use_markup">True</property>
                   </object>
                   <packing>
                     <property name="left_attach">0</property>
