@@ -48,6 +48,8 @@ def hide_text_if_no_data(col, cell, model, iterator, func_data):
 
     if not data:
         cell.set_property('text', '')
+    else:
+        cell.set_property('text', '%')
 
 
 def set_float_precision(col, cell, model, iterator, func_data):
@@ -82,6 +84,8 @@ def set_cells_data_func(builder,
     :param function: The rendering function that should be applied to the data
     :param columns_mapping: dictionary that maps the view model to the data
         model, the key is a tuple that contains the column id and the cell id
+        {(0, 1): 5} Selects the first column (0) and the second cell renderer
+        (1) and passes the model sixth (5) column to the specified function
     """
     for view_name in views_to_set:
         view = builder.get_object(view_name)
