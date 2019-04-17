@@ -705,9 +705,6 @@
                               <object class="GtkCellRendererText">
                                 <property name="text">%</property>
                               </object>
-                              <attributes>
-                                <attribute name="visible">6</attribute>
-                              </attributes>
                             </child>
                           </object>
                         </child>
@@ -721,10 +718,12 @@
                             <child>
                               <object class="GtkCellRendererSpin">
                                 <property name="xalign">1</property>
-                                <property name="editable">True</property>
                                 <property name="adjustment">rm_menu_adjustment</property>
                                 <property name="digits">2</property>
                               </object>
+                              <attributes>
+                                <attribute name="editable">2</attribute>
+                              </attributes>
                             </child>
                             <child>
                               <object class="GtkCellRendererText">
@@ -732,7 +731,6 @@
                                 <property name="placeholder_text">weight</property>
                               </object>
                               <attributes>
-                                <attribute name="visible">2</attribute>
                                 <attribute name="text">5</attribute>
                               </attributes>
                             </child>
@@ -1508,7 +1506,7 @@
             <property name="visible">True</property>
             <property name="can_focus">False</property>
             <property name="halign">end</property>
-            <property name="label" translatable="yes">settings</property>
+            <property name="label" translatable="yes">Settings</property>
           </object>
           <packing>
             <property name="position">3</property>

@@ -6,7 +6,9 @@ import logging
 import gettext
 import meal
 from utils import (set_cells_data_func, set_float_precision,
-                   set_pcf_combobox_text, get_selected_food)
+                   set_pcf_combobox_text, get_selected_food,
+                   set_calendar_date, hide_text_if_no_data, chain_functions,
+                   hide_text_if_true, hide_if_no_data_and_its_food)
 from matplotlib.backends.backend_gtk3agg import (
     FigureCanvasGTK3Agg as FigureCanvas)
 from matplotlib.figure import Figure
@@ -178,15 +180,14 @@ class TheStoryHandler:
 
     def food_clicked(self, treeview, path, view_column):
         """
-        This event is activated when a user double clicks a valid
-        food in the treeview
+        When a food nutrient is clicked this function will shown the story
+        of the nutrient relative to the analysis period
         """
         data = treeview.get_model()
         tree_iter = data.get_iter(path)
-        food_info = data.get(tree_iter, 0)
-        logging.debug(f'{food_info} Food clicked')
-        # Placeholder nutrient 20421 pasta
-        ViewFood(20421)
+        data = data.get(tree_iter, 0)
+        logging.debug(f'{data[0]} Food clicked')
+        ViewFood(data[0])
 
     def update_data(self, *args):
         FdGrp_Cd_iter = self._manager._fd_group_cb.get_active_iter()
@@ -294,10 +295,27 @@ class GTKGui:
                             {(1, 0): 6,
                              (2, 0): 4}
                             )
+
+        # The order is important
+        food_display_function = chain_functions([set_float_precision,
+                                                 hide_if_no_data_and_its_food])
+        set_cells_data_func(builder,
+                            ['rm_menu_treeview'],
+                            food_display_function,
+                            {(1, 0): 6}
+                            )
+
+        set_cells_data_func(builder,
+                            ['rm_menu_treeview'],
+                            hide_text_if_no_data,
+                            {(1, 1): 6}
+                            )
+
         set_cells_data_func(builder,
                             ['rm_menu_treeview'],
                             set_pcf_combobox_text,
                             {(0, 1): 3})
+
         self._update_current_meal_menu()
         self._update_am_analysis()
 
@@ -392,6 +410,8 @@ class TheStory:
         self._food_rank_cb = builder.get_object("food_rank_cb")
         self._story_food = builder.get_object("story_food")
         self._ts_nutrient_header = builder.get_object("ts_nutrient_header")
+        self._end_date_cal = builder.get_object("end_date_cal")
+        self._start_date_cal = builder.get_object("start_date_cal")
 
         builder.connect_signals(TheStoryHandler(self))
 
@@ -406,13 +426,16 @@ class TheStory:
         logging.debug(_("{} story window created")
                       .format(_(self._nutrient_name)))
         self._setup_plot()
-        self._update_data()
         set_cells_data_func(builder,
                             ['story_food_view'],
                             set_float_precision,
                             {(1, 0): 6,
                              (2, 0): 4}
                             )
+
+        set_calendar_date(self._start_date, self._start_date_cal)
+        set_calendar_date(self._end_date, self._end_date_cal)
+        #self._update_data()
 
         self._window.show_all()
 

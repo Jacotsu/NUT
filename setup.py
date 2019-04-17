@@ -46,7 +46,8 @@ setup(
     install_requires=[
         'dataclasses',
         'pytest',
-        'matplotlib'
+        'matplotlib',
+        'appdirs'
     ],
     python_requires='>=3.7',
     packages=['nut_nutrition'],

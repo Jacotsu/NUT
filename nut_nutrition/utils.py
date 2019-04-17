@@ -25,6 +25,16 @@ def hide_text_if_true(col, cell, model, iterator, func_data):
         cell.set_property('text', '')
 
 
+def hide_if_no_data_and_its_food(col, cell, model, iterator, func_data):
+    """
+    Hides the text if it's food
+    """
+    data = model.get(iterator, func_data['column_no'])[0]
+    its_food = model.get(iterator, 2)[0]
+
+    if not data and its_food:
+        cell.set_property('text', '')
+
 def hide_text_if_no_data(col, cell, model, iterator, func_data):
     """
     Hides the text if no data is present

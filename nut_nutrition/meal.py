@@ -143,13 +143,13 @@ class Analysis():
                 435,
                 454
             ],
-            'Sterols':  [
+            'Sterols': [
                 601,
                 636,
                 *range(638, 640),
                 641
             ],
-            'Minerals':  [
+            'Minerals': [
                 301,  # Calcium
                 # Iron Magnesium Phosphorous Potassium Sodium
                 *range(303, 308),
@@ -198,7 +198,6 @@ class Analysis():
                                                                 0.0,
                                                                 '',
                                                                 0.0])
-
             if type(item) is dict:
                 self._build_tree(next_tree_iter, item)
             elif type(item) is list:

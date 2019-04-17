@@ -1,12 +1,18 @@
 import sqlite3
 import bignut_queries
 import logging
+import os
+from appdirs import user_data_dir
 from datetime import datetime
 from food import Food
 
+appname = 'nut_nutrition'
+
 
 class DBMan:
-    def __init__(self, db_name='nut.db'):
+    def __init__(self, db_name=os.path.join(user_data_dir(appname),
+                                            'nut.db')):
+        os.makedirs(user_data_dir(appname), exist_ok=True)
         try:
             self._conn = sqlite3.connect(db_name)
             self._conn.text_factory = self.decode_non_UTF_strings
