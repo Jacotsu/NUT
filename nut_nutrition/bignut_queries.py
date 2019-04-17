@@ -1818,7 +1818,7 @@ AND    chocdf.nutr_no = 205;
 CREATE TABLE IF NOT EXISTS options
   (
      protect       INTEGER PRIMARY KEY,
-     defanal_am    INTEGER DEFAULT 2147123119,
+     defanal_am    INTEGER DEFAULT 3,
      fapu1         REAL DEFAULT 0.0,
      meals_per_day INT DEFAULT 3,
      grams         INT DEFAULT 1,

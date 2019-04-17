@@ -13,7 +13,7 @@
 
 - [ ] Fix tree store data columns
 
-- [ ] Fix number of meals to analyze set to 9999 when new database is created
+- [X] Fix number of meals to analyze set to 9999 when new database is created
 
 ### Record meals
 
