@@ -35,10 +35,10 @@ class DBMan:
                 logging.warning('Database empty or corrupted initializing'
                                 ' a new one')
                 # Loads the USDA and initializes the logic
-                # download_usda_and_unzip(user_data_dir(appname))
+                download_usda_and_unzip(user_data_dir(appname))
                 self.load_db(user_data_dir(appname))
                 cur.executescript(bignut_queries.init_logic)
-                #cleanup_usda(user_data_dir(appname))
+                cleanup_usda(user_data_dir(appname))
 
             cur.executescript(bignut_queries.user_init_query)
 
