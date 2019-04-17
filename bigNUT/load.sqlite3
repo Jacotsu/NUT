@@ -4,8 +4,8 @@
    You would do this if you wanted to move the database to another system.  If
    you delete nut.db-wal and/or nut.db-shm manually, you will corrupt the database.
 
-PRAGMA journal_mode = WAL;
 */
+PRAGMA journal_mode = WAL;
 
 begin;
 
@@ -865,6 +865,7 @@ CREATE TABLE IF NOT EXISTS options
      autocal       INTEGER DEFAULT 0
   );
 
+
 /*
    The table of what and how much eaten at each meal, plus a place for a
    nutrient number to signify automatic portion control on this serving.
@@ -918,5 +919,7 @@ create trigger protect_options after insert on options begin delete from options
 insert into options default values;
 
 drop trigger protect_options;
+UPDATE options
+SET currentmeal = CAST(STRFTIME('%Y%m%d01', DATE('now')) AS INTEGER);
 commit;
 vacuum;

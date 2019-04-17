@@ -2,6 +2,7 @@ import sqlite3
 import bignut_queries
 import logging
 import os
+from utils import download_usda_and_unzip, cleanup_usda
 from appdirs import user_data_dir
 from datetime import datetime
 from food import Food
@@ -28,6 +29,17 @@ class DBMan:
 
         with self._conn as con:
             cur = con.cursor()
+            try:
+                cur.executescript(bignut_queries.user_init_query)
+            except sqlite3.OperationalError:
+                logging.warning('Database empty or corrupted initializing'
+                                ' a new one')
+                # Loads the USDA and initializes the logic
+                # download_usda_and_unzip(user_data_dir(appname))
+                self.load_db(user_data_dir(appname))
+                cur.executescript(bignut_queries.init_logic)
+                #cleanup_usda(user_data_dir(appname))
+
             cur.executescript(bignut_queries.user_init_query)
 
     @staticmethod
@@ -111,7 +123,11 @@ class DBMan:
         """
         cur = self._conn.cursor()
         cur.execute(bignut_queries.get_last_weight)
-        return cur.fetchone()[0]
+        try:
+            return cur.fetchone()[0]
+        except TypeError:
+            # If there are no last weights return 0
+            return 0
 
     @property
     def last_bodyfat(self):
@@ -121,7 +137,11 @@ class DBMan:
         """
         cur = self._conn.cursor()
         cur.execute(bignut_queries.get_last_bodyfat)
-        return cur.fetchone()[0]
+        try:
+            return cur.fetchone()[0]
+        except TypeError:
+            # If there are no last bodyfat return 0
+            return 0
 
     @property
     def defined_nutrients(self):
@@ -522,4 +542,32 @@ class DBMan:
     def load_db(self, path):
         with self._conn as con:
             cur = con.cursor()
-            cur.executescript(bignut_queries.db_load)
+            logging.info(f'Started database loading from {path}')
+            cur.executescript(bignut_queries.db_load_pt1)
+
+            separator = '^'
+            table_mapping = {'NUTR_DEF.txt': 'ttnutr_def',
+                             'FD_GROUP.txt': 'tfd_group',
+                             'FOOD_DES.txt': 'tfood_des',
+                             'WEIGHT.txt': 'tweight',
+                             'NUT_DATA.txt': 'tnut_data'}
+
+            for USDA_file, table in table_mapping.items():
+                with open(os.path.join(path, USDA_file),
+                          'r', encoding='iso-8859-1') as tbl:
+                    values = map(lambda x: x.rstrip().split(separator), tbl)
+                    # !!! UNSAFE CODE !!!
+                    # as long as you don't take user input it should work
+                    # fine.
+                    data = next(values)
+                    query = f'INSERT INTO {table} VALUES'\
+                        f'({",".join("?"*len(data))})'
+                    cur.execute(query, data)
+                    cur.executemany(query,
+                                    values)
+                    logging.info(f'Imported {USDA_file}')
+
+        with self._conn as con:
+            # Using a new connection se we are sure that the changes are
+            # commited
+            cur.executescript(bignut_queries.db_load_pt2)

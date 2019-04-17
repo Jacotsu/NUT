@@ -13,11 +13,15 @@
 
 - [ ] Fix tree store data columns
 
+- [ ] Fix number of meals to analyze set to 9999 when new database is created
+
 ### Record meals
 
 - [ ] Set food weight from both side view and view food
 
 - [ ] Allow to set food weight and food volume from the same interface
+
+- [ ] Fix that multiple foods get added to the menu if their names partially match
 
 ### Recipe management
 

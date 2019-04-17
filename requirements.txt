@@ -3,3 +3,4 @@ dataclasses==0.6
 matplotlib==3.0.1
 setuptools==40.8.0
 appdirs
+requests

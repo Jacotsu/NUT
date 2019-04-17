@@ -1,4 +1,8 @@
 import gettext
+import zipfile
+import requests
+import glob
+import os
 
 _ = gettext.gettext
 
@@ -34,6 +38,7 @@ def hide_if_no_data_and_its_food(col, cell, model, iterator, func_data):
 
     if not data and its_food:
         cell.set_property('text', '')
+
 
 def hide_text_if_no_data(col, cell, model, iterator, func_data):
     """
@@ -107,3 +112,25 @@ def chain_functions(functions):
         for funct in functions:
             funct(*args, **kwargs)
     return res
+
+
+def download_usda_and_unzip(dest_path):
+    os.makedirs(dest_path, exist_ok=True)
+    zip_path = os.path.join(dest_path, 'sr28asc.zip')
+
+    r = requests.get('https://www.ars.usda.gov/ARSUserFiles/80400525/Data/SR/'
+                     'SR28/dnload/sr28asc.zip', stream=True)
+    if r.status_code == 200:
+        with open(zip_path, 'wb') as f:
+            for chunk in r:
+                f.write(chunk)
+
+    zip_ref = zipfile.ZipFile(zip_path, 'r')
+    zip_ref.extractall(dest_path)
+    zip_ref.close()
+
+def cleanup_usda(path):
+    globs = ['*.txt', '*.zip', '*.pdf']
+    for gl in globs:
+        for hgx in glob.glob(globs):
+            os.remove(hgx)
