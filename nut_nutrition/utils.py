@@ -15,11 +15,32 @@ def get_selected_food(menu):
     return food
 
 
+def hide_text_if_true(col, cell, model, iterator, func_data):
+    """
+    Hides the DV if the row is food
+    """
+    data = model.get(iterator, func_data['column_no'])[0]
+
+    if data:
+        cell.set_property('text', '')
+
+
+def hide_text_if_no_data(col, cell, model, iterator, func_data):
+    """
+    Hides the text if no data is present
+    """
+    data = model.get(iterator, func_data['column_no'])[0]
+
+    if not data:
+        cell.set_property('text', '')
+
+
 def set_float_precision(col, cell, model, iterator, func_data):
     """
     Sets the float precision to 2 decimal digits
     """
     data = model.get(iterator, func_data['column_no'])[0]
+
     if data:
         cell.set_property('text', '{:5.2f}'.format(data))
     else:
@@ -55,3 +76,24 @@ def set_cells_data_func(builder,
                                                  .get_cells()[view_col[1]],
                                                  function,
                                                  {'column_no': data_col})
+
+
+def set_calendar_date(date, calendar):
+    day = int(date[-2])
+    month = int(date[-4:-2])
+    year = int(date[0:-4])
+    calendar.select_day(day)
+    calendar.select_month(month, year)
+
+
+def chain_functions(functions):
+    """
+    Returns a function that calls a list of functions called with the same
+    parameters
+    :param functions: A list of functions to call with compatible parameters
+    :returns: the resulting function
+    """
+    def res(*args, **kwargs):
+        for funct in functions:
+            funct(*args, **kwargs)
+    return res
