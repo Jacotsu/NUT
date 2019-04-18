@@ -8,7 +8,7 @@ import meal
 from utils import (set_cells_data_func, set_float_precision,
                    set_pcf_combobox_text, get_selected_food,
                    set_calendar_date, hide_text_if_no_data, chain_functions,
-                   hide_text_if_true, hide_if_no_data_and_its_food)
+                   hide_text_if_true, hide_if_no_data_and_its_a_group)
 from matplotlib.backends.backend_gtk3agg import (
     FigureCanvasGTK3Agg as FigureCanvas)
 from matplotlib.figure import Figure
@@ -293,18 +293,24 @@ class GTKGui:
                        291  # Fiber
                        ]
         self._load_pcf_choiches(pcf_choices)
+
+        nutrient_display_function = \
+            chain_functions([set_float_precision,
+                             hide_if_no_data_and_its_a_group])
         set_cells_data_func(builder,
                             ['rm_menu_treeview',
                              'rm_analysis_treeview',
                              'am_analysis_treeview'],
-                            set_float_precision,
+                            nutrient_display_function,
                             {(1, 0): 6,
                              (2, 0): 4}
                             )
 
         # The order is important
-        food_display_function = chain_functions([set_float_precision,
-                                                 hide_if_no_data_and_its_food])
+        food_display_function = \
+            chain_functions([set_float_precision,
+                             hide_if_no_data_and_its_a_group
+                             ])
         # Hides the DV associated with foods because it makes sense only
         # for nutrients
         set_cells_data_func(builder,

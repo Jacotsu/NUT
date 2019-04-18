@@ -29,14 +29,12 @@ def hide_text_if_true(col, cell, model, iterator, func_data):
         cell.set_property('text', '')
 
 
-def hide_if_no_data_and_its_food(col, cell, model, iterator, func_data):
+def hide_if_no_data_and_its_a_group(col, cell, model, iterator, func_data):
     """
-    Hides the text if it's food
+    Hides the text if it's a nutrient group and has no data associated
     """
     data = model.get(iterator, func_data['column_no'])[0]
-    its_food = model.get(iterator, 2)[0]
-
-    if not data and its_food:
+    if not data and model.iter_has_child(iterator):
         cell.set_property('text', '')
 
 
