@@ -25,8 +25,10 @@ exec tclsh "$0" "$@"
 # from the former to the latter.
 #
 
-set lite [file nativename ~/src/nut/nut.sqlite]
-set big [file nativename ~/src/bigNUT/nut.db]
+#set lite [file nativename ~/src/nut/nut.sqlite]
+#set big [file nativename ~/src/bigNUT/nut.db]
+set lite [file nativename nut.db]
+set big [file nativename bigNut.db]
 
 package require sqlite3
 sqlite3 db $big
