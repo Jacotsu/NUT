@@ -253,6 +253,7 @@ WHERE Nutr_No = ?;
 
 user_init_query = """
 PRAGMA recursive_triggers = 1;
+PRAGMA threads = 4;
 
 BEGIN;
 
