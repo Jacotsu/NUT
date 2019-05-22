@@ -1,5 +1,6 @@
 pytest==4.0.1
 dataclasses==0.6
+PyGObject==3.32.0
 matplotlib==3.0.1
 setuptools==40.8.0
 appdirs

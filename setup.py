@@ -47,6 +47,7 @@ setup(
         'dataclasses',
         'pytest',
         'matplotlib',
+        'PyGObject',
         'appdirs',
         'requests'
     ],
