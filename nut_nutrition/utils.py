@@ -72,6 +72,63 @@ def set_pcf_combobox_text(col, cell, model, iterator, func_data):
             cell.set_property('text', row[1])
 
 
+def decode_ratios(encoded_float, digits=3):
+    """
+    :param encoded_float: A float that contains the encoded ratios
+    :param digits: The number of digits for each ratio that is encoded
+    :returns: The list of ratios
+    """
+    ratios = []
+
+    tmp_float = encoded_float
+    # We get the number of fields
+    for i in range(int(encoded_float)):
+        # We get the decimal part
+        decimal = tmp_float % 1
+        tmp_float = decimal * (10**digits)
+        ratios.append(int(tmp_float))
+
+    return ratios
+
+
+def encode_ratios(ratios, digits=3):
+    """
+    :param ratios: The ratios that should be encoded in the float
+    :param digits: The number of digits for each ratio that is encoded
+    :returns: The encoded ratios
+
+    To avoid changing the data type in gtk model we encode the ratios in
+    float numbers.
+    The integer part is the number of fields
+    The float part contains the various ratio numbers
+    Examples:
+        22/44 is encoded as 2.022044
+        22/44/66 is encoded as 3.022044066
+    This encoding method is not reliabled for a high number of fields
+    simply because floats have a precision limitation.
+    """
+    # We get the number of fields
+    tmp_float = len(ratios)
+    for ratio, i in enumerate(ratios):
+        # We set the decimal part
+        tmp_float += ratio / (10**digits * i)
+
+    # We append 9 to the end to avoid rounding errors
+    tmp_float += 9 / (10**digits * (len(ratios) + 1))
+    return tmp_float
+
+
+def set_text_decode_ratios(col, cell, model, iterator, func_data):
+
+    data = model.get(iterator, func_data['column_no'])[0]
+    nutrient_list = cell.props.model
+    for row in nutrient_list:
+        if row[0] == data:
+            cell.set_property('text', row[1])
+
+
+
+
 def set_cells_data_func(builder,
                         views_to_set,
                         function,
