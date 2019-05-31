@@ -81,6 +81,8 @@ def decode_ratios(encoded_float, digits=3):
     ratios = []
 
     tmp_float = encoded_float
+    # We append 9 to the decimal end to avoid rounding errors
+    tmp_float += int('9' * digits) / (10**(digits * (int(encoded_float) + 1)))
     # We get the number of fields
     for i in range(int(encoded_float)):
         # We get the decimal part
@@ -109,12 +111,10 @@ def encode_ratios(ratios, digits=3):
     """
     # We get the number of fields
     tmp_float = len(ratios)
-    for ratio, i in enumerate(ratios):
+    for i, ratio in enumerate(ratios, 1):
         # We set the decimal part
-        tmp_float += ratio / (10**digits * i)
+        tmp_float += ratio / (10**(digits * i))
 
-    # We append 9 to the end to avoid rounding errors
-    tmp_float += 9 / (10**digits * (len(ratios) + 1))
     return tmp_float
 
 
@@ -125,8 +125,6 @@ def set_text_decode_ratios(col, cell, model, iterator, func_data):
     for row in nutrient_list:
         if row[0] == data:
             cell.set_property('text', row[1])
-
-
 
 
 def set_cells_data_func(builder,
