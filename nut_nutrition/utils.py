@@ -62,6 +62,16 @@ def set_float_precision(col, cell, model, iterator, func_data):
         cell.set_property('text', _('[No Data]'))
 
 
+def show_data_as_ratio(col, cell, model, iterator, func_data):
+    """
+    Shows an encoded float as a series of ratios
+    """
+    data = decode_ratios(model.get(iterator, func_data['column_no'])[0])
+
+    if data:
+        cell.set_property('text', ' / '.join(data))
+
+
 def set_pcf_combobox_text(col, cell, model, iterator, func_data):
     data = model.get(iterator, func_data['column_no'])[0]
     nutrient_list = cell.props.model
@@ -116,15 +126,6 @@ def encode_ratios(ratios, digits=3):
         tmp_float += ratio / (10**(digits * i))
 
     return tmp_float
-
-
-def set_text_decode_ratios(col, cell, model, iterator, func_data):
-
-    data = model.get(iterator, func_data['column_no'])[0]
-    nutrient_list = cell.props.model
-    for row in nutrient_list:
-        if row[0] == data:
-            cell.set_property('text', row[1])
 
 
 def set_cells_data_func(builder,
