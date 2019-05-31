@@ -10,7 +10,7 @@
 
 PRAGMA recursive_triggers = 1;
 
-// Increases performance
+/* Increases performance */
 PRAGMA threads = 4;
 
 BEGIN;

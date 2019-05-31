@@ -79,6 +79,8 @@ class MainHandler:
 
     def analysis_meal_no_changed(self, adj_object):
         """
+        :param adj_object: The adjustment object that contains the number of
+            meals
         When the number of meals to be analyzed is changed this function
         updates the database and the analysis view
         """

@@ -11,9 +11,19 @@
 
 - [ ] Let user choose analysis period from calendars
 
+- [ ] Track the view data status in the Analysis class so that it can be differentially updated
+
 - [ ] Fix tree store data columns
 
 - [X] Fix number of meals to analyze set to 9999 when new database is created
+
+### Show food
+
+- [ ] Implement weight and serving size
+
+- [ ] Implement refusal
+
+- [ ] Add view `[No Data]` and `%` filtering
 
 ### Record meals
 
@@ -57,7 +67,7 @@
 - [ ] Keep all the logic in SQL
   - [ ] Properly parametrize queries
   - [ ] Harden db manager and queries
-  - [ ] Fix `database or disk is full` errors
+  - [X] Fix `database or disk is full` errors
 
 - [ ] Write tests
 

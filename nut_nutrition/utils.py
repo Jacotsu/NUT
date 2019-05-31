@@ -66,6 +66,8 @@ def show_data_as_ratio(col, cell, model, iterator, func_data):
     """
     Shows an encoded float as a series of ratios
     """
+    # An easy way would be to pick the nutrient name from the data
+    # and pass the desired nutrients name through func_data
     data = decode_ratios(model.get(iterator, func_data['column_no'])[0])
 
     if data:
@@ -131,7 +133,8 @@ def encode_ratios(ratios, digits=3):
 def set_cells_data_func(builder,
                         views_to_set,
                         function,
-                        columns_mapping):
+                        columns_mapping,
+                        func_data=None):
     """
     Sets the column data function, useful for changing the displayed
     precision of floats
