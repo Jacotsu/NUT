@@ -356,7 +356,7 @@ class GTKGui:
         self._rm_menu.clear()
         for food in self._db.current_meal_menu:
             logging.debug(f'Inserting food into menu: {food}')
-            meal.Food(self._rm_menu,
+            meal.FoodAnal(self._rm_menu,
                       food[0],
                       self._db.get_food_nutrients(food[0]),
                       food[1],

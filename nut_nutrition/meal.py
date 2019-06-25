@@ -3,11 +3,117 @@ gi.require_version('Gtk', '3.0')
 import gettext
 import logging
 from pprint import pformat
+from dataclasses import dataclass
 
 _ = gettext.gettext
 
 
+@dataclass
+class Portion:
+    """
+    Class that represents a portion
+    """
+    quantity: float = None
+    unit: str = 'g'
+
+
+@dataclass
+class Nutrient:
+    """
+    Class that represents a single nutrient
+    :param nutr_no: Unique nutrient number
+    :param units: Weight measure unit of the nutrient
+    :param quantity: Quantity of nutrient
+    :param tagname: Unique short nutrient tag
+    :param nutr_desc: Description of the nutrient
+    :param dv_default: Default daily value of the nutrient
+    :param nut_opt: User's selected daily value
+    """
+    nutr_no: int
+    # Can be None
+    portion: Portion
+    tagname: str
+    nutr_desc: str
+    dv_default: float
+    nut_opt: float
+    __db: DBMan
+
+    @nut_opt.setter
+    def set_nut_opt(self, new_value=None):
+        """
+        Sets the daily nutrient value in grams
+        :param nutrient_desc: The nutrient number
+        :param value: The new daily value, if None the limit is removed
+        """
+        self.__db.set_nutrient_dv(self, new_value)
+
+
+@dataclass
+class Food:
+    """
+    Class that represents a single food
+    """
+    ndb_no: int
+    fdgrp_cd: int
+    long_desc: str
+    shrt_desc: str
+    ref_desc: str
+    refuse: float
+    # Can be None
+    portion: Portion
+    pro_factor: float
+    fat_factor: float
+    cho_factor: float
+    nutrients: List[Nutrient] = field(default_factory=list)
+    pcf_nutrient: Nutrient = None
+    macro_pct: tuple
+    __db: DBMan
+    meal: Meal = None
+
+    @property
+    def nutrients(self):
+        return self.__db.get_food_nutrients(self)
+
+
+    @amount.setter
+    def set_amount(self, new_amount: float):
+        if new_amount >= 0:
+            self.amount = new_amount
+            self.__db.set_food_amount(self, self.meal)
+        else:
+            raise ValueError("The new amount must be >= 0")
+
+    @pcf_nutrient.setter
+    def set_amount(self, new_pcf_nutrient: Nutrient):
+        self.pcf_nutrient = new_pcf_nutrient
+        self.__db.set_food_pcf()
+
+
+
+@dataclass
+class Meal:
+    """
+    Class that represents a single meal
+    :param meal_id: Unique meal identifier which is normally %Y%M%D%meal_no
+    :param foods: List of foods in meal
+    """
+    meal_id: int
+    _foods: List[Food] = field(default_factory=list)
+    __db: DBMan
+
+    def add_food(self, food: Food):
+        self.__db.insert_food_into_meal(food, self)
+
+    def remove_food(self, food: Food):
+        self.__db.remove_food_from_meal(food, self)
+
+    def analyze(self):
+        raise NotImplementedError
+
 class Analysis():
+    # To allow for dynamic updates a nutrient:GTKModelIterator dictionary
+    # should be compiled, so that the view can be updated witouth recreating
+    # it
     def __init__(self, parent, tree_iter, defined_nutrients):
         self._parent_treestore = parent
         self._defined_nutrients = defined_nutrients
@@ -232,13 +338,13 @@ class Analysis():
 # if PCF_Nutr_No == 0 then PCF is disabled for this food
 
 
-class Food(Analysis):
-    def __init__(self, parent, NDB_No, defined_nutrients, name, weight,
+class FoodAnal(Analysis):
+    def __init__(self, parent, ndb_no, defined_nutrients, name, weight,
                  pcf_Nutr_No=0):
         self._parent_treestore = parent
-        self._NDB_No = None
+        self._ndb_no = None
         food_to_append = [
-            NDB_No,
+            ndb_no,
             # Food Name
             _(name),
             # Is food
