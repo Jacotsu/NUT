@@ -1,11 +1,12 @@
 import sqlite3
-import bignut_queries
 import logging
 import os
-from utils import download_usda_and_unzip, cleanup_usda
 from appdirs import user_data_dir
 from datetime import datetime
-from meal import Nutrient, Food, Meal, Portion
+from typing import Iterator
+from utils import download_usda_and_unzip, cleanup_usda
+import bignut_queries
+import meal
 
 appname = 'nut_nutrition'
 
@@ -155,7 +156,7 @@ class DBMan:
         """
         cur = self._conn.cursor()
         cur.execute(bignut_queries.get_defined_nutrients)
-        return [Nutrient(nutr_no=nut[0],
+        return [meal.Nutrient(nutr_no=nut[0],
                          units=nut[1],
                          tagname=nut[2],
                          nutr_desc=[3],
@@ -388,7 +389,7 @@ class DBMan:
             cur = con.cursor()
             cur.execute(bignut_queries.clear_weight_log)
 
-    def set_nutrient_dv(self, nutrient: Nutrient, value=None):
+    def set_nutrient_dv(self, nutrient: meal.Nutrient, value=None):
         """
         Sets the daily nutrient value in grams
         :param nutrient_desc: The nutrient number
@@ -410,25 +411,62 @@ class DBMan:
         cur = self._conn.cursor()
         cur.execute(bignut_queries.get_meal_by_id, (meal_id,))
 
-        return [Food(*x[:3]) for x in cur]
+        return [meal.Food(*x[:3]) for x in cur]
 
 
-    def get_food_preferred_weight(self, food: Food) -> float:
+    def get_food_preferred_weight(self, food: meal.Food) -> meal.Portion:
         """
         :param food: Food that you want to know the preferred weight
         :return: The food's preferred weight in grams
-        :rtype: float
+        :rtype: meal.Portion
         """
         cur = self._conn.cursor()
         cur.execute(bignut_queries.get_food_preferred_weight, (food.ndb_no,))
 
-        return cur.fetchone()[0]
+        return meal.Portion(cur.fetchone()[0])
+
+    def get_food_by_NDB_No(self,
+                           NDB_No,
+                           portion: meal.Portion = None) -> meal.Food:
+        """
+        :param NDB_No: Unique food identifier number
+        :param portion: Specifies the portion of the food, if None
+            the default portion is assumed
+        :return: The food with the NDB_No
+        :rtype: Food
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_food_from_NDB_No,
+                    {'NDB_No': NDB_No})
+
+        data = cur.fetchone()
+        res_food = meal.Food(ndb_no=data[0],
+                        fdgrp_cd=data[1],
+                        long_desc=data[2],
+                        shrt_desc=data[3],
+                        ref_desc=data[4],
+                        refuse=data[5],
+                        portion=portion,
+                        pro_factor=data[6],
+                        fat_factor=data[7],
+                        cho_factor=data[8]
+                       )
+
+        default_portion = None
+        if not portion:
+            res_food.portion = meal.Portion(self
+                                       .get_food_preferred_weight(res_food))
+        return res_food
 
     def set_food_pcf(self,
-                     food: Food,
-                     pcf_nutrient: Nutrient=None,
-                     meal: Meal=None):
+                     food: meal.Food,
+                     pcf_nutrient: meal.Nutrient=None,
+                     meal: meal.Meal=None):
         """
+        Sets the passed food's portion control to the specified pcf_nutrient.
+        If no meal is passed the current meal is assumed
+        To reset the portion control is sufficient to pass a None nutrient
+
         :param food: Food that needs to change the pcf
         :param pcf_nutrient: The nutrient to be set as new pcf
         :param meal: The meal which contains the food
@@ -437,13 +475,14 @@ class DBMan:
             cur = con.cursor()
             query_params = {'NDB_No': food.ndb_no,
                             'meal_id': meal.meal_id if meal else None,
-                            'Nutr_No': pcf_nutrient.nutr_no}
+                            'Nutr_No': pcf_nutrient.nutr_no if pcf_nutrient
+                                else None}
             cur.execute(bignut_queries.set_food_pcf,
                         query_params)
 
     def set_food_amount(self,
-                        food: Food,
-                        meal: Meal=None):
+                        food: meal.Food,
+                        meal: meal.Meal=None):
         """
         :param food: Food to change the amount
         :param meal_id: The meal id, if None defaults to the current meal
@@ -458,9 +497,12 @@ class DBMan:
 
 
     def insert_food_into_meal(self,
-                              food: Food,
-                              meal: Meal=None):
+                              food: meal.Food,
+                              meal: meal.Meal=None):
         """
+        Inserts the passed food into the specified meal. If no meal is
+        passed the current meal is assumed
+
         :param food: Food to insert into the meal
         :param meal: Meal to modify, if None the current meal is assumed
         """
@@ -476,9 +518,12 @@ class DBMan:
                         query_params)
 
     def remove_food_from_meal(self,
-                              food: Food,
-                              meal: Meal=None):
+                              food: meal.Food,
+                              meal: meal.Meal=None):
         """
+        Removes the passed food food from the specified meal. If no meal
+        is passed the current meal is assumed
+
         :param food: Food to remove
         :param meal: Meal to remove the food from, if None the current meal
             is assumed
@@ -490,47 +535,24 @@ class DBMan:
             cur.execute(bignut_queries.remove_food_from_meal,
                         query_params)
 
-    def get_nutrient_name_by_nutr_no(self, nutr_no):
+    def get_nutrient_name_by_nutr_no(self, nutr_no: int) -> str:
         """
         :return: Name of the nutrient specified by nutr_no
         :rtype: str
         """
+        if nutr_no < 0:
+            raise ValueError("nutr_no must be >= 0")
+
         cur = self._conn.cursor()
         cur.execute(bignut_queries.get_nutrient_name, (Nutr_No,))
 
         return str(cur.fetchone()[0])
 
-    def get_food_by_NDB_No(self,
-                           NDB_No,
-                           portion: Portion = Portion()):
-        """
-        :param NDB_No: Unique food identifier number
-        :param portion: Specifies the portion of the food, if None
-            the default portion is assumed
-        :return: The food with the NDB_No
-        :rtype: Food
-        """
-        cur = self._conn.cursor()
-        cur.execute(bignut_queries.get_food_from_NDB_No,
-                    {'NDB_No': NDB_No})
-
-        data = cur.fetchone()
-        return Food(ndb_no=data[0]
-                     fdgrp_cd=data[1]
-                     long_desc=data[2]
-                     shrt_desc=data[3]
-                     ref_desc=data[4]
-                     refuse=data[5]
-                     portion=portion
-                     pro_factor=data[6]
-                     fat_factor=data[7]
-                     cho_factor=data[8]
-                     )
-
+    
     def get_nutrient_story(self,
-                           nutrient: Nutrient,
+                           nutrient: meal.Nutrient,
                            start_date: datetime,
-                           end_date: datetime) -> map:
+                           end_date: datetime) -> Iterator[tuple]:
         """
         Retrieves the story of a nutrient. The story of a nutrient is the
         association between meals and the nutrient's value
@@ -554,10 +576,11 @@ class DBMan:
                         'end_date': end_date.strftime(self.time_format)}
         cur.execute(bignut_queries.get_nutrient_story,
                     query_params)
-        return map(lambda x: (datetime.strptime(str(x[0]), '%Y%m%d'), x[1]),
+        return map(lambda x: (datetime.strptime(str(x[0]),
+                                                self.time_format), x[1]),
                    cur)
 
-    def get_food_nutrients(self, food: Food) -> map:
+    def get_food_nutrients(self, food: meal.Food) -> Iterator[meal.Nutrient]:
         """
         Retrieves the nutrients of a food.
         If a portion of food is not specified it assumes the default portion
@@ -572,7 +595,7 @@ class DBMan:
                     {'NDB_No': food.ndb_no,
                      'Gm_Wgt': food.portion.quantity if food.portion
                         else None})
-        return map(lambda x: Nutrient(nutr_no=x[0],
+        return map(lambda x: meal.Nutrient(nutr_no=x[0],
                                       units=x[1],
                                       tagname=x[2],
                                       nutr_desc=[3],

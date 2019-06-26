@@ -3,7 +3,8 @@ gi.require_version('Gtk', '3.0')
 import gettext
 import logging
 from pprint import pformat
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import List, Any
 
 _ = gettext.gettext
 
@@ -15,6 +16,9 @@ class Portion:
     """
     quantity: float = None
     unit: str = 'g'
+
+    def __str__(self):
+        return f"{self.quantity:5.2f} {self.unit}"
 
 
 @dataclass
@@ -36,15 +40,21 @@ class Nutrient:
     nutr_desc: str
     dv_default: float
     nut_opt: float
-    __db: DBMan
+    __db: Any
+
+    @property
+    def nut_opt(self) -> float:
+        return self.nut_opt
 
     @nut_opt.setter
-    def set_nut_opt(self, new_value=None):
+    def nut_opt(self, new_value: float = None):
         """
         Sets the daily nutrient value in grams
         :param nutrient_desc: The nutrient number
         :param value: The new daily value, if None the limit is removed
         """
+        if new_value < 0:
+            raise ValueError("The new daily value must be >= 0 or None")
         self.__db.set_nutrient_dv(self, new_value)
 
 
@@ -67,7 +77,7 @@ class Food:
     nutrients: List[Nutrient] = field(default_factory=list)
     pcf_nutrient: Nutrient = None
     macro_pct: tuple
-    __db: DBMan
+    __db: Any
     meal: Meal = None
 
     @property
@@ -88,7 +98,8 @@ class Food:
         self.pcf_nutrient = new_pcf_nutrient
         self.__db.set_food_pcf()
 
-
+    def get_preferred_weight(self) -> Portion:
+        return self.__db.get_food_preferred_weight(self)
 
 @dataclass
 class Meal:
@@ -99,7 +110,7 @@ class Meal:
     """
     meal_id: int
     _foods: List[Food] = field(default_factory=list)
-    __db: DBMan
+    __db: Any
 
     def add_food(self, food: Food):
         self.__db.insert_food_into_meal(food, self)
@@ -109,6 +120,7 @@ class Meal:
 
     def analyze(self):
         raise NotImplementedError
+
 
 class Analysis():
     # To allow for dynamic updates a nutrient:GTKModelIterator dictionary
