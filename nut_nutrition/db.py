@@ -3,7 +3,7 @@ import logging
 import os
 from appdirs import user_data_dir
 from datetime import datetime
-from typing import Iterator
+from typing import Iterator, Tuple
 from utils import download_usda_and_unzip, cleanup_usda
 import bignut_queries
 import meal
@@ -107,7 +107,7 @@ class DBMan:
         return cur.fetchone()
 
     @property
-    def weight_summary(self):
+    def weight_summary(self) -> str:
         """
         :return: The weight log summary
         :rtype: Str
@@ -117,7 +117,7 @@ class DBMan:
         return cur.fetchone()[0]
 
     @property
-    def last_weight(self):
+    def last_weight(self) -> float:
         """
         :return: The last weight
         :rtype: float
@@ -131,7 +131,7 @@ class DBMan:
             return 0
 
     @property
-    def last_bodyfat(self):
+    def last_bodyfat(self) -> float:
         """
         :return: The last bodyfat
         :rtype: float
@@ -145,23 +145,21 @@ class DBMan:
             return 0
 
     @property
-    def defined_nutrients(self):
+    def defined_nutrients(self): -> Iterator
         """
-        Selects
-        Nutr_No|Units|Tagname|NutrDesc|dv_default|nutopt
-        from nutr_def
+        Retrieves all the nutrients saved in the database
 
         :return: A list of Nutrient objects
-        :rtype: list
+        :rtype: Iterator
         """
         cur = self._conn.cursor()
         cur.execute(bignut_queries.get_defined_nutrients)
-        return [meal.Nutrient(nutr_no=nut[0],
-                         units=nut[1],
-                         tagname=nut[2],
-                         nutr_desc=[3],
-                         dv_default=nut[4],
-                         nut_opt=nut[5]) for nut in cur]
+        return map(lambda nut: meal.Nutrient(nutr_no=nut[0],
+                                             units=nut[1],
+                                             tagname=nut[2],
+                                             nutr_desc=[3],
+                                             dv_default=nut[4],
+                                             nut_opt=nut[5]), cur)
 
     @property
     def am_analysis_meal_no(self) -> int:
@@ -220,16 +218,17 @@ class DBMan:
         return meal
 
     @current_meal.setter
-    def current_meal(self, meal_id):
+    def current_meal(self, meal: meal.Meal):
         """
-        :param date: A datetime object that contains the meal's datetime
-        :param meal_no: The day meal number (first meal is 1)
+        Sets the current meal to `meal`
+
+        :param meal: Meal object that containes the current meals
         """
 
         with self._conn as con:
             cur = con.cursor()
             cur.execute(bignut_queries.set_current_meal,
-                        (meal_id,))
+                        (meal.meal_id,))
 
 
     @property
@@ -243,16 +242,16 @@ class DBMan:
         return cur.fetchone()[0]
 
     @property
-    def current_meal_menu(self):
+    def current_meal_menu(self) -> Iterator:
         """
         :return: The current meal menu
-        :rtype: cursor
+        :rtype: Iterator
         """
         cur = self._conn.cursor()
         cur.execute(bignut_queries.get_current_meal_food)
         return cur
 
-    def get_meal_from_offset_rel_to_current(self, offset):
+    def get_meal_from_offset_rel_to_current(self, offset: int) -> meal.Meal:
         """
         :return: The meal id in this format %Y%m%d%meal_no
                  the current meal if none is found
@@ -261,16 +260,17 @@ class DBMan:
         cur = self._conn.cursor()
         cur.execute(bignut_queries.get_meal_from_offset_rel_to_current,
                     (offset, ))
-        meal = cur.fetchone()
+        data = cur.fetchone()
+
         if meal:
-            return meal[0]
+            return meal.Meal(data[0])
         else:
             return self.current_meal
 
     @property
-    def macro_pct(self):
+    def macro_pct(self) -> Tuple:
         """
-        :return: The macro percents in this format (carbs,protein,fat)
+        :return: The macro percents in this format (carbs, protein, fat)
         :rtype: Tuple
         """
         cur = self._conn.cursor()
@@ -279,9 +279,9 @@ class DBMan:
         return tuple(pcts.split('/'))
 
     @property
-    def omega6_3_balance(self):
+    def omega6_3_balance(self) -> Tuple:
         """
-        :return: The omega-6/3 balance in this format (Omega6,Omega3)
+        :return: The omega-6/3 balance in this format (Omega6, Omega3)
         :rtype: Tuple
         """
         cur = self._conn.cursor()
@@ -290,9 +290,9 @@ class DBMan:
         return tuple(bal.replace(" ", "").split('/'))
 
     @property
-    def settings_omega6_3_balance(self):
+    def settings_omega6_3_balance(self) -> Tuple:
         """
-        :return: The omega-6/3 balance in this format (Omega6,Omega3) from
+        :return: The omega-6/3 balance in this format (Omega6, Omega3) from
             personal settings
         :rtype: Tuple
         """
@@ -306,7 +306,6 @@ class DBMan:
         """
         :param data: A tuple that contains the omega6 and omega3 ratio
         """
-
 
 
     @property

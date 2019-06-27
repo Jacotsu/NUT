@@ -1,0 +1,3 @@
+[run]
+omit = tests/*
+       nut_nutrition/GTK_gui.py

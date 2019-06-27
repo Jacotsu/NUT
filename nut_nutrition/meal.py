@@ -40,7 +40,7 @@ class Nutrient:
     nutr_desc: str
     dv_default: float
     nut_opt: float
-    __db: Any
+#    __db: Any
 
     @property
     def nut_opt(self) -> float:
@@ -69,32 +69,35 @@ class Food:
     shrt_desc: str
     ref_desc: str
     refuse: float
-    # Can be None
-    portion: Portion
+    portion: Portion # Can be None
     pro_factor: float
     fat_factor: float
     cho_factor: float
+    macro_pct: tuple
+#    __db: Any
+#    meal: Meal = None
     nutrients: List[Nutrient] = field(default_factory=list)
     pcf_nutrient: Nutrient = None
-    macro_pct: tuple
-    __db: Any
-    meal: Meal = None
 
     @property
     def nutrients(self):
         return self.__db.get_food_nutrients(self)
 
+    @property
+    def portion(self):
+        return self.portion
 
-    @amount.setter
-    def set_amount(self, new_amount: float):
-        if new_amount >= 0:
-            self.amount = new_amount
-            self.__db.set_food_amount(self, self.meal)
-        else:
-            raise ValueError("The new amount must be >= 0")
+    @portion.setter
+    def portion(self, new_portion: Portion):
+        self.portion = new_portion
+        self.__db.set_food_amount(self, self.meal)
+
+    @property
+    def pcf_nutrient(self):
+        return self.pcf_nutrient
 
     @pcf_nutrient.setter
-    def set_amount(self, new_pcf_nutrient: Nutrient):
+    def pcf_nutrient(self, new_pcf_nutrient: Nutrient):
         self.pcf_nutrient = new_pcf_nutrient
         self.__db.set_food_pcf()
 
@@ -109,8 +112,8 @@ class Meal:
     :param foods: List of foods in meal
     """
     meal_id: int
+#    __db: Any
     _foods: List[Food] = field(default_factory=list)
-    __db: Any
 
     def add_food(self, food: Food):
         self.__db.insert_food_into_meal(food, self)
