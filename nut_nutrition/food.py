@@ -1,0 +1,60 @@
+import gettext
+import logging
+from pprint import pformat
+from dataclasses import dataclass, field
+from typing import List, Any
+import db
+import portion
+import nutrient
+
+_ = gettext.gettext
+
+
+@dataclass
+class Food:
+    """
+    Class that represents a single food
+    """
+    ndb_no: int
+    fdgrp_cd: int
+    long_desc: str
+    shrt_desc: str
+    ref_desc: str
+    refuse: float
+    # Can be None
+    pro_factor: float
+    fat_factor: float
+    cho_factor: float
+    macro_pct: tuple
+    __db: Any
+    portion: portion.Portion
+    __meal: Any = None
+    nutrients: List[nutrient.Nutrient] = field(default_factory=list)
+    pcf_nutrient: nutrient.Nutrient = None
+
+    @property
+    def nutrients(self):
+        return self.__db.get_food_nutrients(self)
+
+    @property
+    def portion(self):
+        return self.portion
+
+    @portion.setter
+    def portion(self, new_portion: portion.Portion):
+        self.portion = new_portion
+        self.__db.set_food_amount(self, self.meal)
+
+    @property
+    def pcf_nutrient(self):
+        return self.pcf_nutrient
+
+    @pcf_nutrient.setter
+    def pcf_nutrient(self, new_pcf_nutrient: nutrient.Nutrient):
+        self.pcf_nutrient = new_pcf_nutrient
+        self.__db.set_food_pcf()
+
+    def get_preferred_weight(self) -> portion.Portion:
+        return self.__db.get_food_preferred_weight(self)
+
+

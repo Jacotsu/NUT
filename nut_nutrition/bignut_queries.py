@@ -16,6 +16,32 @@ SET nutopt =
 WHERE Nutr_No = :Nutr_No;
 '''
 
+# gets the specified field from the database
+# the field can be one of the following
+# Units, Tagname, NutrDesc, dv_default, nutopt
+get_nutrient_field_by_nutr_no = '''
+SELECT {field}
+FROM nutr_def
+WHERE Nutr_No = :Nutr_No;
+'''
+
+# gets the specified field from the database
+# the field can be one of the following
+# Units, Tagname, NutrDesc, dv_default, nutopt
+set_nutrient_field_by_nutr_no = '''
+UPDATE nutr_def
+SET {field} =
+    CASE WHEN :field_val IS NOT NULL THEN
+        :field_val
+    ELSE
+        0
+    END
+WHERE Nutr_No = :Nutr_No;
+'''
+
+
+
+
 set_number_of_meals_to_analyze = 'UPDATE options SET defanal_am = ?;'
 get_number_of_meals_to_analyze = 'SELECT defanal_am FROM options;'
 # to implement
@@ -234,6 +260,13 @@ ORDER BY nutrient DESC;
 '''
 
 get_nutrient_name = 'SELECT NutrDesc FROM nutr_def WHERE Nutr_No = ?;'
+
+
+get_nutrient_by_nutr_no = '''
+SELECT Tagname, NutrDesc, dv_default, Units, nutopt
+FROM nutr_def
+WHERE Nutri_No = :Nutr_No
+'''
 
 
 get_meal_by_id = 'SELECT * FROM mealfoods WHERE meal_id = ?'

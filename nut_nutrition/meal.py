@@ -5,104 +5,11 @@ import logging
 from pprint import pformat
 from dataclasses import dataclass, field
 from typing import List, Any
+import db
+import food
 
 _ = gettext.gettext
 
-
-@dataclass
-class Portion:
-    """
-    Class that represents a portion
-    """
-    quantity: float = None
-    unit: str = 'g'
-
-    def __str__(self):
-        return f"{self.quantity:5.2f} {self.unit}"
-
-
-@dataclass
-class Nutrient:
-    """
-    Class that represents a single nutrient
-    :param nutr_no: Unique nutrient number
-    :param units: Weight measure unit of the nutrient
-    :param quantity: Quantity of nutrient
-    :param tagname: Unique short nutrient tag
-    :param nutr_desc: Description of the nutrient
-    :param dv_default: Default daily value of the nutrient
-    :param nut_opt: User's selected daily value
-    """
-    nutr_no: int
-    # Can be None
-    portion: Portion
-    tagname: str
-    nutr_desc: str
-    dv_default: float
-    nut_opt: float
-#    __db: Any
-
-    @property
-    def nut_opt(self) -> float:
-        return self.nut_opt
-
-    @nut_opt.setter
-    def nut_opt(self, new_value: float = None):
-        """
-        Sets the daily nutrient value in grams
-        :param nutrient_desc: The nutrient number
-        :param value: The new daily value, if None the limit is removed
-        """
-        if new_value < 0:
-            raise ValueError("The new daily value must be >= 0 or None")
-        self.__db.set_nutrient_dv(self, new_value)
-
-
-@dataclass
-class Food:
-    """
-    Class that represents a single food
-    """
-    ndb_no: int
-    fdgrp_cd: int
-    long_desc: str
-    shrt_desc: str
-    ref_desc: str
-    refuse: float
-    portion: Portion # Can be None
-    pro_factor: float
-    fat_factor: float
-    cho_factor: float
-    macro_pct: tuple
-#    __db: Any
-#    meal: Meal = None
-    nutrients: List[Nutrient] = field(default_factory=list)
-    pcf_nutrient: Nutrient = None
-
-    @property
-    def nutrients(self):
-        return self.__db.get_food_nutrients(self)
-
-    @property
-    def portion(self):
-        return self.portion
-
-    @portion.setter
-    def portion(self, new_portion: Portion):
-        self.portion = new_portion
-        self.__db.set_food_amount(self, self.meal)
-
-    @property
-    def pcf_nutrient(self):
-        return self.pcf_nutrient
-
-    @pcf_nutrient.setter
-    def pcf_nutrient(self, new_pcf_nutrient: Nutrient):
-        self.pcf_nutrient = new_pcf_nutrient
-        self.__db.set_food_pcf()
-
-    def get_preferred_weight(self) -> Portion:
-        return self.__db.get_food_preferred_weight(self)
 
 @dataclass
 class Meal:
@@ -112,17 +19,25 @@ class Meal:
     :param foods: List of foods in meal
     """
     meal_id: int
-#    __db: Any
-    _foods: List[Food] = field(default_factory=list)
+    __db: Any
+    __foods: List[food.Food] = field(default_factory=list)
 
-    def add_food(self, food: Food):
+    @property
+    def foods(self):
+        return self.__foods
+
+    def add_food(self, food: food.Food):
         self.__db.insert_food_into_meal(food, self)
 
-    def remove_food(self, food: Food):
+    def remove_food(self, food: food.Food):
         self.__db.remove_food_from_meal(food, self)
 
     def analyze(self):
         raise NotImplementedError
+
+    def __str__(self):
+        nl_separated_food = '\n'.join(self._foods)
+        return f"Meal id: {self.meal_id} {nl_separated_food}"
 
 
 class Analysis():
