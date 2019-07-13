@@ -14,14 +14,18 @@ appname = 'nut_nutrition'
 
 
 class DBMan:
-    def __init__(self, db_name=os.path.join(user_data_dir(appname),
-                                            'nut.db')):
-        os.makedirs(user_data_dir(appname), exist_ok=True)
-        try:
-            self._conn = sqlite3.connect(db_name)
-            self._conn.text_factory = self.decode_non_UTF_strings
-        except sqlite3.Error as e:
-            logging.error(e)
+    def __init__(self,
+                 db_name=os.path.join(user_data_dir(appname), 'nut.db'),
+                 db_conn=None):
+        if db_conn:
+            self._conn = db_conn
+        else:
+            os.makedirs(user_data_dir(appname), exist_ok=True)
+            try:
+                self._conn = sqlite3.connect(db_name)
+                self._conn.text_factory = self.decode_non_UTF_strings
+            except sqlite3.Error as e:
+                logging.error(e)
 
         self.time_format = "%Y%m%d"
 
@@ -37,6 +41,9 @@ class DBMan:
             except sqlite3.OperationalError:
                 logging.warning('Database empty or corrupted initializing'
                                 ' a new one')
+
+                cur.executescript(bignut_queries.create_table_structure)
+
                 # Loads the USDA and initializes the logic
                 download_usda_and_unzip(user_data_dir(appname))
                 self.load_db(user_data_dir(appname))
@@ -98,76 +105,6 @@ class DBMan:
         cur.execute(bignut_queries.get_am_analysis_period)
         return cur.fetchone()
 
-    @property
-    def weight_summary(self) -> str:
-        """
-        :return: The weight log summary
-        :rtype: Str
-        """
-        cur = self._conn.cursor()
-        cur.execute(bignut_queries.get_weight_summary)
-        return cur.fetchone()[0]
-
-    @property
-    def last_weight(self) -> float:
-        """
-        :return: The last weight
-        :rtype: float
-        """
-        cur = self._conn.cursor()
-        cur.execute(bignut_queries.get_last_weight)
-        try:
-            return cur.fetchone()[0]
-        except TypeError:
-            # If there are no last weights return 0
-            return 0
-
-    @property
-    def last_bodyfat(self) -> float:
-        """
-        :return: The last bodyfat
-        :rtype: float
-        """
-        cur = self._conn.cursor()
-        cur.execute(bignut_queries.get_last_bodyfat)
-        try:
-            return cur.fetchone()[0]
-        except TypeError:
-            # If there are no last bodyfat return 0
-            return 0
-
-    @property
-    def defined_nutrients(self) -> Iterator:
-        """
-        Retrieves all the nutrients saved in the database
-
-        :return: A list of meal.Nutrient objects
-        :rtype: Iterator
-        """
-        cur = self._conn.cursor()
-        cur.execute(bignut_queries.get_defined_nutrients)
-        return map(lambda nut: nutrient.Nutrient(nut[0], self))
-
-    @property
-    def am_analysis_meal_no(self) -> int:
-        """
-        :return: The number of meals that will be analyzed
-        :rtype: int
-        """
-        cur = self._conn.cursor()
-        cur.execute(bignut_queries.get_number_of_meals_to_analyze)
-        no = cur.fetchone()[0]
-        return no
-
-    @am_analysis_meal_no.setter
-    def am_analysis_meal_no(self, number_of_meals):
-        """
-        :param number_of_meals: The number of meals to set
-        """
-        with self._conn as con:
-            cur = con.cursor()
-            cur.execute(bignut_queries.set_number_of_meals_to_analyze,
-                        (number_of_meals,))
 
     def get_day_meals(self, day):
         raise NotImplementedError
@@ -253,28 +190,7 @@ class DBMan:
         :param data: A tuple that contains the omega6 and omega3 ratio
         """
 
-
-    @property
-    def food_list(self):
-        """
-        :return: The food's list
-        :rtype: Iterator of tuples
-        """
-        cur = self._conn.cursor()
-        cur.execute(bignut_queries.get_food_list)
-        return cur
-
-    @property
-    def food_groups(self):
-        """
-        :return: The defined food groups as (FdGrp_Cd, FdGrp_Desc)
-        :rtype: Iterator of tuples
-        """
-        cur = self._conn.cursor()
-        cur.execute(bignut_queries.get_food_groups)
-        return cur
-
-#    @property
+    #    @property
 #    def current_meal(self) -> meal.Meal:
 #        """
 #        :return: The meal object
@@ -307,6 +223,29 @@ class DBMan:
             logging.error(decoded)
             logging.error(decode_error)
             return decoded
+
+# ----------------------------[ANALYSIS MANAGEMENT]----------------------------
+    @property
+    def am_analysis_meal_no(self) -> int:
+        """
+        :return: The number of meals that will be analyzed
+        :rtype: int
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_number_of_meals_to_analyze)
+        no = cur.fetchone()[0]
+        return no
+
+    @am_analysis_meal_no.setter
+    def am_analysis_meal_no(self, number_of_meals):
+        """
+        :param number_of_meals: The number of meals to set
+        """
+        with self._conn as con:
+            cur = con.cursor()
+            cur.execute(bignut_queries.set_number_of_meals_to_analyze,
+                        (number_of_meals,))
+
 
 #------------------------------[MEAL MANAGEMENT]-------------------------------
 
@@ -376,7 +315,28 @@ class DBMan:
 #        else:
 #            return self.current_meal
 
-#----------------------------[FOOD MANAGEMENT]---------------------------------
+# ---------------------------[FOOD MANAGEMENT]---------------------------------
+    @property
+    def food_list(self):
+        """
+        :return: The food's list
+        :rtype: Iterator of tuples
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_food_list)
+        return cur
+
+    @property
+    def food_groups(self):
+        """
+        :return: The defined food groups as (FdGrp_Cd, FdGrp_Desc)
+        :rtype: Iterator of tuples
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_food_groups)
+        return cur
+
+
 
     def get_ranked_foods(self, Nutr_val, rank_choice=0, FdGrp_Cd=0):
         """
@@ -509,7 +469,44 @@ class DBMan:
 #
 #
 
-#--------------------------[WEIGHT LOG MANAGEMENT]-----------------------------
+# -------------------------[WEIGHT LOG MANAGEMENT]-----------------------------
+    @property
+    def weight_summary(self) -> str:
+        """
+        :return: The weight log summary
+        :rtype: Str
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_weight_summary)
+        return cur.fetchone()[0]
+
+    @property
+    def last_weight(self) -> float:
+        """
+        :return: The last weight
+        :rtype: float
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_last_weight)
+        try:
+            return cur.fetchone()[0]
+        except TypeError:
+            # If there are no last weights return 0
+            return 0
+
+    @property
+    def last_bodyfat(self) -> float:
+        """
+        :return: The last bodyfat
+        :rtype: float
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_last_bodyfat)
+        try:
+            return cur.fetchone()[0]
+        except TypeError:
+            # If there are no last bodyfat return 0
+            return 0
 
     def get_weight_log(self):
         """
@@ -542,6 +539,18 @@ class DBMan:
             cur.execute(bignut_queries.clear_weight_log)
 
 # -------------------------[NUTRIENT MANAGEMENT]-------------------------------
+
+    @property
+    def defined_nutrients(self) -> Iterator:
+        """
+        Retrieves all the nutrients saved in the database
+
+        :return: A list of meal.Nutrient objects
+        :rtype: Iterator
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_defined_nutrients)
+        return map(lambda nut: nutrient.Nutrient(nut[0], self), cur)
 
     def set_nutrient_field(self,
                            nutrient: nutrient.Nutrient,
@@ -608,57 +617,56 @@ class DBMan:
             raise Exception(f"{field} is invalid, programmers error or"
                             " injection attempt")
 
+    def get_nutrient_by_nutr_no(self, nutr_no: int) -> nutrient.Nutrient:
+        """
+        :param nutr_no: Nutrient number
+        :return: Name of the nutrient specified by nutr_no
+        :rtype: Nutrient
+        """
+        if nutr_no < 0:
+            raise ValueError("nutr_no must be >= 0")
 
-#    def get_nutrient_by_nutr_no(self, nutr_no: int) -> meal.Nutrient:
-#        """
-#        :param nutr_no: Nutrient number
-#        :return: Name of the nutrient specified by nutr_no
-#        :rtype: Nutrient
-#        """
-#        if nutr_no < 0:
-#            raise ValueError("nutr_no must be >= 0")
-#
-#        cur = self._conn.cursor()
-#        cur.execute(bignut_queries.get_nutrient_field_by_nutr_no,
-#                    {'field': 'Tagname',
-#                     'Nutr_No': nutr_no})
-#
-#        data = cur.fetchone()
-#        if data:
-#            return nutrient.Nutrient(nutr_no, self)
-#        else:
-#            raise Exception(f"Nutrient {nutr_no} not found in database!")
-#
-#    def get_nutrient_story(self,
-#                           nutrient: meal.Nutrient,
-#                           start_date: datetime,
-#                           end_date: datetime) -> Iterator[tuple]:
-#        """
-#        Retrieves the story of a nutrient. The story of a nutrient is the
-#        association between meals and the nutrient's value
-#
-#        :param nutrient: The nutrient number that you want to fetch the story
-#            from
-#        :param start_date: The start date
-#        :param end_date: The end date
-#        :return: An iterable of the following tuples
-#            (meal_id, nutrient_value)
-#        :rtype: map
-#        """
-#        if start_date > end_date:
-#            raise ValueError("The start date must be before the end date")
-#        if end_date < start_date:
-#            raise ValueError("The end date must be after the start date")
-#
-#        cur = self._conn.cursor()
-#        query_params = {'Nutr_No': nutrient.nutr_no,
-#                        'start_date': start_date.strftime(self.time_format),
-#                        'end_date': end_date.strftime(self.time_format)}
-#        cur.execute(bignut_queries.get_nutrient_story,
-#                    query_params)
-#        return map(lambda x: (datetime.strptime(str(x[0]),
-#                                                self.time_format), x[1]),
-#                   cur)
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_nutrient_field_by_nutr_no,
+                    {'field': 'Tagname',
+                     'Nutr_No': nutr_no})
+
+        data = cur.fetchone()
+        if data:
+            return nutrient.Nutrient(nutr_no, self)
+        else:
+            raise Exception(f"Nutrient {nutr_no} not found in database!")
+
+    def get_nutrient_story(self,
+                           nutrient: nutrient.Nutrient,
+                           start_date: datetime,
+                           end_date: datetime) -> Iterator[tuple]:
+        """
+        Retrieves the story of a nutrient. The story of a nutrient is the
+        association between meals and the nutrient's value
+
+        :param nutrient: The nutrient number that you want to fetch the story
+            from
+        :param start_date: The start date
+        :param end_date: The end date
+        :return: An iterable of the following tuples
+            (meal_id, nutrient_value)
+        :rtype: map
+        """
+        if start_date > end_date:
+            raise ValueError("The start date must be before the end date")
+        if end_date < start_date:
+            raise ValueError("The end date must be after the start date")
+
+        cur = self._conn.cursor()
+        query_params = {'Nutr_No': nutrient.nutr_no,
+                        'start_date': start_date.strftime(self.time_format),
+                        'end_date': end_date.strftime(self.time_format)}
+        cur.execute(bignut_queries.get_nutrient_story,
+                    query_params)
+        return map(lambda x: (datetime.strptime(str(x[0]),
+                                                self.time_format), x[1]),
+                   cur)
 
 #----------------------------[DB MANAGEMENT]----------------------------------
 
