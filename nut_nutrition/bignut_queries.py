@@ -642,8 +642,6 @@ DROP TRIGGER IF EXISTS theusual_delete;
 DROP TRIGGER IF EXISTS autocal_cutting;
 DROP TRIGGER IF EXISTS autocal_bulking;
 DROP TRIGGER IF EXISTS autocal_cycle_end;
-
-
 DROP TRIGGER IF EXISTS autocal_initialization;
 DROP TRIGGER IF EXISTS rm_analysis_trigger;
 DROP TRIGGER IF EXISTS am_dv_trigger;
@@ -662,8 +660,6 @@ DROP TRIGGER IF EXISTS insert_weight_seq;
 DROP TRIGGER IF EXISTS wlog_insert;
 DROP TRIGGER IF EXISTS clear_wlsummary;
 DROP TRIGGER IF EXISTS mpd_archive;
-
-
 DROP TRIGGER IF EXISTS am_analysis_header_trigger;
 DROP TRIGGER IF EXISTS rm_analysis_header_trigger;
 DROP TRIGGER IF EXISTS am_analysis_minus_currentmeal_trigger;
@@ -694,8 +690,6 @@ DROP VIEW IF EXISTS daily_macros;
 DROP VIEW IF EXISTS ranalysis;
 DROP VIEW IF EXISTS analysis;
 DROP VIEW IF EXISTS cm_string;
-
-
 DROP view IF EXISTS am_analysis;
 DROP view IF EXISTS z_pcf;
 """
@@ -716,6 +710,7 @@ DROP TABLE IF EXISTS rm_dv;
 DROP TABLE IF EXISTS z_trig_ctl;
 DROP TABLE IF EXISTS z_vars4;
 """
+
 create_analysis_triggers = """
 CREATE TRIGGER am_analysis_header_trigger
 AFTER UPDATE OF am_analysis_header ON z_trig_ctl
@@ -1243,61 +1238,6 @@ COMMIT;
 db_load_pt1 = """
 BEGIN;
 
-CREATE temp TABLE ttnutr_def
-  (
-     nutr_no  TEXT,
-     units    TEXT,
-     tagname  TEXT,
-     nutrdesc TEXT,
-     num_dec  TEXT,
-     sr_order INT
-  );
-
-CREATE temp TABLE tnutr_def
-  (
-     nutr_no    INT PRIMARY KEY,
-     units      TEXT,
-     tagname    TEXT,
-     nutrdesc   TEXT,
-     dv_default REAL,
-     nutopt     REAL
-  );
-
-CREATE temp TABLE tfd_group
-  (
-     fdgrp_cd   INT,
-     fdgrp_desc TEXT
-  );
-
-CREATE temp TABLE tfood_des
-  (
-     ndb_no      TEXT,
-     fdgrp_cd    TEXT,
-     lONg_desc   TEXT,
-     shrt_desc   TEXT,
-     comname     TEXT,
-     manufacname TEXT,
-     survey      TEXT,
-     ref_desc    TEXT,
-     refuse      INTEGER,
-     sciname     TEXT,
-     n_factor    REAL,
-     pro_factor  REAL,
-     fat_factor  REAL,
-     cho_factor  REAL
-  );
-
-CREATE temp TABLE tweight
-  (
-     ndb_no     TEXT,
-     seq        TEXT,
-     amount     REAL,
-     msre_desc  TEXT,
-     gm_wgt     REAL,
-     num_data_p INT,
-     std_dev    REAL
-  );
-
 CREATE temp TABLE zweight
   (
      ndb_no     INT,
@@ -1310,27 +1250,6 @@ CREATE temp TABLE zweight
      PRIMARY KEY(ndb_no, origseq)
   );
 
-CREATE temp TABLE tnut_data
-  (
-     ndb_no        TEXT,
-     nutr_no       TEXT,
-     nutr_val      REAL,
-     num_data_pts  INT,
-     std_error     REAL,
-     src_cd        TEXT,
-     deriv_cd      TEXT,
-     ref_ndb_no    TEXT,
-     add_nutr_mark TEXT,
-     num_studies   INT,
-     min           REAL,
-     max           REAL,
-     df            INT,
-     low_eb        REAL,
-     up_eb         REAL,
-     stat_cmt      TEXT,
-     addmod_date   TEXT,
-     cc            TEXT
-  );
 """
 
 init_tables = """
@@ -1468,10 +1387,98 @@ CREATE TABLE IF NOT EXISTS z_wl
   );
 """
 
-load_nutrients = """
-INSERT INTO tnutr_def
-SELECT * FROM nutr_def;
+usda_load_init_tables = """
+CREATE TEMP TABLE tfd_group
+  (
+     fdgrp_cd   INT,
+     fdgrp_desc TEXT
+  );
 
+CREATE TEMP TABLE tfood_des
+  (
+     ndb_no      TEXT,
+     fdgrp_cd    TEXT,
+     lONg_desc   TEXT,
+     shrt_desc   TEXT,
+     comname     TEXT,
+     manufacname TEXT,
+     survey      TEXT,
+     ref_desc    TEXT,
+     refuse      INTEGER,
+     sciname     TEXT,
+     n_factor    REAL,
+     pro_factor  REAL,
+     fat_factor  REAL,
+     cho_factor  REAL
+  );
+
+CREATE TEMP TABLE tweight
+  (
+     ndb_no     TEXT,
+     seq        TEXT,
+     amount     REAL,
+     msre_desc  TEXT,
+     gm_wgt     REAL,
+     num_data_p INT,
+     std_dev    REAL
+  );
+
+CREATE TEMP TABLE tnut_data
+  (
+     ndb_no        TEXT,
+     nutr_no       TEXT,
+     nutr_val      REAL,
+     num_data_pts  INT,
+     std_error     REAL,
+     src_cd        TEXT,
+     deriv_cd      TEXT,
+     ref_ndb_no    TEXT,
+     add_nutr_mark TEXT,
+     num_studies   INT,
+     min           REAL,
+     max           REAL,
+     df            INT,
+     low_eb        REAL,
+     up_eb         REAL,
+     stat_cmt      TEXT,
+     addmod_date   TEXT,
+     cc            TEXT
+  );
+
+
+
+CREATE TEMP TABLE ttnutr_def
+  (
+     nutr_no  TEXT,
+     units    TEXT,
+     tagname  TEXT,
+     nutrdesc TEXT,
+     num_dec  TEXT,
+     sr_order INT
+  );
+
+CREATE TEMP TABLE tnutr_def
+  (
+     nutr_no    INT PRIMARY KEY,
+     units      TEXT,
+     tagname    TEXT,
+     nutrdesc   TEXT,
+     dv_default REAL,
+     nutopt     REAL
+  );
+"""
+
+usda_load_init_triggers = """
+-- Call after tables
+
+"""
+
+usda_load_food_group = """
+"""
+
+usda_load_init = """
+
+-- Remove tildes from USDA
 INSERT OR IGNORE
 INTO   tnutr_def
 SELECT TRIM(nutr_no, '~'),
@@ -1482,894 +1489,219 @@ SELECT TRIM(nutr_no, '~'),
        NULL
 FROM ttnutr_def;
 
-UPDATE tnutr_def
-SET Tagname = 'ADPROT'
-WHERE Nutr_No = 257;
 
-UPDATE tnutr_def
-SET Tagname = 'VITD_BOTH'
-WHERE Nutr_No = 328;
 
-UPDATE tnutr_def
-SET Tagname = 'LUT_ZEA'
-WHERE Nutr_No = 338;
-
-UPDATE tnutr_def
-SET Tagname = 'VITE_ADDED'
-WHERE Nutr_No = 573;
-
-UPDATE tnutr_def
-SET Tagname = 'VITB12_ADDED'
-WHERE Nutr_No = 578;
-
-UPDATE tnutr_def
-SET Tagname = 'F22D1T'
-WHERE Nutr_No = 664;
-
-UPDATE tnutr_def
-SET Tagname = 'F18D2T'
-WHERE Nutr_No = 665;
-
-UPDATE tnutr_def
-SET Tagname = 'F18D2I'
-WHERE Nutr_No = 666;
-
-UPDATE tnutr_def
-SET Tagname = 'F22D1C'
-WHERE Nutr_No = 676;
-
-UPDATE tnutr_def
-SET Tagname = 'F18D3I'
-WHERE Nutr_No = 856;
-
--- comment out the next statement if you want to hassle
--- the non-ascii micro char
-UPDATE tnutr_def
-SET Units = 'mcg'
-WHERE HEX(Units) = 'B567';
-
-UPDATE tnutr_def
-SET Units = 'kc'
-WHERE Nutr_No = 208;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Protein'
-WHERE Nutr_No = 203;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Total Fat'
-WHERE Nutr_No = 204;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Total Carb'
-WHERE Nutr_No = 205;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Ash'
-WHERE Nutr_No = 207;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Calories'
-WHERE Nutr_No = 208;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Starch'
-WHERE Nutr_No = 209;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Sucrose'
-WHERE Nutr_No = 210;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Glucose'
-WHERE Nutr_No = 211;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Fructose'
-WHERE Nutr_No = 212;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Lactose'
-WHERE Nutr_No = 213;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Maltose'
-WHERE Nutr_No = 214;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Ethyl Alcohol'
-WHERE Nutr_No = 221;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Water'
-WHERE Nutr_No = 255;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Adj. Protein'
-WHERE Nutr_No = 257;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Caffeine'
-WHERE Nutr_No = 262;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Theobromine'
-WHERE Nutr_No = 263;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Sugars'
-WHERE Nutr_No = 269;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Galactose'
-WHERE Nutr_No = 287;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Fiber'
-WHERE Nutr_No = 291;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Calcium'
-WHERE Nutr_No = 301;
-
-UPDATE tnutr_def
-SET NutrDesc = 'IrON'
-WHERE Nutr_No = 303;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Magnesium'
-WHERE Nutr_No = 304;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Phosphorus'
-WHERE Nutr_No = 305;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Potassium'
-WHERE Nutr_No = 306;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Sodium'
-WHERE Nutr_No = 307;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Zinc'
-WHERE Nutr_No = 309;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Copper'
-WHERE Nutr_No = 312;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Fluoride'
-WHERE Nutr_No = 313;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Manganese'
-WHERE Nutr_No = 315;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Selenium'
-WHERE Nutr_No = 317;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Vit. A, IU'
-WHERE Nutr_No = 318;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Retinol'
-WHERE Nutr_No = 319;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Vitamin A'
-WHERE Nutr_No = 320;
-
-UPDATE tnutr_def
-SET NutrDesc = 'B-Carotene'
-WHERE Nutr_No = 321;
-
-UPDATE tnutr_def
-SET NutrDesc = 'A-Carotene'
-WHERE Nutr_No = 322;
-
-UPDATE tnutr_def
-SET NutrDesc = 'A-Tocopherol'
-WHERE Nutr_No = 323;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Vit. D, IU'
-WHERE Nutr_No = 324;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Vitamin D2'
-WHERE Nutr_No = 325;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Vitamin D3'
-WHERE Nutr_No = 326;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Vitamin D'
-WHERE Nutr_No = 328;
-
-UPDATE tnutr_def
-SET NutrDesc = 'B-Cryptoxanth.'
-WHERE Nutr_No = 334;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Lycopene'
-WHERE Nutr_No = 337;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Lutein+Zeaxan.'
-WHERE Nutr_No = 338;
-
-UPDATE tnutr_def
-SET NutrDesc = 'B-Tocopherol'
-WHERE Nutr_No = 341;
-
-UPDATE tnutr_def
-SET NutrDesc = 'G-Tocopherol'
-WHERE Nutr_No = 342;
-
-UPDATE tnutr_def
-SET NutrDesc = 'D-Tocopherol'
-WHERE Nutr_No = 343;
-
-UPDATE tnutr_def
-SET NutrDesc = 'A-Tocotrienol'
-WHERE Nutr_No = 344;
-
-UPDATE tnutr_def
-SET NutrDesc = 'B-Tocotrienol'
-WHERE Nutr_No = 345;
-
-UPDATE tnutr_def
-SET NutrDesc = 'G-Tocotrienol'
-WHERE Nutr_No = 346;
-
-UPDATE tnutr_def
-SET NutrDesc = 'D-Tocotrienol'
-WHERE Nutr_No = 347;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Vitamin C'
-WHERE Nutr_No = 401;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Thiamin'
-WHERE Nutr_No = 404;
-
-UPDATE tnutr_def
-SET NutrDesc = 'RibOFlavin'
-WHERE Nutr_No = 405;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Niacin'
-WHERE Nutr_No = 406;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Panto. Acid'
-WHERE Nutr_No = 410;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Vitamin B6'
-WHERE Nutr_No = 415;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Folate'
-WHERE Nutr_No = 417;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Vitamin B12'
-WHERE Nutr_No = 418;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Choline'
-WHERE Nutr_No = 421;
-
-UPDATE tnutr_def
-SET NutrDesc = 'MenaquinONe-4'
-WHERE Nutr_No = 428;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Dihydro-K1'
-WHERE Nutr_No = 429;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Vitamin K1'
-WHERE Nutr_No = 430;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Folic Acid'
-WHERE Nutr_No = 431;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Folate, food'
-WHERE Nutr_No = 432;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Folate, DFE'
-WHERE Nutr_No = 435;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Betaine'
-WHERE Nutr_No = 454;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Tryptophan'
-WHERE Nutr_No = 501;
-
-UPDATE tnutr_def
-SET NutrDesc = 'ThreONine'
-WHERE Nutr_No = 502;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Isoleucine'
-WHERE Nutr_No = 503;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Leucine'
-WHERE Nutr_No = 504;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Lysine'
-WHERE Nutr_No = 505;
-
-UPDATE tnutr_def
-SET NutrDesc = 'MethiONine'
-WHERE Nutr_No = 506;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Cystine'
-WHERE Nutr_No = 507;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Phenylalanine'
-WHERE Nutr_No = 508;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Tyrosine'
-WHERE Nutr_No = 509;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Valine'
-WHERE Nutr_No = 510;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Arginine'
-WHERE Nutr_No = 511;
-
-UPDATE tnutr_def
-SET NutrDesc = 'HIStidine'
-WHERE Nutr_No = 512;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Alanine'
-WHERE Nutr_No = 513;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Aspartic acid'
-WHERE Nutr_No = 514;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Glutamic acid'
-WHERE Nutr_No = 515;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Glycine'
-WHERE Nutr_No = 516;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Proline'
-WHERE Nutr_No = 517;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Serine'
-WHERE Nutr_No = 518;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Hydroxyproline'
-WHERE Nutr_No = 521;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Vit. E added'
-WHERE Nutr_No = 573;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Vit. B12 added'
-WHERE Nutr_No = 578;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Cholesterol'
-WHERE Nutr_No = 601;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Trans Fat'
-WHERE Nutr_No = 605;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Sat Fat'
-WHERE Nutr_No = 606;
-
-UPDATE tnutr_def
-SET NutrDesc = '4:0'
-WHERE Nutr_No = 607;
-
-UPDATE tnutr_def
-SET NutrDesc = '6:0'
-WHERE Nutr_No = 608;
-
-UPDATE tnutr_def
-SET NutrDesc = '8:0'
-WHERE Nutr_No = 609;
-
-UPDATE tnutr_def
-SET NutrDesc = '10:0'
-WHERE Nutr_No = 610;
-
-UPDATE tnutr_def
-SET NutrDesc = '12:0'
-WHERE Nutr_No = 611;
-
-UPDATE tnutr_def
-SET NutrDesc = '14:0'
-WHERE Nutr_No = 612;
-
-UPDATE tnutr_def
-SET NutrDesc = '16:0'
-WHERE Nutr_No = 613;
-
-UPDATE tnutr_def
-SET NutrDesc = '18:0'
-WHERE Nutr_No = 614;
-
-UPDATE tnutr_def
-SET NutrDesc = '20:0'
-WHERE Nutr_No = 615;
-
-UPDATE tnutr_def
-SET NutrDesc = '18:1'
-WHERE Nutr_No = 617;
-
-UPDATE tnutr_def
-SET NutrDesc = '18:2'
-WHERE Nutr_No = 618;
-
-UPDATE tnutr_def
-SET NutrDesc = '18:3'
-WHERE Nutr_No = 619;
-
-UPDATE tnutr_def
-SET NutrDesc = '20:4'
-WHERE Nutr_No = 620;
-
-UPDATE tnutr_def
-SET NutrDesc = '22:6n-3'
-WHERE Nutr_No = 621;
-
-UPDATE tnutr_def
-SET NutrDesc = '22:0'
-WHERE Nutr_No = 624;
-
-UPDATE tnutr_def
-SET NutrDesc = '14:1'
-WHERE Nutr_No = 625;
-
-UPDATE tnutr_def
-SET NutrDesc = '16:1'
-WHERE Nutr_No = 626;
-
-UPDATE tnutr_def
-SET NutrDesc = '18:4'
-WHERE Nutr_No = 627;
-
-UPDATE tnutr_def
-SET NutrDesc = '20:1'
-WHERE Nutr_No = 628;
-
-UPDATE tnutr_def
-SET NutrDesc = '20:5n-3'
-WHERE Nutr_No = 629;
-
-UPDATE tnutr_def
-SET NutrDesc = '22:1'
-WHERE Nutr_No = 630;
-
-UPDATE tnutr_def
-SET NutrDesc = '22:5n-3'
-WHERE Nutr_No = 631;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Phytosterols'
-WHERE Nutr_No = 636;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Stigmasterol'
-WHERE Nutr_No = 638;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Campesterol'
-WHERE Nutr_No = 639;
-
-UPDATE tnutr_def
-SET NutrDesc = 'BetaSitosterol'
-WHERE Nutr_No = 641;
-
-UPDATE tnutr_def
-SET NutrDesc = 'MONo Fat'
-WHERE Nutr_No = 645;
-
-UPDATE tnutr_def
-SET NutrDesc = 'Poly Fat'
-WHERE Nutr_No = 646;
-
-UPDATE tnutr_def
-SET NutrDesc = '15:0'
-WHERE Nutr_No = 652;
-
-UPDATE tnutr_def
-SET NutrDesc = '17:0'
-WHERE Nutr_No = 653;
-
-UPDATE tnutr_def
-SET NutrDesc = '24:0'
-WHERE Nutr_No = 654;
-
-UPDATE tnutr_def
-SET NutrDesc = '16:1t'
-WHERE Nutr_No = 662;
-
-UPDATE tnutr_def
-SET NutrDesc = '18:1t'
-WHERE Nutr_No = 663;
-
-UPDATE tnutr_def
-SET NutrDesc = '22:1t'
-WHERE Nutr_No = 664;
-
-UPDATE tnutr_def
-SET NutrDesc = '18:2t'
-WHERE Nutr_No = 665;
-
-UPDATE tnutr_def
-SET NutrDesc = '18:2i'
-WHERE Nutr_No = 666;
-
-UPDATE tnutr_def
-SET NutrDesc = '18:2t,t'
-WHERE Nutr_No = 669;
-
-UPDATE tnutr_def
-SET NutrDesc = '18:2CLA'
-WHERE Nutr_No = 670;
-
-UPDATE tnutr_def
-SET NutrDesc = '24:1c'
-WHERE Nutr_No = 671;
-
-UPDATE tnutr_def
-SET NutrDesc = '20:2n-6c,c'
-WHERE Nutr_No = 672;
-
-UPDATE tnutr_def
-SET NutrDesc = '16:1c'
-WHERE Nutr_No = 673;
-
-UPDATE tnutr_def
-SET NutrDesc = '18:1c'
-WHERE Nutr_No = 674;
-
-UPDATE tnutr_def
-SET NutrDesc = '18:2n-6c,c'
-WHERE Nutr_No = 675;
-
-UPDATE tnutr_def
-SET NutrDesc = '22:1c'
-WHERE Nutr_No = 676;
-
-UPDATE tnutr_def
-SET NutrDesc = '18:3n-6c,c,c'
-WHERE Nutr_No = 685;
-
-UPDATE tnutr_def
-SET NutrDesc = '17:1'
-WHERE Nutr_No = 687;
-
-UPDATE tnutr_def
-SET NutrDesc = '20:3'
-WHERE Nutr_No = 689;
-
-UPDATE tnutr_def
-SET NutrDesc = 'TransMONoenoic'
-WHERE Nutr_No = 693;
-
-UPDATE tnutr_def
-SET NutrDesc = 'TransPolyenoic'
-WHERE Nutr_No = 695;
-
-UPDATE tnutr_def
-SET NutrDesc = '13:0'
-WHERE Nutr_No = 696;
-
-UPDATE tnutr_def
-SET NutrDesc = '15:1'
-WHERE Nutr_No = 697;
-
-UPDATE tnutr_def
-SET NutrDesc = '18:3n-3c,c,c'
-WHERE Nutr_No = 851;
-
-UPDATE tnutr_def
-SET NutrDesc = '20:3n-3'
-WHERE Nutr_No = 852;
-
-UPDATE tnutr_def
-SET NutrDesc = '20:3n-6'
-WHERE Nutr_No = 853;
-
-UPDATE tnutr_def
-SET NutrDesc = '20:4n-6'
-WHERE Nutr_No = 855;
-
-UPDATE tnutr_def
-SET NutrDesc = '18:3i'
-WHERE Nutr_No = 856;
-
-UPDATE tnutr_def
-SET NutrDesc = '21:5'
-WHERE Nutr_No = 857;
-
-UPDATE tnutr_def
-SET NutrDesc = '22:4'
-WHERE Nutr_No = 858;
-
-UPDATE tnutr_def
-SET NutrDesc = '18:1n-7t'
-WHERE Nutr_No = 859;
-
-INSERT OR IGNORE INTO tnutr_def
-VALUES(3000,'kc','PROT_KCAL','Protein Calories', NULL, NULL);
-
-INSERT OR IGNORE INTO tnutr_def
-VALUES(3001,'kc','FAT_KCAL','Fat Calories', NULL, NULL);
-
-INSERT OR IGNORE INTO tnutr_def
-VALUES(3002,'kc','CHO_KCAL','Carb Calories', NULL, NULL);
-
-INSERT OR IGNORE INTO tnutr_def
-VALUES(2000,'g','CHO_NONFIB','NON-Fiber Carb', NULL, NULL);
-
-INSERT OR IGNORE INTO tnutr_def
-VALUES(2001,'g','LA','LA', NULL, NULL);
-
-INSERT OR IGNORE INTO tnutr_def
-VALUES(2002,'g','AA','AA', NULL, NULL);
-
-INSERT OR IGNORE INTO tnutr_def
-VALUES(2003,'g','ALA','ALA', NULL, NULL);
-
-INSERT OR IGNORE INTO tnutr_def
-VALUES(2004,'g','EPA','EPA', NULL, NULL);
-
-INSERT OR IGNORE INTO tnutr_def
-VALUES(2005,'g','DHA','DHA', NULL, NULL);
-
-INSERT OR IGNORE INTO tnutr_def
-VALUES(2006,'g','OMEGA6','Omega-6', NULL, NULL);
-
-INSERT OR IGNORE INTO tnutr_def
-VALUES(3003,'g','SHORT6','Short-chain Omega-6', NULL, NULL);
-
-INSERT OR IGNORE INTO tnutr_def
-VALUES(3004,'g','LONG6','LONg-chain Omega-6', NULL, NULL);
-
-INSERT OR IGNORE INTO tnutr_def
-VALUES(2007,'g','OMEGA3','Omega-3', NULL, NULL);
-
-INSERT OR IGNORE INTO tnutr_def
-VALUES(3005,'g','SHORT3','Short-chain Omega-3', NULL, NULL);
-
-INSERT OR IGNORE INTO tnutr_def
-VALUES(3006,'g','LONG3','LONg-chain Omega-3', NULL, NULL);
+-- Insert or replace default values
+-- to read the USDA a trigger should be put that trims '~' and doesn't
+-- overwrite default values
+-- Create a trigger to avoid overwriting the user's nutopt
+REPLACE INTO nutr_def (
+  Nutr_No,
+  Units,
+  Tagname,
+  NutrDesc,
+  dv_default,
+  nutopt
+)
+VALUES
+  (203, 'g', 'PROCNT', 'Protein', 50.0, 0),
+  (204, 'g', 'FAT', 'Total Fat', 78.0, 0),
+  (205, 'g', 'CHOCDF', 'Total Carb', 275.0, 0),
+  (207, 'g', NULL, 'Ash', NULL, 0),
+  (208, 'kc', 'ENERC_KCAL', 'Calories', 2000.0, 0),
+  (209, 'g', NULL, 'Starch', NULL, 0),
+  (210, 'g', NULL, 'Sucrose', NULL, 0),
+  (211, 'g', NULL, 'Glucose', NULL, 0),
+  (212, 'g', NULL, 'Fructose', NULL, 0),
+  (213, 'g', NULL, 'Lactose', NULL, 0),
+  (214, 'g', NULL, 'Maltose', NULL, 0),
+  (221, 'g', NULL, 'Ethyl Alcohol', NULL, 0),
+  (255, 'g', NULL, 'Water', NULL, 0),
+  (257, 'g', 'ADPROT', '', NULL, 0),
+  (257, 'g', NULL, 'Adj. Protein', NULL, 0),
+  (262, 'mg', NULL, 'Caffeine', NULL, 0),
+  (263, 'mg', NULL, 'Theobromine', NULL, 0),
+  (269, 'g', NULL, 'Sugars', NULL, 0),
+  (287, 'g', NULL, 'Galactose', NULL, 0),
+  (291, 'g', 'FIBTG', 'Fiber', 28.0, 0),
+  (301, 'mg', 'CA', 'Calcium', 1300.0, 0),
+  (303, 'mg', 'FE', 'Iron', 18.0, 0),
+  (304, 'mg', 'MG', 'Magnesium', 420.0, 0),
+  (305, 'mg', 'P', 'Phosphorus', 1250.0, 0),
+  (306, 'mg', 'K', 'Potassium', 4700.0, 0),
+  (307, 'mg', 'NA', 'Sodium', 2300.0, 0),
+  (309, 'mg', 'ZN', 'Zinc', 11.0, 0),
+  (312, 'mg', 'CU', 'Copper', 0.9, 0),
+  (313, 'mcg', NULL, 'Fluoride', NULL, 0),
+  (315, 'mg', 'MN', 'Manganese', 2.3, 0),
+  (317, 'mcg', 'SE', 'Selenium', 55.0, 0),
+  (318, 'IU', NULL, 'Vit. A, IU', NULL, 0),
+  (319, 'mcg', NULL, 'Retinol', NULL, 0),
+  (320, 'mcg', 'VITA_RAE', 'Vitamin A', 900.0, 0),
+  (321, 'mcg', NULL, 'B-Carotene', NULL, 0),
+  (322, 'mcg', NULL, 'A-Carotene', NULL, 0),
+  (323, 'mg', NULL, 'A-Tocopherol', NULL, 0),
+  (324, 'IU', 'VITD', 'Vit. D, IU', NULL, 0),
+  (325, 'mcg', NULL, 'Vitamin D2', NULL, 0),
+  (326, 'mcg', NULL, 'Vitamin D3', NULL, 0),
+  (328, 'mcg', 'VITD_BOTH', 'Vitamin D', 20.0, 0),
+  (334, 'mcg', NULL, 'B-Cryptoxanth', NULL, 0),
+  (337, 'mcg', NULL, 'Lycopene', NULL, 0),
+  (338, 'mcg', NULL, 'Lutein+Zeaxan', NULL, 0),
+  (341, 'mg', NULL, 'B-Tocopherol', NULL, 0),
+  (342, 'mg', NULL, 'G-Tocopherol', NULL, 0),
+  (343, 'mg', NULL, 'D-Tocopherol', NULL, 0),
+  (344, 'mg', NULL, 'A-Tocotrienol', NULL, 0),
+  (345, 'mg', NULL, 'B-Tocotrienol', NULL, 0),
+  (346, 'mg', NULL, 'G-Tocotrienol', NULL, 0),
+  (347, 'mg', NULL, 'D-Tocotrienol', NULL, 0),
+  (401, 'mg', 'VITC', 'Vitamin C', 90.0, 0),
+  (404, 'mg', 'THIA', 'Thiamin', 1.2, 0),
+  (405, 'mg', 'RIBF', 'Riboflavin', 1.3, 0),
+  (406, 'mg', 'NIA', 'Niacin', 16.0, 0),
+  (410, 'mg', 'PANTAC', 'Panto. Acid', 5.0, 0),
+  (415, 'mg', 'VITB6A', 'Vitamin B6', 1.7, 0),
+  (417, 'mcg', 'FOL', 'Folate', 400.0, 0),
+  (418, 'mcg', 'VITB12?, 'Vitamin B12', 2.4, 0),
+  (421, 'mg', 'CHOLN', 'Choline', 550.0, 0),
+  (428, 'mcg', NULL, 'Menaquinone-4', NULL, 0),
+  (429, 'mcg', NULL, 'Dihydro-K1', NULL, 0),
+  (430, 'mcg', 'VITK1', 'Vitamin K1', 120.0, 0),
+  (431, 'mcg', NULL, 'Folic Acid', NULL, 0),
+  (432, 'mcg', NULL, 'Folate, food', NULL, 0),
+  (435, 'mcg', NULL, 'Folate, DFE', NULL, 0),
+  (454, 'mg', NULL, 'Betaine', NULL, 0),
+  (501, 'g', NULL, 'Tryptophan', NULL, 0),
+  (502, 'g', NULL, 'Threonine', NULL, 0),
+  (503, 'g', NULL, 'Isoleucine', NULL, 0),
+  (504, 'g', NULL, 'Leucine', NULL, 0),
+  (505, 'g', NULL, 'Lysine', NULL, 0),
+  (506, 'g', NULL, 'Methionine', NULL, 0),
+  (507, 'g', NULL, 'Cystine', NULL, 0),
+  (508, 'g', NULL, 'Phenylalanine', NULL, 0),
+  (509, 'g', NULL, 'Tyrosine', NULL, 0),
+  (510, 'g', NULL, 'Valine', NULL, 0),
+  (511, 'g', NULL, 'Arginine', NULL, 0),
+  (512, 'g', NULL, 'Histidine', NULL, 0),
+  (513, 'g', NULL, 'Alanine', NULL, 0),
+  (514, 'g', NULL, 'Aspartic acid', NULL, 0),
+  (515, 'g', NULL, 'Glutamic acid', NULL, 0),
+  (516, 'g', NULL, 'Glycine', NULL, 0),
+  (517, 'g', NULL, 'Proline', NULL, 0),
+  (518, 'g', NULL, 'Serine', NULL, 0),
+  (521, 'g', NULL, 'Hydroxyroline', NULL, 0),
+  (573, 'mg', 'VITE_ADDED', 'Vit. E added', NULL, 0),
+  (578, 'mcg', 'VITB12_ADDED', 'Vit. B12 added', NULL, 0),
+  (601, 'mg', 'CHOLE', 'Cholesterol', 300.0, 0),
+  (605, 'g', NULL, 'Trans Fat', NULL, 0),
+  (606, 'g', 'FASAT', 'Sat Fat', NULL, 0),
+  (607, 'g', NULL, '4:0', NULL, 0),
+  (608, 'g', NULL, '6:0', NULL, 0),
+  (609, 'g', NULL, '8:0', NULL, 0),
+  (610, 'g', NULL, '10:0', NULL, 0),
+  (611, 'g', NULL, '12:0', NULL, 0),
+  (612, 'g', NULL, '14:0', NULL, 0),
+  (613, 'g', NULL, '16:0', NULL, 0),
+  (614, 'g', NULL, '18:0', NULL, 0),
+  (615, 'g', NULL, '20:0', NULL, 0),
+  (617, 'g', NULL, '18:1', NULL, 0),
+  (618, 'g', NULL, '18:2', NULL, 0),
+  (619, 'g', NULL, '18:3', NULL, 0),
+  (620, 'g', NULL, '20:4', NULL, 0),
+  (621, 'g', NULL, ''22:6n-3, NULL, 0),
+  (624, 'g', NULL, '22:0', NULL, 0),
+  (625, 'g', NULL, '14:1', NULL, 0),
+  (626, 'g', NULL, '16:1', NULL, 0),
+  (627, 'g', NULL, '18:4', NULL, 0),
+  (628, 'g', NULL, '20:1', NULL, 0),
+  (629, 'g', NULL, '20:5n-3', NULL, 0),
+  (630, 'g', NULL, '22:1', NULL, 0),
+  (631, 'g', NULL, '22:5n-3', NULL, 0),
+  (636, 'mg', NULL, 'Phytosterols', NULL, 0),
+  (638, 'mg', NULL, 'Stigmasterol', NULL, 0),
+  (639, 'mg', NULL, 'Campesterol', NULL, 0),
+  (641, 'mg', NULL, 'BetaSitosterol', NULL, 0),
+  (645, 'g', 'FAMS', 'Mono Fat', 32.6, 0),
+  (646, 'g', 'FAPU', 'Poly Fat', 8.9, 0),
+  (652, 'g', NULL, '15:0', NULL, 0),
+  (653, 'g', NULL, '17:0', NULL, 0),
+  (654, 'g', NULL, '24:0', NULL, 0),
+  (662, 'g', NULL, '16:1t', NULL, 0),
+  (663, 'g', NULL, '18:1t', NULL, 0),
+  (664, 'g', 'F22D1T', '', NULL, 0),
+  (664, 'g', NULL, '22:1t', NULL, 0),
+  (665, 'g', 'F18D2T', '', NULL, 0),
+  (665, 'g', NULL, '18:2t', NULL, 0),
+  (666, 'g', 'F18D2I', '', NULL, 0),
+  (666, 'g', NULL, '18:2i', NULL, 0),
+  (669, 'g', NULL, '18:2t,t', NULL, 0),
+  (670, 'g', NULL, '18:2CLA', NULL, 0),
+  (671, 'g', NULL, '24:1c', NULL, 0),
+  (672, 'g', NULL, '20:2n-6c,c', NULL, 0),
+  (673, 'g', NULL, '16:1c', NULL, 0),
+  (674, 'g', NULL, '18:1c', NULL, 0),
+  (675, 'g', NULL, '18:2n-6c,c', NULL, 0),
+  (676, 'g', 'F22D1C', '', NULL, 0),
+  (685, 'g', NULL, '18:3n-6c,c,c', NULL, 0),
+  (687, 'g', NULL, '17:1', NULL, 0),
+  (689, 'g', NULL, '20:3', NULL, 0),
+  (693, 'g', NULL, 'TransMonoenoic', NULL, 0),
+  (695, 'g', NULL, 'TransPolyenoic', NULL, 0),
+  (696, 'g', NULL, '13:0', NULL, 0),
+  (697, 'g', NULL, '15:1', NULL, 0),
+  (767, 'g', NULL, '22:1c', NULL, 0),
+  (851, 'g', NULL, '18:3n-3c,c,c', NULL, 0),
+  (852, 'g', NULL, '20:3n-3', NULL, 0),
+  (853, 'g', NULL, '20:3n-6', NULL, 0),
+  (855, 'g', NULL, '20:4n-6', NULL, 0),
+  (856, 'g', 'F18D3I', '', NULL, 0),
+  (856, 'g', NULL, '18:3i', NULL, 0),
+  (857, 'g', NULL, '21:5', NULL, 0),
+  (858, 'g', NULL, '22:4', NULL, 0),
+  (859, 'g', NULL, '18:1n-7t', NULL, 0),
 
 -- These are the new "daily value" labeling standards minus "ADDED SUGARS"
 -- which have not yet appeared in the USDA data.
 
-INSERT OR IGNORE INTO tnutr_def
-VALUES(2008,'mg','VITE','Vitamin E', NULL, NULL);
+  (2000, 'g', 'CHO_NONFIB', 'Non-Fiber Carb', 247.0, NULL),
+  (2001, 'g', 'LA', 'LA', 4.7, NULL),
+  (2002, 'g', 'AA', 'AA', 0.2, NULL),
+  (2003, 'g', 'ALA', 'ALA', 3.8, NULL),
+  (2004, 'g', 'EPA', 'EPA', 0.1, NULL),
+  (2005, 'g', 'DHA', 'DHA', 0.1, NULL),
+  (2006, 'g', 'OMEGA6', 'Omega-6', 4.9, NULL),
+  (2007, 'g', 'OMEGA3', 'Omega-3', 4.0, NULL),
+  (2008, 'mg', 'VITE', 'Vitamin E', 15.0, NULL),
+  (3000, 'kc', 'PROT_KCAL', 'Protein Calories', NULL, NULL),
+  (3001, 'kc', 'FAT_KCAL', 'Fat Calories', NULL, NULL),
+  (3002, 'kc', 'CHO_KCAL', 'Carb Calories', NULL, NULL),
+  (3003, 'g', 'SHORT6', 'Short-chain Omega-6', NULL, NULL),
+  (3004, 'g', 'LONG6', 'Long-chain Omega-6', NULL, NULL),
+  (3005, 'g', 'SHORT3', 'Short-chain Omega-3', NULL, NULL),
+  (3006, 'g', 'LONG3', 'Long-chain Omega-3', NULL, NULL);
 
-UPDATE tnutr_def
-SET dv_default = 2000.0
-WHERE Tagname = 'ENERC_KCAL';
 
-UPDATE tnutr_def
-SET dv_default = 50.0
-WHERE Tagname = 'PROCNT';
+-- comment out the next statement if you want to hassle
+-- the non-ascii micro char
+UPDATE nutr_def
+SET Units = 'mcg'
+WHERE HEX(Units) = 'B567';
 
-UPDATE tnutr_def
-SET dv_default = 78.0
-WHERE Tagname = 'FAT';
 
-UPDATE tnutr_def
-SET dv_default = 275.0
-WHERE Tagname = 'CHOCDF';
+UPDATE nutr_def SET nutopt = 0.0
+WHERE dv_default > 0.0 AND nutopt IS NULL;
 
-UPDATE tnutr_def
-SET dv_default = 28.0
-WHERE Tagname = 'FIBTG';
+CREATE INDEX IF NOT EXISTS tagname_index ON nutr_def (Tagname ASC);
 
-UPDATE tnutr_def
-SET dv_default = 247.0
-WHERE Tagname = 'CHO_NONFIB';
 
-UPDATE tnutr_def
-SET dv_default = 1300.0
-WHERE Tagname = 'CA';
-
-UPDATE tnutr_def
-SET dv_default = 1250.0
-WHERE Tagname = 'P';
-
-UPDATE tnutr_def
-SET dv_default = 18.0
-WHERE Tagname = 'FE';
-
-UPDATE tnutr_def
-SET dv_default = 2300.0
-WHERE Tagname = 'NA';
-
-UPDATE tnutr_def
-SET dv_default = 4700.0
-WHERE Tagname = 'K';
-
-UPDATE tnutr_def
-SET dv_default = 420.0
-WHERE Tagname = 'MG';
-
-UPDATE tnutr_def
-SET dv_default = 11.0
-WHERE Tagname = 'ZN';
-
-UPDATE tnutr_def
-SET dv_default = 0.9
-WHERE Tagname = 'CU';
-
-UPDATE tnutr_def
-SET dv_default = 2.3
-WHERE Tagname = 'MN';
-
-UPDATE tnutr_def
-SET dv_default = 55.0
-WHERE Tagname = 'SE';
-
-UPDATE tnutr_def
-SET dv_default = NULL
-WHERE Tagname = 'VITA_IU';
-
-UPDATE tnutr_def
-SET dv_default = 900.0
-WHERE Tagname = 'VITA_RAE';
-
-UPDATE tnutr_def
-SET dv_default = 15.0
-WHERE Tagname = 'VITE';
-
-UPDATE tnutr_def
-SET dv_default = 120.0
-WHERE Tagname = 'VITK1';
-
-UPDATE tnutr_def
-SET dv_default = 1.2
-WHERE Tagname = 'THIA';
-
-UPDATE tnutr_def
-SET dv_default = 1.3
-WHERE Tagname = 'RIBF';
-
-UPDATE tnutr_def
-SET dv_default = 16.0
-WHERE Tagname = 'NIA';
-
-UPDATE tnutr_def
-SET dv_default = 5.0
-WHERE Tagname = 'PANTAC';
-
-UPDATE tnutr_def
-SET dv_default = 1.7
-WHERE Tagname = 'VITB6A';
-
-UPDATE tnutr_def
-SET dv_default = 400.0
-WHERE Tagname = 'FOL';
-
-UPDATE tnutr_def
-SET dv_default = 2.4
-WHERE Tagname = 'VITB12';
-
-UPDATE tnutr_def
-SET dv_default = 550.0
-WHERE Tagname = 'CHOLN';
-
-UPDATE tnutr_def
-SET dv_default = 90.0
-WHERE Tagname = 'VITC';
-
-UPDATE tnutr_def
-SET dv_default = 20.0
-WHERE Tagname = 'FASAT';
-
-UPDATE tnutr_def
-SET dv_default = 300.0
-WHERE Tagname = 'CHOLE';
-
-UPDATE tnutr_def
-SET dv_default = NULL
-WHERE Tagname = 'VITD';
-
-UPDATE tnutr_def
-SET dv_default = 20.0
-WHERE Tagname = 'VITD_BOTH';
-
-UPDATE tnutr_def
-SET dv_default = 8.9
-WHERE Tagname = 'FAPU';
-
-UPDATE tnutr_def
-SET dv_default = 0.2
-WHERE Tagname = 'AA';
-
-UPDATE tnutr_def
-SET dv_default = 3.8
-WHERE Tagname = 'ALA';
-
-UPDATE tnutr_def
-SET dv_default = 0.1
-WHERE Tagname = 'EPA';
-
-UPDATE tnutr_def
-SET dv_default = 0.1
-WHERE Tagname = 'DHA';
-
-UPDATE tnutr_def
-SET dv_default = 4.7
-WHERE Tagname = 'LA';
-
-UPDATE tnutr_def
-SET dv_default = 4.0
-WHERE Tagname = 'OMEGA3';
-
-UPDATE tnutr_def
-SET dv_default = 4.9
-WHERE Tagname = 'OMEGA6';
-
-UPDATE tnutr_def
-SET dv_default = 32.6
-WHERE Tagname = 'FAMS';
-
-UPDATE tnutr_def SET nutopt = 0.0
-WHERE dv_default > 0.0 and nutopt IS NULL;
-
-DELETE
-FROM nutr_def;
-
-INSERT INTO nutr_def SELECT *
-FROM tnutr_def;
-
-CREATE INDEX IF NOT EXISTS tagname_index ON nutr_def (Tagname asc);
-
-DROP TABLE ttnutr_def;
-DROP TABLE tnutr_def;
-
-INSERT
-OR     REPLACE
+REPLACE
 INTO   fd_group
 SELECT TRIM(fdgrp_cd, '~'),
        TRIM(fdgrp_desc, '~')
 FROM   tfd_group;
 
-INSERT OR REPLACE
-INTO   fd_group VALUES
+REPLACE
+INTO fd_group VALUES
        (
               9999,
               'Added Recipes'
@@ -2377,7 +1709,8 @@ INTO   fd_group VALUES
 
 DROP TABLE tfd_group;
 
-INSERT OR REPLACE INTO food_des
+-- replace this statement with a trigger
+REPLACE INTO food_des
 (
   ndb_no,
   fdgrp_cd,
@@ -2438,14 +1771,13 @@ DROP TABLE tweight;
 DROP TABLE zweight;
 
 
-INSERT OR replace INTO nut_data
+REPLACE INTO nut_data
 SELECT TRIM(NDB_No, '~'), TRIM(Nutr_No, '~'), Nutr_Val
 FROM tnut_data;
 DROP TABLE tnut_data;
 
-  --INSERT VITE records INTO nut_data
-INSERT
-or     REPLACE
+--INSERT VITE records INTO nut_data
+REPLACE
 INTO   nut_data
 SELECT    f.ndb_no,
           2008,
@@ -2457,8 +1789,7 @@ AND       tocpha.nutr_no = 323
 WHERE     tocpha.nutr_val IS NOT NULL;
 
   --INSERT LA records INTO nut_data
-INSERT
-or     REPLACE
+REPLACE
 INTO   nut_data
 SELECT    f.ndb_no,
           2001,
@@ -2765,147 +2096,154 @@ DROP TRIGGER protect_options;
 UPDATE options
 SET currentmeal = CAST(STRFTIME('%Y%m%d01', DATE('now')) AS INTEGER);
 
---commit;
+COMMIT;
 VACUUM;
 """
 
 # ThIS query will wipe everything USE WITH CARE
+init_logic_create_tables = """
+CREATE TABLE z_vars1 (
+  am_cals2gram_pro real,
+  am_cals2gram_fat real,
+  am_cals2gram_cho real,
+  am_alccals real,
+  am_fa2fat real,
+  balance_of_calories int
+);
+
+CREATE TABLE z_vars2 (
+  am_fat_dv_not_boc real,
+  am_cho_nONfib_dv_not_boc real,
+  am_chocdf_dv_not_boc real
+);
+
+CREATE TABLE z_vars3 (
+  am_fat_dv_boc real,
+  am_chocdf_dv_boc real,
+  am_cho_nONfib_dv_boc real
+);
+
+CREATE TABLE z_vars4 (
+  Nutr_No int,
+  dv real,
+  Nutr_Val real
+);
+
+CREATE TABLE z_n6 (
+  n6hufa real,
+  FAPU1 real,
+  pufa_reductiON real,
+  iter int,
+  reduce int,
+  p3 real,
+  p6 real,
+  h3 real,
+  h6 real,
+  o real
+);
+
+CREATE TABLE z_anal (
+  Nutr_No int primary key,
+  NULL_value int,
+  Nutr_Val real
+);
+
+
+CREATE TABLE am_analysis_header (
+  maxmeal int,
+  mealcount int,
+  meals_per_day int,
+  firstmeal integer,
+  lastmeal integer,
+  currentmeal integer,
+  caloriebuttON text,
+  macropct text,
+  n6balance text
+);
+
+
+CREATE TABLE am_dv (
+  Nutr_No int primary key asc,
+  dv real,
+  dvpct_OFfSET real
+);
+
+CREATE TABLE rm_analysis_header (
+  maxmeal int,
+  mealcount int,
+  meals_per_day int,
+  firstmeal integer,
+  lastmeal integer,
+  currentmeal integer,
+  caloriebuttON text,
+  macropct text,
+  n6balance text
+);
+
+CREATE TABLE rm_analysis (
+  Nutr_No int primary key asc,
+  NULL_value int,
+  Nutr_Val real
+);
+
+CREATE TABLE rm_dv (
+  Nutr_No int primary key asc,
+  dv real,
+  dvpct_OFfSET real
+);
+
+CREATE TABLE z_trig_ctl (
+  am_analysis_header integer default 0,
+  rm_analysis_header integer default 0,
+  am_analysis_minus_currentmeal integer default 0,
+  am_analysis_null integer default 0,
+  am_analysis integer default 0,
+  rm_analysis integer default 0,
+  rm_analysis_null integer default 0,
+  am_dv integer default 0,
+  PCF_processing integer default 0,
+  block_setting_preferred_weight integer default 0,
+  block_mealfoods_insert_trigger default 0,
+  block_mealfoods_delete_trigger integer default 0
+);
+"""
+
+init_logic_create_views = """
+CREATE VIEW am_analysis AS
+SELECT am.Nutr_No AS Nutr_No,
+  CASE
+    WHEN currentmeal BETWEEN firstmeal AND lastmeal
+      AND am.null_value = 1 AND rm.null_value = 1 THEN
+        1
+    WHEN currentmeal NOT BETWEEN firstmeal AND lastmeal
+      AND am.null_value = 1 THEN
+        1
+      ELSE
+       0
+  END AS null_value,
+  CASE
+    WHEN currentmeal BETWEEN firstmeal AND lastmeal THEN
+      IFNULL(am.Nutr_Val,0.0) + 1.0 / mealcount * IFNULL(rm.Nutr_Val, 0.0)
+    ELSE
+      am.Nutr_Val
+  END AS Nutr_Val
+FROM z_anal am
+LEFT JOIN rm_analysis rm ON am.Nutr_No = rm.Nutr_No join am_analysis_header;
+
+
+"""
+
 init_logic = """
 BEGIN;
 
-  CREATE TABLE z_vars1 (
-    am_cals2gram_pro real,
-    am_cals2gram_fat real,
-    am_cals2gram_cho real,
-    am_alccals real,
-    am_fa2fat real,
-    balance_of_calories int
-  );
+  -- Call create tables
+  -- Call create views
 
-  CREATE TABLE z_vars2 (
-    am_fat_dv_not_boc real,
-    am_cho_nONfib_dv_not_boc real,
-    am_chocdf_dv_not_boc real
-  );
-
-  CREATE TABLE z_vars3 (
-    am_fat_dv_boc real,
-    am_chocdf_dv_boc real,
-    am_cho_nONfib_dv_boc real
-  );
-
-  CREATE TABLE z_vars4 (
-    Nutr_No int,
-    dv real,
-    Nutr_Val real
-  );
-
-  CREATE TABLE z_n6 (
-    n6hufa real,
-    FAPU1 real,
-    pufa_reductiON real,
-    iter int,
-    reduce int,
-    p3 real,
-    p6 real,
-    h3 real,
-    h6 real,
-    o real
-  );
-
-
-  CREATE TABLE z_anal (
-    Nutr_No int primary key,
-    NULL_value int,
-    Nutr_Val real
-  );
-
-
-  CREATE TABLE am_analysis_header (
-    maxmeal int,
-    mealcount int,
-    meals_per_day int,
-    firstmeal integer,
-    lastmeal integer,
-    currentmeal integer,
-    caloriebuttON text,
-    macropct text,
-    n6balance text
-  );
-
-
-  CREATE TABLE am_dv (
-    Nutr_No int primary key asc,
-    dv real,
-    dvpct_OFfSET real
-  );
-
-  CREATE TABLE rm_analysis_header (
-    maxmeal int,
-    mealcount int,
-    meals_per_day int,
-    firstmeal integer,
-    lastmeal integer,
-    currentmeal integer,
-    caloriebuttON text,
-    macropct text,
-    n6balance text
-  );
-
-  CREATE TABLE rm_analysis (
-    Nutr_No int primary key asc,
-    NULL_value int,
-    Nutr_Val real
-  );
-
-  CREATE TABLE rm_dv (
-    Nutr_No int primary key asc,
-    dv real,
-    dvpct_OFfSET real
-  );
-
-  CREATE VIEW am_analysis AS
-  SELECT am.Nutr_No AS Nutr_No,
-    CASE
-      WHEN currentmeal BETWEEN firstmeal AND lastmeal
-        AND am.null_value = 1 AND rm.null_value = 1 THEN
-          1
-      WHEN currentmeal NOT BETWEEN firstmeal AND lastmeal
-        AND am.null_value = 1 THEN
-          1
-        ELSE
-         0
-    END AS null_value,
-    CASE
-      WHEN currentmeal BETWEEN firstmeal AND lastmeal THEN
-        IFNULL(am.Nutr_Val,0.0) + 1.0 / mealcount * IFNULL(rm.Nutr_Val, 0.0)
-      ELSE
-        am.Nutr_Val
-    END AS Nutr_Val
-  FROM z_anal am
-  LEFT JOIN rm_analysis rm ON am.Nutr_No = rm.Nutr_No join am_analysis_header;
-
-
-  CREATE TABLE z_trig_ctl (
-    am_analysis_header integer default 0,
-    rm_analysis_header integer default 0,
-    am_analysis_minus_currentmeal integer default 0,
-    am_analysis_null integer default 0,
-    am_analysis integer default 0,
-    rm_analysis integer default 0,
-    rm_analysis_null integer default 0,
-    am_dv integer default 0,
-    PCF_processing integer default 0,
-    block_setting_preferred_weight integer default 0,
-    block_mealfoods_insert_trigger default 0,
-    block_mealfoods_delete_trigger integer default 0
-  );
 
   INSERT INTO z_trig_ctl default values;
 
 
-  DELETE
-  FROM z_n6;
+  DELETE FROM z_n6;
 
   INSERT INTO z_n6
   SELECT NULL, NULL, NULL, 1, 1, 900.0 *
@@ -3014,6 +2352,8 @@ BEGIN;
         n6balance
       END;
   END;
+
+  -- Call create init triggers
 
   CREATE TRIGGER rm_analysis_trigger
   AFTER UPDATE OF rm_analysis ON z_trig_ctl
