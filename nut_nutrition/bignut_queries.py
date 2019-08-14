@@ -80,7 +80,7 @@ set_weight_unit = 'UPDATE options SET grams = ?'
 
 get_current_meal = 'SELECT currentmeal FROM options;'
 get_current_meal_food = '''
-SELECT mf.NDB_No AS NDB_No, LONg_Desc, mf.Gm_Wgt, Nutr_No
+SELECT mf.NDB_No AS NDB_No, Long_Desc, mf.Gm_Wgt, Nutr_No
 FROM mealfoods mf
 NATURAL JOIN food_des
 LEFT JOIN pref_Gm_Wgt pGW USING (NDB_No)
@@ -167,12 +167,12 @@ WHERE
     AND NDB_No = :NDB_No;
 '''
 
-get_food_list = 'SELECT NDB_No, LONg_Desc FROM food_des;'
+get_food_list = 'SELECT NDB_No, Long_Desc FROM food_des;'
 get_food_from_ndb_no = 'SELECT * FROM food_des WHERE NDB_No = :NDB_No;'
-search_food = 'SELECT NDB_No, LONg_Desc FROM food_des WHERE LONg_Desc'\
+search_food = 'SELECT NDB_No, Long_Desc FROM food_des WHERE Long_Desc'\
     ' like :lONg_desc;'
 get_food_sorted_by_nutrient = """
-    SELECT LONg_Desc FROM fd_group NATURAL JOIN food_des NATURAL JOIN nut_data
+    SELECT Long_Desc FROM fd_group NATURAL JOIN food_des NATURAL JOIN nut_data
     WHERE FdGrp_Desc like ? AND Nutr_No = ? ORDER BY Nutr_Val desc;
     """
 get_food_preferred_weight = 'SELECT * FROM pref_Gm_Wgt WHERE NDB_No = ?;'
@@ -202,7 +202,7 @@ WHERE NDB_No = :NDB_No;
 get_nutrient = 'SELECT * FROM nutr_def WHERE Nutr_No = ?;'
 
 foods_ranked_per_100_grams = '''
-SELECT NDB_No, FdGrp_Cd, LONg_Desc, 100, 'g', Nutr_val, Units
+SELECT NDB_No, FdGrp_Cd, Long_Desc, 100, 'g', Nutr_val, Units
 FROM food_des
 NATURAL JOIN nut_data
 NATURAL JOIN nutr_def
@@ -216,7 +216,7 @@ ORDER BY Nutr_val DESC;
 '''
 
 foods_ranked_per_100_calories = '''
-SELECT NDB_No, FdGrp_Cd, LONg_Desc, Gm_Wgt, 100, Nutr_val, Units
+SELECT NDB_No, FdGrp_Cd, Long_Desc, Gm_Wgt, 100, Nutr_val, Units
 FROM food_des
 NATURAL JOIN nut_data
 NATURAL JOIN nutr_def
@@ -285,11 +285,12 @@ PRAGMA user_version = 39;
 -- IMPORTANT, WITHOUT THIS NUT WON'T WORK
 PRAGMA recursive_triggers = 1;
 
+-- These pragmas enhance performance
 PRAGMA journal_mode = WAL;
 PRAGMA threads = 4;
 """
 
-init_views = """
+create_temp_views = """
 ------------------------------[TEMP VIEWS]-------------------------------------
 CREATE TEMP VIEW pref_Gm_Wgt AS
 SELECT NDB_No,
@@ -302,16 +303,16 @@ SELECT NDB_No,
        Amount AS origAmount
 FROM weight
 NATURAL JOIN
-  (SELECT NDB_No,
-          MIN(Seq) AS Seq
+  (SELECT NDB_No, MIN(Seq) AS Seq
    FROM weight
    GROUP BY NDB_No);
 
+-- Displays foods compositions
 CREATE TEMP VIEW view_foods AS
 SELECT NutrDesc,
        NDB_No,
        SUBSTR(Shrt_Desc, 1, 45),
-       round(Nutr_Val * Gm_Wgt / 100.0, 1) AS Nutr_Val,
+       ROUND(Nutr_Val * Gm_Wgt / 100.0, 1) AS Nutr_Val,
        Units,
        CAST(CAST(ROUND(Nutr_Val * Gm_Wgt / dv) AS int) AS text)
          || '% DV' AS dv
@@ -321,6 +322,7 @@ LEFT JOIN am_dv USING (Nutr_No)
 NATURAL JOIN food_des
 NATURAL JOIN pref_Gm_Wgt;
 
+-- Dislays the current meal
 CREATE TEMP VIEW currentmeal AS
 SELECT mf.NDB_No AS NDB_No,
   CASE
@@ -347,6 +349,7 @@ LEFT JOIN nutr_def USING (Nutr_No)
 WHERE meal_id = (SELECT currentmeal FROM options)
 ORDER BY Shrt_Desc;
 
+-- Displays the food list of a saved menu
 CREATE TEMP VIEW theusual AS
 SELECT meal_name,
        NDB_No,
@@ -356,6 +359,8 @@ FROM z_tu
 NATURAL JOIN pref_Gm_Wgt
 LEFT JOIN nutr_def USING (Nutr_No);
 
+
+-- Displays the meals composition
 CREATE TEMP VIEW nut_in_meals AS
 SELECT NutrDesc,
        ROUND(SUM(
@@ -440,7 +445,7 @@ CREATE TEMP VIEW nut_in_100g AS
 SELECT NutrDesc,
        FdGrp_Cd,
        f.NDB_No,
-       LONg_Desc,
+       Long_Desc,
        Nutr_Val
 FROM food_des f
 JOIN nutr_def n
@@ -452,7 +457,7 @@ CREATE TEMP VIEW nut_in_100cal AS
 SELECT NutrDesc,
        FdGrp_Cd,
        f.NDB_No,
-       LONg_Desc,
+       Long_Desc,
        100.0 * d.Nutr_Val / c.Nutr_Val AS Nutr_Val
 FROM food_des f
 JOIN nutr_def n
@@ -594,7 +599,7 @@ CREATE TEMP VIEW cm_string AS WITH cdate (cdate, meal) AS
    FROM options)
 SELECT CASE
   WHEN w = 0 THEN 'Sun'
-  WHEN w = 1 THEN 'MON'
+  WHEN w = 1 THEN 'Mon'
   WHEN w = 2 THEN 'Tue'
   WHEN w = 3 THEN 'Wed'
   WHEN w = 4 THEN 'Thu'
@@ -624,7 +629,7 @@ FROM
    FROM cdate);
 """
 
-reset_triggers = """
+drop_triggers = """
 DROP TRIGGER IF EXISTS before_mealfoods_insert_pcf;
 DROP TRIGGER IF EXISTS mealfoods_insert_pcf;
 DROP TRIGGER IF EXISTS mealfoods_update_pcf;
@@ -668,7 +673,7 @@ DROP TRIGGER IF EXISTS rm_analysis_null_trigger;
 DROP TRIGGER IF EXISTS am_analysis_trigger;
 """
 
-reset_views = """
+drop_views = """
 DROP VIEW IF EXISTS pref_Gm_Wgt;
 DROP VIEW IF EXISTS view_foods;
 DROP VIEW IF EXISTS currentmeal;
@@ -696,7 +701,7 @@ DROP view IF EXISTS z_pcf;
 
 # Call before init logic
 # !!!! THIS WILL WIPE EVERYTHING !!!
-reset_db = """
+drop_tables = """
 DROP TABLE IF EXISTS z_vars1;
 DROP TABLE IF EXISTS z_vars2;
 DROP TABLE IF EXISTS z_vars3;
@@ -731,9 +736,12 @@ BEGIN
     IFNULL(MIN(meal_id),0) AS firstmeal,
     IFNULL(MAX(meal_id),0) AS lastmeal,
     currentmeal,
-    NULL AS caloriebutton,
-    NULL AS macropct,
-    NULL AS n6balance
+    NULL AS calories,
+    NULL AS proteins,
+    NULL AS carbs,
+    NULL AS fats,
+    NULL AS omega6,
+    NULL AS omega3,
   FROM options LEFT JOIN
     (
       SELECT DISTINCT meal_id
@@ -768,9 +776,12 @@ BEGIN
     currentmeal AS firstmeal,
     currentmeal AS lastmeal,
     currentmeal AS currentmeal,
-    NULL AS caloriebuttON,
-    '0 / 0 / 0' AS macropct,
-    '0 / 0' AS n6balance
+    NULL AS calories,
+    0 AS proteins,
+    0 AS carbs,
+    0 AS fats,
+    0 AS omega6,
+    0 AS omega3,
   FROM am_analysis_header;
 END;
 
@@ -822,7 +833,12 @@ BEGIN
     FROM nutr_def join am_analysis_header
     WHERE firstmeal != currentmeal OR lastmeal != currentmeal;
 
-  UPDATE am_analysis_header SET macropct = '0 / 0 / 0', n6balance = '0 / 0';
+  UPDATE am_analysis_header
+  SET proteins = 0,
+    carbs = 0,
+    fats = 0,
+    omega6 = 0,
+    omega3 = 0;
 END;
 
 CREATE TRIGGER rm_analysis_null_trigger
@@ -839,9 +855,12 @@ BEGIN
 
   UPDATE rm_analysis_header
   SET
-    caloriebutton = (SELECT caloriebuttON FROM am_analysis_header),
-    macropct = '0 / 0 / 0',
-    n6balance = '0 / 0';
+    calories = (SELECT calories FROM am_analysis_header),
+    proteins = 0,
+    carbs = 0,
+    fats = 0,
+    omega6 = 0,
+    omega3 = 0;
 END;
 
 
@@ -853,14 +872,24 @@ BEGIN
 
   UPDATE am_analysis_header
     SET
-      macropct = (
+      proteins = (
         SELECT
-          CAST(IFNULL(round(100 * PROT_KCAL.Nutr_Val
-          / ENERC_KCAL.Nutr_Val,0),0) AS int) || ' / ' ||
-          CAST(IFNULL(round(100 * CHO_KCAL.Nutr_Val / ENERC_KCAL.Nutr_Val,0),
-          0) AS int) || ' / ' ||
-          CAST(IFNULL(round(100 * FAT_KCAL.Nutr_Val / ENERC_KCAL.Nutr_Val,0),
-          0) as int)
+          CAST(
+            IFNULL(
+              ROUND(100 * PROT_KCAL.Nutr_Val / ENERC_KCAL.Nutr_Val, 0),
+              0) AS REAL
+           )
+        FROM am_analysis ENERC_KCAL
+        JOIN am_analysis PROT_KCAL
+          ON ENERC_KCAL.Nutr_No = 208 AND PROT_KCAL.Nutr_No = 3000
+        JOIN am_analysis CHO_KCAL
+          ON CHO_KCAL.Nutr_No = 3002
+        JOIN am_analysis FAT_KCAL ON FAT_KCAL.Nutr_No = 3001
+      ),
+      carbs = (
+        SELECT
+          CAST(IFNULL(ROUND(100 * CHO_KCAL.Nutr_Val / ENERC_KCAL.Nutr_Val,0),
+          0) AS REAL)
         FROM am_analysis ENERC_KCAL
         JOIN am_analysis PROT_KCAL
           ON ENERC_KCAL.Nutr_No = 208
@@ -868,7 +897,19 @@ BEGIN
         JOIN am_analysis CHO_KCAL
           ON CHO_KCAL.Nutr_No = 3002
         JOIN am_analysis FAT_KCAL ON FAT_KCAL.Nutr_No = 3001
-      );
+      )
+     fats = (
+        SELECT
+          CAST(IFNULL(round(100 * FAT_KCAL.Nutr_Val / ENERC_KCAL.Nutr_Val,0),
+          0) AS REAL)
+        FROM am_analysis ENERC_KCAL
+        JOIN am_analysis PROT_KCAL
+          ON ENERC_KCAL.Nutr_No = 208
+            AND PROT_KCAL.Nutr_No = 3000
+        JOIN am_analysis CHO_KCAL
+          ON CHO_KCAL.Nutr_No = 3002
+        JOIN am_analysis FAT_KCAL ON FAT_KCAL.Nutr_No = 3001
+      )
 """
 
 init_triggers = """
@@ -885,20 +926,22 @@ init_triggers = """
   WHEN NEW.meal_id = (SELECT currentmeal FROM options)
     AND (SELECT block_mealfoods_insert_trigger FROM z_trig_ctl) = 0
   BEGIN
-    UPDATE z_trig_ctl SET rm_analysis = 1;
-    UPDATE z_trig_ctl SET am_analysis = 1;
-    UPDATE z_trig_ctl SET am_dv = 1;
-    UPDATE z_trig_ctl SET PCF_processing = 1;
+    UPDATE z_trig_ctl
+    SET rm_analysis = 1,
+      am_analysis = 1,
+      am_dv = 1,
+      PCF_processing = 1;
   END;
 
   CREATE TEMP TRIGGER mealfoods_update_pcf
   AFTER UPDATE ON mealfoods
   WHEN OLD.meal_id = (SELECT currentmeal FROM options)
   BEGIN
-    UPDATE z_trig_ctl SET rm_analysis = 1;
-    UPDATE z_trig_ctl SET am_analysis = 1;
-    UPDATE z_trig_ctl SET am_dv = 1;
-    UPDATE z_trig_ctl SET PCF_processing = 1;
+    UPDATE z_trig_ctl
+    SET rm_analysis = 1,
+      am_analysis = 1,
+      am_dv = 1,
+      PCF_processing = 1;
   END;
 
   CREATE TEMP TRIGGER mealfoods_delete_pcf
@@ -907,29 +950,32 @@ init_triggers = """
     AND
       (SELECT block_mealfoods_DELETE_TRIGGER FROM z_trig_ctl) = 0
   BEGIN
-    UPDATE z_trig_ctl SET am_analysis_header = 1;
-    UPDATE z_trig_ctl SET rm_analysis = 1;
-    UPDATE z_trig_ctl SET am_analysis = 1;
-    UPDATE z_trig_ctl SET am_dv = 1;
-    UPDATE z_trig_ctl SET PCF_processing = 1;
+    UPDATE z_trig_ctl
+    SET am_analysis_header = 1,
+      rm_analysis = 1,
+      am_analysis = 1,
+      am_dv = 1,
+      PCF_processing = 1;
   END;
 
   CREATE TEMP TRIGGER update_nutopt_pcf
   AFTER UPDATE OF nutopt ON nutr_def
   BEGIN
-    UPDATE z_trig_ctl SET rm_analysis = 1;
-    UPDATE z_trig_ctl SET am_analysis = 1;
-    UPDATE z_trig_ctl SET am_dv = 1;
-    UPDATE z_trig_ctl SET PCF_processing = 1;
+    UPDATE z_trig_ctl
+    SET rm_analysis = 1,
+      am_analysis = 1,
+      am_dv = 1,
+      PCF_processing = 1;
   END;
 
   CREATE TEMP TRIGGER update_FAPU1_pcf
   AFTER UPDATE OF FAPU1 ON options
   BEGIN
-    UPDATE z_trig_ctl SET rm_analysis = 1;
-    UPDATE z_trig_ctl SET am_analysis = 1;
-    UPDATE z_trig_ctl SET am_dv = 1;
-    UPDATE z_trig_ctl SET PCF_processing = 1;
+    UPDATE z_trig_ctl
+    SET rm_analysis = 1,
+      am_analysis = 1,
+      am_dv = 1,
+      PCF_processing = 1;
   END;
 
 ---------------------------[VIEWS TRIGGERS]----------------------------------
@@ -1014,22 +1060,22 @@ init_triggers = """
 
 
   CREATE TEMP TRIGGER currentmeal_upd_Gm_Wgt INSTEAD OF
-  UPDATE OF Gm_Wgt ON currentmeal BEGIN
-  UPDATE mealfoods
-  SET Gm_Wgt = CASE
-                   WHEN NEW.Gm_Wgt IS NULL THEN
-                          (SELECT Gm_Wgt
-                           FROM pref_Gm_Wgt
-                           WHERE NDB_No = NEW.NDB_No)
-                   ELSE NEW.Gm_Wgt
-               END
-  WHERE NDB_No = NEW.NDB_No
-    AND meal_id =
-      (SELECT currentmeal
-       FROM options);
-
+  UPDATE OF Gm_Wgt ON currentmeal
+  BEGIN
+    UPDATE mealfoods
+    SET Gm_Wgt = CASE
+      WHEN NEW.Gm_Wgt IS NULL THEN
+        (SELECT Gm_Wgt
+         FROM pref_Gm_Wgt
+         WHERE NDB_No = NEW.NDB_No)
+      ELSE
+        NEW.Gm_Wgt
+      END
+    WHERE NDB_No = NEW.NDB_No
+      AND meal_id =
+        (SELECT currentmeal
+         FROM options);
   END;
-
 
 
   CREATE TEMP TRIGGER currentmeal_upd_pcf INSTEAD OF
@@ -1048,10 +1094,6 @@ init_triggers = """
     AND meal_id =
       (SELECT currentmeal
        FROM options); END;
-
-
-
-
 
 
   CREATE TEMP TRIGGER theusual_INSERT INSTEAD OF
@@ -1075,7 +1117,6 @@ init_triggers = """
        FROM options); END;
 
 
-
   CREATE TEMP TRIGGER theusual_DELETE INSTEAD OF
   DELETE ON theusual WHEN OLD.meal_name IS NOT NULL BEGIN
   DELETE
@@ -1083,14 +1124,14 @@ init_triggers = """
   WHERE meal_name = OLD.meal_name; END;
 
 
-
-
   DROP TABLE IF EXISTS wlsave;
-
-
-  CREATE TEMP TABLE wlsave (weight real, fat real, wldate integer, span integer, today integer);
-
-
+  CREATE TEMP TABLE wlsave (
+    weight REAL,
+    fat REAL,
+    wldate INTEGER,
+    span INTEGER,
+    today INTEGER
+  );
 
 
   CREATE TEMP TRIGGER autocal_cutting AFTER
@@ -1104,6 +1145,7 @@ init_triggers = """
           options) BEGIN
   DELETE
   FROM wlsave;
+
   INSERT INTO wlsave
   SELECT weightyintercept,
          fatyintercept,
@@ -1116,7 +1158,7 @@ init_triggers = """
     (SELECT MIN(wldate) AS wldate
      FROM z_wl
      WHERE cleardate IS NULL),
-    (SELECT strftime('%Y%m%d', 'now', 'localtime') AS today);
+    (SELECT STRFTIME('%Y%m%d', 'now', 'localtime') AS today);
   UPDATE z_wl
   SET cleardate =
     (SELECT today
@@ -1133,8 +1175,6 @@ init_triggers = """
   WHERE Nutr_No = 208; END;
 
 
-
-
   CREATE TEMP TRIGGER autocal_bulking AFTER
   INSERT ON z_wl WHEN
     (SELECT autocal = 2
@@ -1143,38 +1183,39 @@ init_triggers = """
      AND (weightslope - fatslope) < 0.0
      FROM z_wslope,
           z_fslope,
-          options) BEGIN
-  DELETE
-  FROM wlsave;
-  INSERT INTO wlsave
-  SELECT weightyintercept,
-         fatyintercept,
-         wldate,
-         span,
-         today
-  FROM z_wslope,
-       z_fslope,
-       z_span,
-    (SELECT MIN(wldate) AS wldate
-     FROM z_wl
-     WHERE cleardate IS NULL),
-    (SELECT strftime('%Y%m%d', 'now', 'localtime') AS today);
-  UPDATE z_wl
-  SET cleardate =
-    (SELECT today
-     FROM wlsave)
-  WHERE cleardate IS NULL;
-    INSERT INTO z_wl
-  SELECT weight,
-         round(100.0 * fat / weight, 1),
-         today,
-         NULL
-  FROM wlsave;
-  UPDATE nutr_def
-  SET nutopt = nutopt + 20.0
-  WHERE Nutr_No = 208; END;
+          options)
+  BEGIN
+    DELETE
+    FROM wlsave;
 
-
+    INSERT INTO wlsave
+    SELECT weightyintercept,
+           fatyintercept,
+           wldate,
+           span,
+           today
+    FROM z_wslope,
+         z_fslope,
+         z_span,
+      (SELECT MIN(wldate) AS wldate
+       FROM z_wl
+       WHERE cleardate IS NULL),
+      (SELECT STRFTIME('%Y%m%d', 'now', 'localtime') AS today);
+    UPDATE z_wl
+    SET cleardate =
+      (SELECT today
+       FROM wlsave)
+    WHERE cleardate IS NULL;
+      INSERT INTO z_wl
+    SELECT weight,
+           round(100.0 * fat / weight, 1),
+           today,
+           NULL
+    FROM wlsave;
+    UPDATE nutr_def
+    SET nutopt = nutopt + 20.0
+    WHERE Nutr_No = 208;
+  END;
 
 
   CREATE TEMP TRIGGER autocal_cycle_END AFTER
@@ -1216,9 +1257,6 @@ init_triggers = """
 
 
 ---------------------------[ANALYSIS TRIGGERS]---------------------------------
-
-
-
 """
 
 user_init_query = """
@@ -1238,7 +1276,7 @@ COMMIT;
 db_load_pt1 = """
 BEGIN;
 
-CREATE temp TABLE zweight
+CREATE TEMP TABLE zweight
   (
      ndb_no     INT,
      seq        INT,
@@ -1315,7 +1353,6 @@ CREATE TABLE IF NOT EXISTS options
      autocal       INTEGER DEFAULT 0
   );
 
-
 CREATE TABLE IF NOT EXISTS mealfoods
   (
      meal_id INT,
@@ -1340,18 +1377,18 @@ CREATE TABLE IF NOT EXISTS cost
   );
 
 
-CREATE TABLE IF NOT EXISTS eating_plan (plan_name text);
+CREATE TABLE IF NOT EXISTS eating_plan (plan_name TEXT);
 
 CREATE TABLE IF NOT EXISTS archive_mealfoods
    (
       meal_id INT,
       NDB_No INT,
-      Gm_Wgt REAK,
+      Gm_Wgt REAL,
       meals_per_day INTEGER,
-      primary key
+      PRIMARY KEY
         (
-          meal_id desc,
-          NDB_No asc,
+          meal_id DESC,
+          NDB_No ASC,
           meals_per_day
         )
   );
@@ -1404,7 +1441,7 @@ CREATE TEMP TABLE tfood_des
      manufacname TEXT,
      survey      TEXT,
      ref_desc    TEXT,
-     refuse      INTEGER,
+     refuse      INT,
      sciname     TEXT,
      n_factor    REAL,
      pro_factor  REAL,
@@ -1445,8 +1482,6 @@ CREATE TEMP TABLE tnut_data
      cc            TEXT
   );
 
-
-
 CREATE TEMP TABLE ttnutr_def
   (
      nutr_no  TEXT,
@@ -1477,7 +1512,6 @@ usda_load_food_group = """
 """
 
 usda_load_init = """
-
 -- Remove tildes from USDA
 INSERT OR IGNORE
 INTO   tnutr_def
@@ -1488,8 +1522,6 @@ SELECT TRIM(nutr_no, '~'),
        NULL,
        NULL
 FROM ttnutr_def;
-
-
 
 -- Insert or replace default values
 -- to read the USDA a trigger should be put that trims '~' and doesn't
@@ -1725,7 +1757,7 @@ REPLACE INTO food_des
 
 SELECT TRIM(ndb_no, '~'),
        TRIM(fdgrp_cd, '~'),
-       REPLACE(TRIM(TRIM(lONg_desc, '~')
+       REPLACE(TRIM(TRIM(long_desc, '~')
               || ' ('
               || TRIM(sciname, '~')
               || ')',' ('),' ()',''),
@@ -1767,6 +1799,7 @@ FROM tweight;
 --We overwrite the real weight TABLE with the original user mods
 INSERT OR replace INTO weight SELECT *
 FROM zweight;
+
 DROP TABLE tweight;
 DROP TABLE zweight;
 
@@ -2002,55 +2035,58 @@ AND       lONg6.nutr_no = 3004
 WHERE     short6.nutr_val IS NOT NULL
 OR        lONg6.nutr_val IS NOT NULL;
 
---INSERT OMEGA3 records INTO nut_data
-INSERT
-or     REPLACE
+-- Insert OMEGA3 records into nut_data
+INSERT OR REPLACE
 INTO   nut_data
-SELECT    f.ndb_no,
-          2007,
-          IFNULL(short3.nutr_val, 0.0) + IFNULL(lONg3.nutr_val, 0.0)
-FROM      food_des f
+SELECT
+  f.ndb_no,
+  2007,
+  IFNULL(short3.nutr_val, 0.0) + IFNULL(lONg3.nutr_val, 0.0)
+FROM food_des f
 LEFT JOIN nut_data short3
-ON        f.ndb_no = short3.ndb_no
-AND       short3.nutr_no = 3005
-LEFT JOIN nut_data lONg3
-ON        f.ndb_no = lONg3.ndb_no
-AND       lONg3.nutr_no = 3006
-WHERE     short3.nutr_val IS NOT NULL
-OR        lONg3.nutr_val IS NOT NULL;
+  ON f.ndb_no = short3.ndb_no
+  AND short3.nutr_no = 3005
+LEFT JOIN nut_data long3
+  ON f.ndb_no = long3.ndb_no
+  AND long3.nutr_no = 3006
+WHERE short3.nutr_val IS NOT NULL
+  OR long3.nutr_val IS NOT NULL;
 
---INSERT CHO_NONFIB records INTO nut_data
-INSERT
-or     REPLACE
-INTO   nut_data
-SELECT    f.ndb_no,
-          2000,
-          CASE
-                    WHEN chocdf.nutr_val - IFNULL(fibtg.nutr_val, 0.0) < 0.0 THEN 0.0
-                    ELSE chocdf.nutr_val - IFNULL(fibtg.nutr_val, 0.0)
-          END
-FROM      food_des f
+-- Insert CHO_NONFIB records into nut_data
+INSERT OR REPLACE
+INTO nut_data
+SELECT
+  f.ndb_no,
+  2000,
+  CASE
+    WHEN chocdf.nutr_val - IFNULL(fibtg.nutr_val, 0.0) < 0.0 THEN
+      0.0
+    ELSE
+      chocdf.nutr_val - IFNULL(fibtg.nutr_val, 0.0)
+    END
+FROM food_des f
 LEFT JOIN nut_data chocdf
-ON        f.ndb_no = chocdf.ndb_no
-AND       chocdf.nutr_no = 205
+  ON f.ndb_no = chocdf.ndb_no
+  AND chocdf.nutr_no = 205
 LEFT JOIN nut_data fibtg
-ON        f.ndb_no = fibtg.ndb_no
-AND       fibtg.nutr_no = 291
-WHERE     chocdf.nutr_val IS NOT NULL;
+  ON f.ndb_no = fibtg.ndb_no
+  AND fibtg.nutr_no = 291
+WHERE chocdf.nutr_val IS NOT NULL;
 
---replace empty strings with values for macrONutrient factors in food_des
+-- Replace empty strings with values for macronutrient factors in food_des
 UPDATE food_des
 SET    pro_factor = 4.0
-WHERE  pro_factor = ''
-OR     pro_factor IS NULL;UPDATE food_des
-SET    fat_factor = 9.0
-WHERE  fat_factor = ''
-OR     fat_factor IS NULL;UPDATE food_des
-SET    cho_factor = 4.0
-WHERE  cho_factor = ''
-OR     cho_factor IS NULL;
+WHERE  pro_factor = '' OR pro_factor IS NULL;
 
---INSERT calories
+UPDATE food_des
+SET    fat_factor = 9.0
+WHERE  fat_factor = '' OR fat_factor IS NULL;
+
+UPDATE food_des
+SET    cho_factor = 4.0
+WHERE  cho_factor = '' OR cho_factor IS NULL;
+
+-- insert calories
 FROM macrONutrients INTO nut_data
 INSERT
 or     REPLACE
@@ -2084,10 +2120,11 @@ AND    chocdf.nutr_no = 205;
 
 DROP TRIGGER IF EXISTS protect_options;
 
-CREATE TRIGGER protect_options 
-AFTER INSERT ON options 
+CREATE TRIGGER protect_options
+AFTER INSERT ON options
   BEGIN DELETE FROM options
-WHERE protect != 1; END;
+WHERE protect != 1;
+END;
 
 INSERT INTO options default values;
 
@@ -2100,52 +2137,53 @@ COMMIT;
 VACUUM;
 """
 
-# ThIS query will wipe everything USE WITH CARE
+# This query will wipe everything USE WITH CARE
 init_logic_create_tables = """
 CREATE TABLE z_vars1 (
-  am_cals2gram_pro real,
-  am_cals2gram_fat real,
-  am_cals2gram_cho real,
-  am_alccals real,
-  am_fa2fat real,
-  balance_of_calories int
+  am_cals2gram_pro REAL,
+  am_cals2gram_fat REAL,
+  am_cals2gram_cho REAL,
+  am_alccals REAL,
+  am_fa2fat REAL,
+  balance_of_calories INT
 );
 
 CREATE TABLE z_vars2 (
-  am_fat_dv_not_boc real,
-  am_cho_nONfib_dv_not_boc real,
-  am_chocdf_dv_not_boc real
+  am_fat_dv_not_boc REAL,
+  am_cho_nONfib_dv_not_boc REAL,
+  am_chocdf_dv_not_boc REAL
 );
 
 CREATE TABLE z_vars3 (
-  am_fat_dv_boc real,
-  am_chocdf_dv_boc real,
-  am_cho_nONfib_dv_boc real
+  am_fat_dv_boc REAL,
+  am_chocdf_dv_boc REAL,
+  am_cho_nonfib_dv_boc REAL
 );
 
 CREATE TABLE z_vars4 (
-  Nutr_No int,
-  dv real,
-  Nutr_Val real
+  Nutr_No INT,
+  dv REAL,
+  Nutr_Val REAL
 );
 
+-- Used for the calculation of the omega-6/omega-3 balance
 CREATE TABLE z_n6 (
-  n6hufa real,
-  FAPU1 real,
-  pufa_reductiON real,
-  iter int,
-  reduce int,
-  p3 real,
-  p6 real,
-  h3 real,
-  h6 real,
-  o real
+  n6hufa REAL,
+  FAPU1 REAL,
+  pufa_reduction REAL,
+  iter INT,
+  reduce INT,
+  p3 REAL,
+  p6 REAL,
+  h3 REAL,
+  h6 REAL,
+  o REAL
 );
 
 CREATE TABLE z_anal (
-  Nutr_No int primary key,
-  NULL_value int,
-  Nutr_Val real
+  Nutr_No INT PRIMARY KEY,
+  NULL_value INT,
+  Nutr_Val REAL
 );
 
 
@@ -2156,9 +2194,12 @@ CREATE TABLE am_analysis_header (
   firstmeal integer,
   lastmeal integer,
   currentmeal integer,
-  caloriebuttON text,
-  macropct text,
-  n6balance text
+  calories REAL,
+  proteins REAL,
+  carbs REAL,
+  fats REAL,
+  omega6 REAL,
+  omega3 REAL
 );
 
 
@@ -2175,9 +2216,12 @@ CREATE TABLE rm_analysis_header (
   firstmeal integer,
   lastmeal integer,
   currentmeal integer,
-  caloriebuttON text,
-  macropct text,
-  n6balance text
+  calories REAL,
+  proteins REAL,
+  carbs REAL,
+  fats REAL,
+  omega6 REAL,
+  omega3 REAL
 );
 
 CREATE TABLE rm_analysis (
@@ -2193,18 +2237,18 @@ CREATE TABLE rm_dv (
 );
 
 CREATE TABLE z_trig_ctl (
-  am_analysis_header integer default 0,
-  rm_analysis_header integer default 0,
-  am_analysis_minus_currentmeal integer default 0,
-  am_analysis_null integer default 0,
-  am_analysis integer default 0,
-  rm_analysis integer default 0,
-  rm_analysis_null integer default 0,
-  am_dv integer default 0,
-  PCF_processing integer default 0,
-  block_setting_preferred_weight integer default 0,
-  block_mealfoods_insert_trigger default 0,
-  block_mealfoods_delete_trigger integer default 0
+  am_analysis_header INT DEFAULT 0,
+  rm_analysis_header INT DEFAULT 0,
+  am_analysis_minus_currentmeal INT DEFAULT 0,
+  am_analysis_null INT DEFAULT 0,
+  am_analysis INT DEFAULT 0,
+  rm_analysis INT DEFAULT 0,
+  rm_analysis_null int default 0,
+  am_dv INT DEFAULT 0,
+  PCF_processing INT DEFAULT 0,
+  block_setting_preferred_weight INT DEFAULT 0,
+  block_mealfoods_insert_trigger INT DEFAULT 0,
+  block_mealfoods_delete_trigger INT DEFAULT 0
 );
 """
 
@@ -2223,14 +2267,12 @@ SELECT am.Nutr_No AS Nutr_No,
   END AS null_value,
   CASE
     WHEN currentmeal BETWEEN firstmeal AND lastmeal THEN
-      IFNULL(am.Nutr_Val,0.0) + 1.0 / mealcount * IFNULL(rm.Nutr_Val, 0.0)
+      IFNULL(am.Nutr_Val, 0.0) + 1.0 / mealcount * IFNULL(rm.Nutr_Val, 0.0)
     ELSE
       am.Nutr_Val
   END AS Nutr_Val
 FROM z_anal am
-LEFT JOIN rm_analysis rm ON am.Nutr_No = rm.Nutr_No join am_analysis_header;
-
-
+LEFT JOIN rm_analysis rm ON am.Nutr_No = rm.Nutr_No JOIN am_analysis_header;
 """
 
 init_logic = """
@@ -2239,75 +2281,30 @@ BEGIN;
   -- Call create tables
   -- Call create views
 
-
   INSERT INTO z_trig_ctl default values;
-
 
   DELETE FROM z_n6;
 
   INSERT INTO z_n6
-  SELECT NULL, NULL, NULL, 1, 1, 900.0 *
-    CASE
-      WHEN SHORT3.Nutr_Val > 0.0 THEN
-        SHORT3.Nutr_Val
-      ELSE
-        0.000000001
-    END /
-    CASE
-      WHEN ENERC_KCAL.Nutr_Val > 0.0 THEN
-        ENERC_KCAL.Nutr_Val
-      ELSE
-        0.000000001
-    END,
-    900.0 *
-    CASE
-      WHEN SHORT6.Nutr_Val > 0.0 THEN
-        SHORT6.Nutr_Val
-      ELSE
-        0.000000001
-    END /
-    CASE
-      WHEN ENERC_KCAL.Nutr_Val > 0.0 THEN
-        ENERC_KCAL.Nutr_Val
-      ELSE
-        0.000000001
-    END,
-    900.0 *
-    CASE
-      WHEN LONG3.Nutr_Val > 0.0 THEN
-        LONG3.Nutr_Val
-      ELSE
-        0.000000001
-    END /
-    CASE
-      WHEN ENERC_KCAL.Nutr_Val > 0.0  THEN
-        ENERC_KCAL.Nutr_Val
-      ELSE
-        0.000000001
-    END,
-    900.0 *
-    CASE
-      WHEN LONG6.Nutr_Val > 0.0 THEN
-        LONG6.Nutr_Val
-      ELSE
-        0.000000001
-    END /
-    CASE
-      WHEN ENERC_KCAL.Nutr_Val > 0.0 THEN
-        ENERC_KCAL.Nutr_Val
-      ELSE
-        0.000000001
-    END,
+  SELECT
+    NULL,
+    NULL,
+    NULL,
+    1,
+    1,
+    900.0 * MAX(SHORT3.Nutr_Val, 0.000000001) /
+      MAX(ENERC_KCAL.Nutr_Val, 0.000000001),
+    900.0 * MAX(SHORT6.Nutr_Val, 0.000000001) /
+      MAX(ENERC_KCAL.Nutr_Val, 0.000000001),
+    900.0 * MAX(LONG3.Nutr_Val, 0.000000001) /
+      MAX(ENERC_KCAL.Nutr_Val, 0.000000001),
+    900.0 * MAX(LONG6.Nutr_Val, 0.000000001) /
+      MAX(ENERC_KCAL.Nutr_Val, 0.000000001),
     900.0 *
     (FASAT.Nutr_Val + FAMS.Nutr_Val + FAPU.Nutr_Val -
-    MAX(SHORT3.Nutr_Val,0.000000001) - MAX(SHORT6.Nutr_Val,0.000000001) -
-    MAX(LONG3.Nutr_Val,0.000000001) - MAX(LONG6.Nutr_Val,0.000000001)) /
-    CASE
-      WHEN ENERC_KCAL.Nutr_Val > 0.0 THEN
-        ENERC_KCAL.Nutr_Val
-      ELSE
-        0.000000001
-    END
+      MAX(SHORT3.Nutr_Val, 0.000000001) - MAX(SHORT6.Nutr_Val, 0.000000001) -
+      MAX(LONG3.Nutr_Val, 0.000000001) - MAX(LONG6.Nutr_Val, 0.000000001)) /
+    MAX(ENERC_KCAL.Nutr_Val, 0.000000001)
   FROM am_analysis SHORT3
   JOIN am_analysis SHORT6 ON SHORT3.Nutr_No = 3005 AND SHORT6.Nutr_No = 3003
   JOIN am_analysis LONG3 ON LONG3.Nutr_No = 3006
@@ -2320,7 +2317,7 @@ BEGIN;
 
 
   UPDATE am_analysis_header
-  SET n6balance = (
+  SET omega6 = (
     SELECT
       CASE
         WHEN n6hufa_int = 0 OR n6hufa_int IS NULL THEN
@@ -2331,27 +2328,36 @@ BEGIN;
           90
         ELSE
           n6hufa_int
-      END || ' / ' || (100 -
+      END
+    FROM (SELECT CAST(ROUND(n6hufa, 0) AS REAL) AS n6hufa_int FROM z_n6));
+      ),
+    omega3 = (100 - (SELECT
       CASE
-        WHEN n6hufa_int = 0 THEN
-          100
-        WHEN n6hufa_int BETWEEN 1 AND 14 THEN
+        WHEN n6hufa_int = 0 OR n6hufa_int IS NULL THEN
+          0
+        WHEN n6hufa_int between 1 AND 14 THEN
           15
         WHEN n6hufa_int > 90 THEN
           90
-        ELSE n6hufa_int
-      END)
-  FROM (SELECT CAST(ROUND(n6hufa,0) AS int) AS n6hufa_int FROM z_n6));
+        ELSE
+          n6hufa_int
+      END
+    FROM (SELECT CAST(ROUND(n6hufa, 0) AS REAL) AS n6hufa_int FROM z_n6)))
+      );
 
   UPDATE am_analysis_header
-  SET n6balance =
-    CASE
-      WHEN n6balance IS NULL THEN
-        '0 / 0'
+  SET omega6 = CASE
+      WHEN omega6 IS NULL THEN
+        0
       ELSE
-        n6balance
+        omega6
+      END,
+  SET omega3 = CASE
+      WHEN omega3 IS NULL THEN
+        0
+      ELSE
+        omega3
       END;
-  END;
 
   -- Call create init triggers
 
@@ -2367,12 +2373,12 @@ BEGIN;
     SELECT
       Nutr_No,
       CASE
-        WHEN sum(mhectograms * Nutr_Val) IS NULL THEN
+        WHEN SUM(mhectograms * Nutr_Val) IS NULL THEN
           1
         ELSE
           0
       END,
-      IFNULL(sum(mhectograms * Nutr_Val), 0.0)
+      IFNULL(SUM(mhectograms * Nutr_Val), 0.0)
       FROM (SELECT NDB_No, total(Gm_Wgt / 100.0 * meals_per_day) AS mhectograms
     FROM mealfoods
     JOIN am_analysis_header
@@ -2382,26 +2388,42 @@ BEGIN;
 
     UPDATE rm_analysis_header
     SET
-      caloriebuttON = (
-        SELECT caloriebuttON
+      calories = (
+        SELECT calories
         FROM am_analysis_header
       ),
-      macropct = (
-        SELECT
-          cast(IFNULL(round(100 * PROT_KCAL.Nutr_Val / ENERC_KCAL.Nutr_Val,0),
-          0) AS int)
-          || ' / ' || cast (IFNULL(round(100 * CHO_KCAL.Nutr_Val /
-          ENERC_KCAL.Nutr_Val,0),0) as int) || ' / ' ||
-          cast (IFNULL(round(100 * FAT_KCAL.Nutr_Val / ENERC_KCAL.Nutr_Val,0),
-          0) as int)
+      proteins = (
+        SELECT CAST(IFNULL(
+          ROUND(100 * PROT_KCAL.Nutr_Val / ENERC_KCAL.Nutr_Val, 0), 0) AS REAL)
         FROM rm_analysis ENERC_KCAL
         JOIN rm_analysis PROT_KCAL
           ON ENERC_KCAL.Nutr_No = 208 AND PROT_KCAL.Nutr_No = 3000
         JOIN rm_analysis CHO_KCAL
           ON CHO_KCAL.Nutr_No = 3002
         JOIN rm_analysis FAT_KCAL
-          ON FAT_KCAL.Nutr_No = 3001
-      );
+          ON FAT_KCAL.Nutr_No = 3001)
+      ),
+      carbs = (
+        SELECT CAST(IFNULL(
+          ROUND(100 * CHO_KCAL.Nutr_Val / ENERC_KCAL.Nutr_Val, 0), 0) as REAL)
+        FROM rm_analysis ENERC_KCAL
+        JOIN rm_analysis PROT_KCAL
+          ON ENERC_KCAL.Nutr_No = 208 AND PROT_KCAL.Nutr_No = 3000
+        JOIN rm_analysis CHO_KCAL
+          ON CHO_KCAL.Nutr_No = 3002
+        JOIN rm_analysis FAT_KCAL
+          ON FAT_KCAL.Nutr_No = 3001)
+          ),
+      fats = (
+        SELECT CAST(IFNULL(
+          ROUND(100 * FAT_KCAL.Nutr_Val / ENERC_KCAL.Nutr_Val, 0), 0) as REAL)
+          FROM rm_analysis ENERC_KCAL
+        JOIN rm_analysis PROT_KCAL
+          ON ENERC_KCAL.Nutr_No = 208 AND PROT_KCAL.Nutr_No = 3000
+        JOIN rm_analysis CHO_KCAL
+          ON CHO_KCAL.Nutr_No = 3002
+        JOIN rm_analysis FAT_KCAL
+          ON FAT_KCAL.Nutr_No = 3001);
 
     DELETE FROM z_n6;
 
@@ -2412,67 +2434,18 @@ BEGIN;
       NULL,
       1,
       1,
-      900.0 *
-      CASE
-        WHEN SHORT3.Nutr_Val > 0.0 THEN
-          SHORT3.Nutr_Val
-        ELSE
-          0.000000001
-      END /
-      CASE
-        WHEN ENERC_KCAL.Nutr_Val > 0.0 THEN
-          ENERC_KCAL.Nutr_Val
-        ELSE
-          0.000000001
-      END,
-      900.0 *
-      CASE
-        WHEN SHORT6.Nutr_Val > 0.0 THEN
-          SHORT6.Nutr_Val
-        ELSE
-          0.000000001
-      END /
-      CASE
-        WHEN ENERC_KCAL.Nutr_Val > 0.0 THEN
-          ENERC_KCAL.Nutr_Val
-        ELSE
-          0.000000001
-      END,
-      900.0 *
-      CASE
-        WHEN LONG3.Nutr_Val > 0.0 THEN
-          LONG3.Nutr_Val
-        ELSE
-          0.000000001
-      END /
-      CASE
-        WHEN ENERC_KCAL.Nutr_Val > 0.0 THEN
-          ENERC_KCAL.Nutr_Val
-        ELSE
-          0.000000001
-      END,
-      900.0 *
-      CASE
-        WHEN LONG6.Nutr_Val > 0.0 THEN
-          LONG6.Nutr_Val
-        ELSE
-          0.000000001
-      END /
-      CASE
-        WHEN ENERC_KCAL.Nutr_Val > 0.0 THEN
-          ENERC_KCAL.Nutr_Val
-        ELSE
-          0.000000001
-      END,
+      900.0 * MAX(SHORT3.Nutr_Val, 0.000000001)
+       / MAX(ENERC_KCAL.Nutr_Val, 0.000000001),
+      900.0 * MAX(SHORT6.Nutr_Val, 0.000000001)
+       / MAX(ENERC_KCAL.Nutr_Val, 0.000000001),
+      900.0 * MAX(LONG3.Nutr_Val, 0.000000001)
+       / MAX(ENERC_KCAL.Nutr_Val, 0.000000001),
+      900.0 * MAX(LONG6.Nutr_Val, 0.000000001)
+       / MAX(ENERC_KCAL.Nutr_Val, 0.000000001),
       900.0 * (FASAT.Nutr_Val + FAMS.Nutr_Val + FAPU.Nutr_Val -
       MAX(SHORT3.Nutr_Val,0.000000001) - MAX(SHORT6.Nutr_Val,0.000000001) -
       MAX(LONG3.Nutr_Val,0.000000001) - MAX(LONG6.Nutr_Val,0.000000001)) /
-      CASE
-        WHEN ENERC_KCAL.Nutr_Val > 0.0 THEN
-          ENERC_KCAL.Nutr_Val
-        ELSE
-          0.000000001
-        END
+      MAX(ENERC_KCAL.Nutr_Val, 0.000000001)
     FROM rm_analysis SHORT3
     JOIN rm_analysis SHORT6
       ON SHORT3.Nutr_No = 3005 AND SHORT6.Nutr_No = 3003
@@ -2492,7 +2465,7 @@ BEGIN;
       ON ENERC_KCAL.Nutr_No = 208;
 
     UPDATE rm_analysis_header
-    SET n6balance = (
+    SET omega6 = (
       SELECT
         CASE
           WHEN n6hufa_int = 0 OR n6hufa_int IS NULL THEN
@@ -2503,10 +2476,12 @@ BEGIN;
             90
           ELSE
             n6hufa_int
-        END || ' / ' || (100 -
-        CASE
-          WHEN n6hufa_int = 0 THEN
-            100
+       END),
+    omega3 = (
+      SELECT
+        (100 - CASE
+          WHEN n6hufa_int = 0 OR n6hufa_int IS NULL THEN
+            0
           WHEN n6hufa_int BETWEEN 1 AND 14 THEN
             15
           WHEN n6hufa_int > 90 THEN
@@ -2514,7 +2489,8 @@ BEGIN;
           ELSE
             n6hufa_int
         END)
-    FROM (SELECT cast (round(n6hufa,0) as int) as n6hufa_int
+    )
+    FROM (SELECT CAST(ROUND(n6hufa, 0) AS int) AS n6hufa_int
     FROM z_n6));
   END;
 
@@ -2599,7 +2575,7 @@ BEGIN;
     WHERE Nutr_No in (2007, 2003, 2004, 2005);
     INSERT INTO am_dv SELECT Nutr_No, dv, 100.0 * Nutr_Val / dv - 100.0
     FROM z_vars4;
-    UPDATE am_analysis_header SET caloriebuttON = 'Calories (' || (SELECT cast (round(dv) as int)
+    UPDATE am_analysis_header SET calories = 'Calories (' || (SELECT cast (round(dv) as int)
     FROM am_dv
     WHERE Nutr_No = 208) || ')';
     DELETE
@@ -2625,6 +2601,8 @@ BEGIN;
   FROM z_pcf limit 1;
   UPDATE z_trig_ctl SET block_mealfoods_DELETE_TRIGGER = 0;
   END;
+
+
 
   CREATE TRIGGER defanal_am_TRIGGER AFTER UPDATE OF defanal_am ON options BEGIN
   UPDATE z_trig_ctl SET am_analysis_header = 1;
@@ -2666,89 +2644,182 @@ BEGIN;
   UPDATE z_trig_ctl SET am_dv = 1;
   END;
 
-  CREATE TRIGGER z_n6_INSERT_TRIGGER AFTER INSERT ON z_n6 BEGIN
-  UPDATE z_n6 SET n6hufa = (SELECT 100.0 / (1.0 + 0.0441 / p6 * (1.0 + p3 / 0.0555 + h3 / 0.005 + o / 5.0 + p6 / 0.175)) + 100.0 / (1.0 + 0.7 / h6 * (1.0 + h3 / 3.0))), reduce = 0, iter = 0;
+
+-----------------------[OMEGA BALANCE TRIGGERS]--------------------------------
+
+  CREATE TRIGGER z_n6_insert_trigger
+  AFTER INSERT ON z_n6
+  BEGIN
+    UPDATE z_n6
+    SET
+      n6hufa = (SELECT 100.0 / (1.0 + 0.0441 / p6 *
+        (1.0 + p3 / 0.0555 + h3 / 0.005 + o / 5.0 + p6 / 0.175)) + 100.0 /
+        (1.0 + 0.7 / h6 * (1.0 + h3 / 3.0))),
+      reduce = 0,
+      iter = 0;
   END;
 
-  CREATE TRIGGER z_n6_reduce6_TRIGGER AFTER UPDATE ON z_n6 WHEN NEW.n6hufa > OLD.FAPU1 and NEW.iter < 100 and NEW.reduce in (0, 6) BEGIN
-  UPDATE z_n6 SET iter = iter + 1, reduce = 6, n6hufa = (SELECT 100.0 / (1.0 + 0.0441 / (p6 - iter * .01 * p6) * (1.0 + p3 / 0.0555 + h3 / 0.005 + o / 5.0 + p6 / 0.175)) + 100.0 / (1.0 + 0.7 / (h6 - iter * .01 * h6) * (1.0 + h3 / 3.0)));
+  CREATE TRIGGER z_n6_reduce6_trigger
+  AFTER UPDATE ON z_n6
+  WHEN NEW.n6hufa > OLD.FAPU1 AND NEW.iter < 100 AND NEW.reduce in (0, 6)
+  BEGIN
+    UPDATE z_n6
+    SET
+      iter = iter + 1,
+      reduce = 6,
+      n6hufa = (SELECT 100.0 / (1.0 + 0.0441 / (p6 - iter * .01 * p6) *
+      (1.0 + p3 / 0.0555 + h3 / 0.005 + o / 5.0 + p6 / 0.175)) + 100.0 /
+      (1.0 + 0.7 / (h6 - iter * .01 * h6) * (1.0 + h3 / 3.0)));
   END;
 
-  CREATE TRIGGER z_n6_reduce3_TRIGGER AFTER UPDATE OF n6hufa ON z_n6 WHEN NEW.n6hufa < OLD.FAPU1 and NEW.iter < 100 and NEW.reduce in (0, 3) BEGIN
-  UPDATE z_n6 SET iter = iter + 1, reduce = 3, n6hufa = (SELECT 100.0 / (1.0 + 0.0441 / p6 * (1.0 + (p3 - iter * .01 * p3) / 0.0555 + (h3 - iter * .01 * h3) / 0.005 + o / 5.0 + p6 / 0.175)) + 100.0 / (1.0 + 0.7 / h6 * (1.0 + (h3 - iter * .01 * h3) / 3.0)));
+  CREATE TRIGGER z_n6_reduce3_trigger
+  AFTER UPDATE OF n6hufa ON z_n6
+  WHEN NEW.n6hufa < OLD.FAPU1 AND NEW.iter < 100 AND NEW.reduce in (0, 3)
+  BEGIN
+    UPDATE z_n6
+    SET
+      iter = iter + 1,
+      reduce = 3,
+      n6hufa = (SELECT 100.0 / (1.0 + 0.0441 / p6 *
+      (1.0 + (p3 - iter * .01 * p3) / 0.0555 + (h3 - iter * .01 * h3) /
+      0.005 + o / 5.0 + p6 / 0.175)) + 100.0 / (1.0 + 0.7 / h6 * (1.0 +
+      (h3 - iter * .01 * h3) / 3.0)));
   END;
 
+-----------------[MEAL FOODS INSERT AND DELETE TRIGGERS]-----------------------
 
-  CREATE TRIGGER INSERT_mealfoods_TRIGGER AFTER INSERT ON mealfoods WHEN NEW.meal_id = (SELECT currentmeal
-  FROM options) and (SELECT count(*)
-  FROM mealfoods
-  WHERE meal_id = NEW.meal_id) = 1 BEGIN
-  UPDATE z_trig_ctl SET am_analysis_header = 1;
-  UPDATE z_trig_ctl SET am_analysis_minus_currentmeal = CASE WHEN (SELECT mealcount
-  FROM am_analysis_header) > 1 THEN 1 WHEN (SELECT mealcount
-  FROM am_analysis_header) = 1 and (SELECT lastmeal
-  FROM am_analysis_header) != (SELECT currentmeal
-  FROM am_analysis_header) THEN 1 ELSE 0 END;
-  UPDATE z_trig_ctl SET am_analysis_NULL = CASE WHEN (SELECT mealcount
-  FROM am_analysis_header) > 1 THEN 0 WHEN (SELECT mealcount
-  FROM am_analysis_header) = 1 and (SELECT lastmeal
-  FROM am_analysis_header) != (SELECT currentmeal
-  FROM am_analysis_header) THEN 0 ELSE 1 END;
-  UPDATE z_trig_ctl SET rm_analysis_header = 1;
-  UPDATE z_trig_ctl SET rm_analysis = CASE WHEN (SELECT mealcount
-  FROM rm_analysis_header) = 1 THEN 1 ELSE 0 END;
-  UPDATE z_trig_ctl SET rm_analysis_NULL = CASE WHEN (SELECT mealcount
-  FROM rm_analysis_header) = 0 THEN 1 ELSE 0 END;
-  UPDATE z_trig_ctl SET am_analysis = 1;
-  UPDATE z_trig_ctl SET am_dv = 1;
+  CREATE TRIGGER insert_mealfoods_trigger
+  AFTER INSERT ON mealfoods
+  WHEN NEW.meal_id = (SELECT currentmeal
+    FROM options) AND (SELECT count(*) FROM mealfoods
+    WHERE meal_id = NEW.meal_id) = 1
+  BEGIN
+    UPDATE z_trig_ctl
+    SET
+      am_analysis_header = 1,
+      am_analysis = 1,
+      am_dv = 1,
+      rm_analysis_header = 1,
+
+      am_analysis_minus_currentmeal = CASE
+        WHEN (SELECT mealcount FROM am_analysis_header) > 1 THEN
+          1
+        WHEN (SELECT mealcount FROM am_analysis_header) = 1 AND
+          (SELECT lastmeal FROM am_analysis_header) != (SELECT currentmeal
+          FROM am_analysis_header) THEN
+          1
+        ELSE
+          0
+      END,
+
+      am_analysis_null = CASE
+        WHEN (SELECT mealcount FROM am_analysis_header) > 1 THEN
+          0
+        WHEN (SELECT mealcount FROM am_analysis_header) = 1 AND
+          (SELECT lastmeal FROM am_analysis_header) != (SELECT currentmeal
+          FROM am_analysis_header) THEN
+          0
+        ELSE
+          1
+        END,
+
+      rm_analysis = CASE
+        WHEN (SELECT mealcount FROM rm_analysis_header) = 1 THEN
+          1
+        ELSE
+          0
+      END,
+
+      rm_analysis_null = CASE
+        WHEN (SELECT mealcount FROM rm_analysis_header) = 0 THEN
+          1
+        ELSE
+          0
+      END;
   END;
 
-  CREATE TRIGGER DELETE_mealfoods_TRIGGER AFTER DELETE ON mealfoods WHEN OLD.meal_id = (SELECT currentmeal
-  FROM options) and (SELECT count(*)
-  FROM mealfoods
-  WHERE meal_id = OLD.meal_id) = 0 BEGIN
-  UPDATE mealfoods SET Nutr_No = NULL
-  WHERE Nutr_No IS not NULL;
-  UPDATE z_trig_ctl SET am_analysis_header = 1;
-  UPDATE z_trig_ctl SET am_analysis_minus_currentmeal = CASE WHEN (SELECT mealcount
-  FROM am_analysis_header) > 1 THEN 1 WHEN (SELECT mealcount
-  FROM am_analysis_header) = 1 and (SELECT lastmeal
-  FROM am_analysis_header) != (SELECT currentmeal
-  FROM am_analysis_header) THEN 1 ELSE 0 END;
-  UPDATE z_trig_ctl SET am_analysis_NULL = CASE WHEN (SELECT mealcount
-  FROM am_analysis_header) > 1 THEN 0 WHEN (SELECT mealcount
-  FROM am_analysis_header) = 1 and (SELECT lastmeal
-  FROM am_analysis_header) != (SELECT currentmeal
-  FROM am_analysis_header) THEN 0 ELSE 1 END;
-  UPDATE z_trig_ctl SET rm_analysis_header = 1;
-  UPDATE z_trig_ctl SET rm_analysis = CASE WHEN (SELECT mealcount
-  FROM rm_analysis_header) = 1 THEN 1 ELSE 0 END;
-  UPDATE z_trig_ctl SET rm_analysis_NULL = CASE WHEN (SELECT mealcount
-  FROM rm_analysis_header) = 0 THEN 1 ELSE 0 END;
-  UPDATE z_trig_ctl SET am_analysis = 1;
-  UPDATE z_trig_ctl SET am_dv = 1;
+  CREATE TRIGGER delete_mealfoods_trigger
+  AFTER DELETE ON mealfoods
+  WHEN OLD.meal_id = (SELECT currentmeal FROM options) AND (SELECT count(*)
+    FROM mealfoods
+  WHERE meal_id = OLD.meal_id) = 0
+  BEGIN
+    UPDATE mealfoods SET Nutr_No = NULL
+    WHERE Nutr_No IS NOT NULL;
+
+    UPDATE z_trig_ctl
+    SET
+      am_analysis_header = 1,
+      am_analysis = 1,
+      am_dv = 1,
+      rm_analysis_header = 1,
+      am_analysis_minus_currentmeal = CASE
+        WHEN (SELECT mealcount FROM am_analysis_header) > 1 THEN
+          1
+        WHEN (SELECT mealcount FROM am_analysis_header) = 1 AND
+          (SELECT lastmeal FROM am_analysis_header) != (SELECT currentmeal
+          FROM am_analysis_header) THEN
+          1
+        ELSE
+          0
+        END,
+
+      am_analysis_NULL = CASE
+        WHEN (SELECT mealcount FROM am_analysis_header) > 1 THEN
+          0
+        WHEN (SELECT mealcount FROM am_analysis_header) = 1 AND
+          (SELECT lastmeal FROM am_analysis_header) != (SELECT currentmeal
+          FROM am_analysis_header) THEN
+          0
+        ELSE
+          1
+        END,
+
+      rm_analysis = CASE
+        WHEN (SELECT mealcount FROM rm_analysis_header) = 1 THEN
+          1
+        ELSE
+          0
+        END,
+
+      rm_analysis_NULL = CASE
+        WHEN (SELECT mealcount FROM rm_analysis_header) = 0 THEN
+          1
+        ELSE
+          0
+        END;
   END;
 
-  CREATE TRIGGER UPDATE_mealfoods2weight_TRIGGER AFTER UPDATE ON mealfoods WHEN NEW.Gm_Wgt > 0.0 and (SELECT block_SETting_preferred_weight
-  FROM z_trig_ctl) = 0 BEGIN
-  UPDATE weight SET Gm_Wgt = NEW.Gm_Wgt
-  WHERE NDB_No = NEW.NDB_No and Seq = (SELECT MIN(Seq)
-  FROM weight
-  WHERE NDB_No = NEW.NDB_No) ;
+------------------------[MEAL FOODS WEIGHT TRIGGER]----------------------------
+
+  CREATE TRIGGER update_mealfoods2weight_trigger
+  AFTER UPDATE ON mealfoods
+  WHEN NEW.Gm_Wgt > 0.0 AND (SELECT block_setting_preferred_weight
+    FROM z_trig_ctl) = 0
+  BEGIN
+    UPDATE weight SET Gm_Wgt = NEW.Gm_Wgt
+    WHERE NDB_No = NEW.NDB_No and Seq = (SELECT MIN(Seq)
+      FROM weight
+      WHERE NDB_No = NEW.NDB_No);
   END;
 
-  CREATE TRIGGER INSERT_mealfoods2weight_TRIGGER AFTER INSERT ON mealfoods WHEN NEW.Gm_Wgt > 0.0 and (SELECT block_SETting_preferred_weight
-  FROM z_trig_ctl) = 0 BEGIN
-  UPDATE weight SET Gm_Wgt = NEW.Gm_Wgt
-  WHERE NDB_No = NEW.NDB_No and Seq = (SELECT MIN(Seq)
-  FROM weight
-  WHERE NDB_No = NEW.NDB_No) ;
+  CREATE TRIGGER insert_mealfoods2weight_trigger
+  AFTER INSERT ON mealfoods
+  WHEN NEW.Gm_Wgt > 0.0 and (SELECT block_setting_preferred_weight
+    FROM z_trig_ctl) = 0
+  BEGIN
+    UPDATE weight SET Gm_Wgt = NEW.Gm_Wgt
+    WHERE NDB_No = NEW.NDB_No and Seq = (SELECT MIN(Seq)
+      FROM weight
+      WHERE NDB_No = NEW.NDB_No) ;
   END;
+-------------------------------------------------------------------------------
 
-
-  CREATE TRIGGER UPDATE_weight_Seq BEFORE UPDATE OF Seq ON weight WHEN NEW.Seq = 0 BEGIN
-  UPDATE weight SET Seq = origSeq, Gm_Wgt = origGm_Wgt
-  WHERE NDB_No = NEW.NDB_No;
+  CREATE TRIGGER update_weight_seq
+  BEFORE UPDATE OF Seq ON weight WHEN NEW.Seq = 0
+  BEGIN
+    UPDATE weight SET Seq = origSeq, Gm_Wgt = origGm_Wgt
+      WHERE NDB_No = NEW.NDB_No;
   END;
 
   CREATE TRIGGER INSERT_weight_Seq BEFORE INSERT ON weight WHEN NEW.Seq = 0 BEGIN
@@ -2861,7 +2932,7 @@ BEGIN;
           FROM options
       ) = 0
   BEGIN
-      UPDATE z_wl SET cleardate = (SELECT strftime('%Y%m%d', 'now', 'localtime'))
+      UPDATE z_wl SET cleardate = (SELECT STRFTIME('%Y%m%d', 'now', 'localtime'))
       WHERE cleardate IS NULL;
 
       INSERT INTO z_wl SELECT weight, bodyfat, wldate, NULL
@@ -2883,50 +2954,46 @@ BEGIN;
   WHEN NEW.meals_per_day != OLD.meals_per_day
   BEGIN
 
-  INSERT OR IGNORE INTO archive_mealfoods
-  SELECT meal_id, NDB_No, Gm_Wgt, OLD.meals_per_day
-  FROM mealfoods;
+    INSERT OR IGNORE INTO archive_mealfoods
+    SELECT meal_id, NDB_No, Gm_Wgt, OLD.meals_per_day
+    FROM mealfoods;
 
-  DELETE
-  FROM mealfoods;
+    DELETE
+    FROM mealfoods;
 
-  INSERT OR IGNORE INTO mealfoods
-  SELECT meal_id, NDB_No, Gm_Wgt, NULL
-  FROM archive_mealfoods
-  WHERE meals_per_day = NEW.meals_per_day;
+    INSERT OR IGNORE INTO mealfoods
+    SELECT meal_id, NDB_No, Gm_Wgt, NULL
+    FROM archive_mealfoods
+    WHERE meals_per_day = NEW.meals_per_day;
 
-  DELETE
-  FROM archive_mealfoods
-  WHERE meals_per_day = NEW.meals_per_day;
+    DELETE
+    FROM archive_mealfoods
+    WHERE meals_per_day = NEW.meals_per_day;
 
-  UPDATE options
-  SET defanal_am =
-      (
-          SELECT count(dIStinct meal_id)
-          FROM mealfoods
-      );
+    UPDATE options
+    SET defanal_am =
+        (
+            SELECT COUNT(DISTINCT meal_id)
+            FROM mealfoods
+        );
   END;
 
   UPDATE nutr_def SET nutopt = 0.0
   WHERE nutopt IS NULL;
 
   UPDATE options
-  SET currentmeal =
-      CASE
-          WHEN currentmeal IS NULL THEN
-              0
-          ELSE
-              currentmeal
-      END;
-
-  UPDATE options
-  SET defanal_am =
-      CASE
-          WHEN defanal_am IS NULL THEN
-              0
-          ELSE
-              defanal_am
-      END;
+  SET defanal_am = CASE
+    WHEN defanal_am IS NULL THEN
+      0
+    ELSE
+      defanal_am
+    END,
+  SET currentmeal = CASE
+    WHEN currentmeal IS NULL THEN
+      0
+    ELSE
+      currentmeal
+    END;
 
   COMMIT;
   ANALYZE main;
