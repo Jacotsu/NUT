@@ -1,7 +1,7 @@
 # .read load
-# .read logic !! ONly IF new database, it can wipe everything
+# .read logic !! only IF new database, it can wipe everything
 # .read user
-# .headers ON user for debugging
+# .headers on use for debugging
 
 # ---------------------- [NUTRIENT MANAGEMENT] --------------------------------
 
@@ -232,7 +232,7 @@ ORDER BY Nutr_val DESC;
 foods_ranked_per_1_aproximate_serving = '''
 '''
 
-# Must implement period restrictiON
+# Must implement period restriction
 foods_ranked_per_daily_recorded_meals = '''
 SELECT mealfoods.NDB_No,
     FdGrp_Cd,
@@ -278,6 +278,8 @@ SELECT dv
 FROM am_dv
 WHERE Nutr_No = ?;
 """
+
+# ------------------------ -[BIG NUT QUERIES]----------------------------------
 
 init_pragmas = """
 PRAGMA user_version = 39;
@@ -629,6 +631,7 @@ FROM
    FROM cdate);
 """
 
+# Call when upgrading from one database version to another
 drop_triggers = """
 DROP TRIGGER IF EXISTS before_mealfoods_insert_pcf;
 DROP TRIGGER IF EXISTS mealfoods_insert_pcf;
@@ -673,6 +676,7 @@ DROP TRIGGER IF EXISTS rm_analysis_null_trigger;
 DROP TRIGGER IF EXISTS am_analysis_trigger;
 """
 
+# Call when upgrading from one database version to another
 drop_views = """
 DROP VIEW IF EXISTS pref_Gm_Wgt;
 DROP VIEW IF EXISTS view_foods;
@@ -767,7 +771,7 @@ BEGIN
     maxmeal,
     CASE
       WHEN (SELECT COUNT(*) FROM mealfoods
-      WHERE meal_id = currentmeal) = 0 THEN
+        WHERE meal_id = currentmeal) = 0 THEN
         0
       ELSE
         1
@@ -824,11 +828,10 @@ BEGIN
   DELETE FROM z_anal;
 
   INSERT INTO z_anal
+  VALUES
     SELECT nutr_no, 1, 0.0
     FROM nutr_def join am_analysis_header
-    WHERE firstmeal = currentmeal and lastmeal = currentmeal;
-
-  INSERT INTO z_anal
+    WHERE firstmeal = currentmeal AND lastmeal = currentmeal,
     SELECT nutr_no, 0, 0.0
     FROM nutr_def join am_analysis_header
     WHERE firstmeal != currentmeal OR lastmeal != currentmeal;
@@ -912,7 +915,7 @@ BEGIN
       )
 """
 
-init_triggers = """
+init_temp_triggers = """
 --------------------------------[PCF TRIGGERS]---------------------------------
   CREATE TEMP TRIGGER before_mealfoods_insert_pcf
   BEFORE INSERT ON mealfoods
@@ -986,9 +989,7 @@ init_triggers = """
     UPDATE weight
     SET Gm_Wgt = NEW.Gm_Wgt
     WHERE NDB_No = NEW.NDB_No
-      AND Seq =
-    (SELECT MIN(Seq) FROM weight
-     WHERE NDB_No = NEW.NDB_No);
+      AND Seq = (SELECT MIN(Seq) FROM weight WHERE NDB_No = NEW.NDB_No);
   END;
 
   CREATE TEMP TRIGGER pref_weight_Amount INSTEAD OF
@@ -998,66 +999,55 @@ init_triggers = """
     SET Gm_Wgt = origGm_Wgt * NEW.Amount / Amount
     WHERE NDB_No = NEW.NDB_No
       AND Seq =
-        (SELECT MIN(Seq)
-         FROM weight
-         WHERE NDB_No = NEW.NDB_No);
+        (SELECT MIN(Seq) FROM weight WHERE NDB_No = NEW.NDB_No);
+
     UPDATE currentmeal
-    SET Gm_Wgt = NULL WHERE NDB_No = NEW.NDB_No;
+    SET Gm_Wgt = NULL
+    WHERE NDB_No = NEW.NDB_No;
   END;
 
   CREATE TEMP TRIGGER currentmeal_INSERT INSTEAD OF
-  INSERT ON currentmeal BEGIN
-  UPDATE mealfoods
-  SET Nutr_No = NULL
-  WHERE Nutr_No =
-      (SELECT Nutr_No
-       FROM nutr_def
-       WHERE NutrDesc = NEW.NutrDesc);
-    INSERT
-    OR
-    REPLACE INTO mealfoods
-  VALUES (
-            (SELECT currentmeal
-             FROM options), NEW.NDB_No,
-                            CASE
-                                WHEN NEW.Gm_Wgt IS NULL THEN
-                                       (SELECT Gm_Wgt
-                                        FROM pref_Gm_Wgt
-                                        WHERE NDB_No = NEW.NDB_No)
-                                ELSE NEW.Gm_Wgt
-                            END,
-                            CASE
-                                WHEN NEW.NutrDesc IS NULL THEN NULL
-                                WHEN
-                                       (SELECT count(*)
-                                        FROM nutr_def
-                                        WHERE NutrDesc = NEW.NutrDesc
-                                          AND dv_default > 0.0) = 1 THEN
-                                       (SELECT Nutr_No
-                                        FROM nutr_def
-                                        WHERE NutrDesc = NEW.NutrDesc)
-                                WHEN
-                                       (SELECT count(*)
-                                        FROM nutr_def
-                                        WHERE Nutr_No = NEW.NutrDesc
-                                          AND dv_default > 0.0) = 1 THEN NEW.NutrDesc
-                                ELSE NULL
-                            END);
+  INSERT ON currentmeal
+  BEGIN
+    UPDATE mealfoods
+    SET Nutr_No = NULL
+    WHERE Nutr_No = (
+      SELECT Nutr_No
+      FROM nutr_def
+      WHERE NutrDesc = NEW.NutrDesc);
 
+    INSERT OR REPLACE INTO mealfoods
+    VALUES (
+      (SELECT currentmeal FROM options),
+      NEW.NDB_No,
+      CASE
+        WHEN NEW.Gm_Wgt IS NULL THEN
+          (SELECT Gm_Wgt FROM pref_Gm_Wgt WHERE NDB_No = NEW.NDB_No)
+        ELSE
+          NEW.Gm_Wgt
+      END,
+      CASE
+        WHEN NEW.NutrDesc IS NULL THEN
+          NULL
+      WHEN (SELECT count(*) FROM nutr_def WHERE NutrDesc = NEW.NutrDesc
+        AND dv_default > 0.0) = 1 THEN
+        (SELECT Nutr_No FROM nutr_def WHERE NutrDesc = NEW.NutrDesc)
+      WHEN
+        (SELECT count(*) FROM nutr_def WHERE Nutr_No = NEW.NutrDesc
+        AND dv_default > 0.0) = 1 THEN
+          NEW.NutrDesc
+      ELSE
+        NULL
+      END);
   END;
 
-
-
-  CREATE TEMP TRIGGER currentmeal_DELETE INSTEAD OF
-  DELETE ON currentmeal BEGIN
-  DELETE
-  FROM mealfoods
-  WHERE meal_id =
-      (SELECT currentmeal
-       FROM options)
-    AND NDB_No = OLD.NDB_No; END;
-
-
+  CREATE TEMP TRIGGER currentmeal_delete INSTEAD OF
+  DELETE ON currentmeal
+  BEGIN
+    DELETE
+    FROM mealfoods
+    WHERE meal_id = (SELECT currentmeal FROM options) AND NDB_No = OLD.NDB_No;
+  END;
 
   CREATE TEMP TRIGGER currentmeal_upd_Gm_Wgt INSTEAD OF
   UPDATE OF Gm_Wgt ON currentmeal
@@ -1065,38 +1055,27 @@ init_triggers = """
     UPDATE mealfoods
     SET Gm_Wgt = CASE
       WHEN NEW.Gm_Wgt IS NULL THEN
-        (SELECT Gm_Wgt
-         FROM pref_Gm_Wgt
-         WHERE NDB_No = NEW.NDB_No)
+        (SELECT Gm_Wgt FROM pref_Gm_Wgt WHERE NDB_No = NEW.NDB_No)
       ELSE
         NEW.Gm_Wgt
       END
     WHERE NDB_No = NEW.NDB_No
-      AND meal_id =
-        (SELECT currentmeal
-         FROM options);
+      AND meal_id = (SELECT currentmeal FROM options);
   END;
-
 
   CREATE TEMP TRIGGER currentmeal_upd_pcf INSTEAD OF
   UPDATE OF NutrDesc ON currentmeal BEGIN
   UPDATE mealfoods
   SET Nutr_No = NULL
-  WHERE Nutr_No =
-      (SELECT Nutr_No
-       FROM nutr_def
-       WHERE NutrDesc = NEW.NutrDesc);
+  WHERE Nutr_No = (SELECT Nutr_No FROM nutr_def WHERE NutrDesc = NEW.NutrDesc);
     UPDATE mealfoods
-    SET Nutr_No =
-      (SELECT Nutr_No
-       FROM nutr_def
-       WHERE NutrDesc = NEW.NutrDesc) WHERE NDB_No = NEW.NDB_No
+    SET Nutr_No = (SELECT Nutr_No FROM nutr_def WHERE NutrDesc = NEW.NutrDesc)
+    WHERE NDB_No = NEW.NDB_No
     AND meal_id =
       (SELECT currentmeal
        FROM options); END;
 
-
-  CREATE TEMP TRIGGER theusual_INSERT INSTEAD OF
+  CREATE TEMP TRIGGER theusual_insert INSTEAD OF
   INSERT ON theusual WHEN NEW.meal_name IS NOT NULL
   AND NEW.NDB_No IS NULL
   AND NEW.Gm_Wgt IS NULL
@@ -1117,7 +1096,7 @@ init_triggers = """
        FROM options); END;
 
 
-  CREATE TEMP TRIGGER theusual_DELETE INSTEAD OF
+  CREATE TEMP TRIGGER theusual_delete INSTEAD OF
   DELETE ON theusual WHEN OLD.meal_name IS NOT NULL BEGIN
   DELETE
   FROM z_tu
@@ -1218,7 +1197,7 @@ init_triggers = """
   END;
 
 
-  CREATE TEMP TRIGGER autocal_cycle_END AFTER
+  CREATE TEMP TRIGGER autocal_cycle_end AFTER
   INSERT ON z_wl WHEN
     (SELECT autocal = 2
      AND weightn > 1
@@ -1291,6 +1270,7 @@ CREATE TEMP TABLE zweight
 """
 
 init_tables = """
+-- Nutrients definitions
 CREATE TABLE IF NOT EXISTS nutr_def
   (
      nutr_no    INT PRIMARY KEY,
@@ -1301,12 +1281,14 @@ CREATE TABLE IF NOT EXISTS nutr_def
      nutopt     REAL
   );
 
+-- Food groups
 CREATE TABLE IF NOT EXISTS fd_group
   (
      fdgrp_cd   INT PRIMARY KEY,
      fdgrp_desc TEXT
   );
 
+-- Food descriptions
 CREATE TABLE IF NOT EXISTS food_des
   (
      ndb_no     INT PRIMARY KEY,
@@ -1320,6 +1302,7 @@ CREATE TABLE IF NOT EXISTS food_des
      cho_factor REAL
   );
 
+-- Food weights
 CREATE TABLE IF NOT EXISTS weight
   (
      ndb_no     INT,
@@ -1332,6 +1315,7 @@ CREATE TABLE IF NOT EXISTS weight
      PRIMARY KEY(ndb_no, origseq)
   );
 
+-- Foods compositions
 CREATE TABLE IF NOT EXISTS nut_data
   (
      ndb_no   INT,
@@ -1340,6 +1324,7 @@ CREATE TABLE IF NOT EXISTS nut_data
      PRIMARY KEY(ndb_no, nutr_no)
   );
 
+-- User options
 CREATE TABLE IF NOT EXISTS options
   (
      protect       INTEGER PRIMARY KEY,
@@ -1353,6 +1338,7 @@ CREATE TABLE IF NOT EXISTS options
      autocal       INTEGER DEFAULT 0
   );
 
+-- Current Meal foods
 CREATE TABLE IF NOT EXISTS mealfoods
   (
      meal_id INT,
@@ -1362,6 +1348,8 @@ CREATE TABLE IF NOT EXISTS mealfoods
      PRIMARY KEY(meal_id, ndb_no)
   );
 
+-- Shopping list (Not implemented)
+/*
 CREATE TABLE IF NOT EXISTS shopping
   (
      n INTEGER PRIMARY KEY,
@@ -1369,6 +1357,7 @@ CREATE TABLE IF NOT EXISTS shopping
      store TEXT
   );
 
+-- Food cost list (Not implemented)
 CREATE TABLE IF NOT EXISTS cost
   (
       ndb_no INT PRIMARY KEY,
@@ -1377,8 +1366,12 @@ CREATE TABLE IF NOT EXISTS cost
   );
 
 
+-- Eating plans (Not implemented)
 CREATE TABLE IF NOT EXISTS eating_plan (plan_name TEXT);
 
+*/
+
+-- Archived meal foods
 CREATE TABLE IF NOT EXISTS archive_mealfoods
    (
       meal_id INT,
@@ -1393,6 +1386,7 @@ CREATE TABLE IF NOT EXISTS archive_mealfoods
         )
   );
 
+-- Usual meal menu
 CREATE TABLE IF NOT EXISTS z_tu
   (
     meal_name text,
@@ -1410,6 +1404,7 @@ CREATE TABLE IF NOT EXISTS z_tu
       )
   );
 
+-- User's weight log
 CREATE TABLE IF NOT EXISTS z_wl
   (
     weight real,
@@ -1425,12 +1420,14 @@ CREATE TABLE IF NOT EXISTS z_wl
 """
 
 usda_load_init_tables = """
+-- Temporary food groups table
 CREATE TEMP TABLE tfd_group
   (
      fdgrp_cd   INT,
      fdgrp_desc TEXT
   );
 
+-- Temporary food descriptions table
 CREATE TEMP TABLE tfood_des
   (
      ndb_no      TEXT,
@@ -1449,6 +1446,7 @@ CREATE TEMP TABLE tfood_des
      cho_factor  REAL
   );
 
+-- Temporary food weights table
 CREATE TEMP TABLE tweight
   (
      ndb_no     TEXT,
@@ -1460,6 +1458,7 @@ CREATE TEMP TABLE tweight
      std_dev    REAL
   );
 
+-- Temporary nutrient data
 CREATE TEMP TABLE tnut_data
   (
      ndb_no        TEXT,
@@ -1726,27 +1725,23 @@ WHERE dv_default > 0.0 AND nutopt IS NULL;
 CREATE INDEX IF NOT EXISTS tagname_index ON nutr_def (Tagname ASC);
 
 
-REPLACE
-INTO   fd_group
+REPLACE INTO fd_group
 SELECT TRIM(fdgrp_cd, '~'),
        TRIM(fdgrp_desc, '~')
 FROM   tfd_group;
 
-REPLACE
-INTO fd_group VALUES
-       (
-              9999,
-              'Added Recipes'
-       );
+REPLACE INTO fd_group
+VALUES (9999, 'Added Recipes');
 
 DROP TABLE tfd_group;
 
--- replace this statement with a trigger
+-----------[LOAD TEMPORARY FOOD DESCRIPTIONS INTO FINAL TABLE]-----------------
+
 REPLACE INTO food_des
 (
   ndb_no,
   fdgrp_cd,
-  lONg_desc,
+  long_desc,
   shrt_desc,
   ref_desc,
   refuse,
@@ -1754,7 +1749,6 @@ REPLACE INTO food_des
   fat_factor,
   cho_factor
 )
-
 SELECT TRIM(ndb_no, '~'),
        TRIM(fdgrp_cd, '~'),
        REPLACE(TRIM(TRIM(long_desc, '~')
@@ -1776,9 +1770,13 @@ WHERE LENGTH(Long_Desc) <= 60;
 
 DROP TABLE tfood_des;
 
-UPDATE tweight SET NDB_No = TRIM(NDB_No,'~');
-UPDATE tweight SET Seq = TRIM(Seq,'~');
-UPDATE tweight SET Msre_Desc = TRIM(Msre_Desc,'~');
+-------------------------------------------------------------------------------
+
+UPDATE tweight
+SET
+  NDB_No = TRIM(NDB_No, '~'),
+  Seq = TRIM(Seq, '~'),
+  Msre_Desc = TRIM(Msre_Desc, '~');
 
 --We want every food to have a weight, so we make a '100 grams' default weight
 INSERT OR REPLACE INTO zweight
@@ -1792,7 +1790,7 @@ FROM weight
 WHERE Seq != origSeq OR Gm_Wgt != origGm_Wgt;
 
 --We overwrite real weight TABLE with new USDA records
-INSERT OR REPLACE INTO weight
+REPLACE INTO weight
 SELECT NDB_No, Seq, Amount, Msre_Desc, Gm_Wgt, Seq, Gm_Wgt
 FROM tweight;
 
@@ -1807,11 +1805,11 @@ DROP TABLE zweight;
 REPLACE INTO nut_data
 SELECT TRIM(NDB_No, '~'), TRIM(Nutr_No, '~'), Nutr_Val
 FROM tnut_data;
+
 DROP TABLE tnut_data;
 
 --INSERT VITE records INTO nut_data
-REPLACE
-INTO   nut_data
+REPLACE INTO   nut_data
 SELECT    f.ndb_no,
           2008,
           IFNULL(tocpha.nutr_val, 0.0)
@@ -1822,8 +1820,7 @@ AND       tocpha.nutr_no = 323
 WHERE     tocpha.nutr_val IS NOT NULL;
 
   --INSERT LA records INTO nut_data
-REPLACE
-INTO   nut_data
+REPLACE INTO   nut_data
 SELECT    f.ndb_no,
           2001,
           CASE
