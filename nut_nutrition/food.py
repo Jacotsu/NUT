@@ -1,9 +1,6 @@
 import gettext
-import logging
-from pprint import pformat
 from dataclasses import dataclass, field
 from typing import List, Any
-import db
 import portion
 import nutrient
 
@@ -47,14 +44,12 @@ class Food:
 
     @property
     def pcf_nutrient(self):
-        return self.pcf_nutrient
+        return self.__db.get_food_(self)
 
     @pcf_nutrient.setter
-    def pcf_nutrient(self, new_pcf_nutrient: nutrient.Nutrient):
-        self.pcf_nutrient = new_pcf_nutrient
-        self.__db.set_food_pcf()
+    def pcf_nutrient(self,
+                     new_pcf_nutrient: nutrient.Nutrient):
+        self.__db.set_food_pcf(self, new_pcf_nutrient)
 
     def get_preferred_weight(self) -> portion.Portion:
         return self.__db.get_food_preferred_weight(self)
-
-

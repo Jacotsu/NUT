@@ -5,7 +5,6 @@ import logging
 from pprint import pformat
 from dataclasses import dataclass, field
 from typing import List, Any
-import db
 import food
 
 _ = gettext.gettext
@@ -270,7 +269,7 @@ class Analysis():
 
 class FoodAnal(Analysis):
     def __init__(self, parent, ndb_no, defined_nutrients, name, weight,
-                 pcf_Nutr_No=0):
+                 pcf_nutr_no=0):
         self._parent_treestore = parent
         self._ndb_no = None
         food_to_append = [
@@ -280,7 +279,7 @@ class FoodAnal(Analysis):
             # Is food
             True,
             # PCF
-            pcf_Nutr_No,
+            pcf_nutr_no,
             # Weight
             weight,
             # Weights unit
@@ -290,4 +289,4 @@ class FoodAnal(Analysis):
         ]
 
         top = self._parent_treestore.append(None, food_to_append)
-        super(Food, self).__init__(parent, top, defined_nutrients)
+        super(FoodAnal, self).__init__(parent, top, defined_nutrients)

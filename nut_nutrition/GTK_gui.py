@@ -58,14 +58,14 @@ class MainHandler:
 
     def record_meals_set_pcf(self, cell_renderer_combo, path_string, new_iter):
         pcf_list = cell_renderer_combo.props.model
-        Nutr_No = pcf_list.get_value(new_iter, 0)
-        Nutrient_name = pcf_list.get_value(new_iter, 1)
+        nutr_no = pcf_list.get_value(new_iter, 0)
+        nutrient_name = pcf_list.get_value(new_iter, 1)
 
         food = get_selected_food(self._manager._rm_menu_treeview)
 
-        NDB_No = food[0]
-        self._manager._db.set_food_pcf(NDB_No, Nutr_No)
-        logging.info(f'Set PCF: {NDB_No} {Nutrient_name}')
+        ndb_no = food[0]
+        self._manager._db.set_food_pcf(ndb_no, nutr_no)
+        logging.info(f'Set PCF: {ndb_no} {nutrient_name}')
         self._manager._update_current_meal_menu()
 
     def record_meals_set_amount(self, adjustment, user_data=None):

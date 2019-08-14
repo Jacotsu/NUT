@@ -7,8 +7,8 @@ from typing import Iterator, Tuple
 from utils import download_usda_and_unzip, cleanup_usda
 import bignut_queries
 import nutrient
-#import meal
-#import food
+import meal
+import food
 
 appname = 'nut_nutrition'
 
@@ -36,6 +36,8 @@ class DBMan:
 
         with self._conn as con:
             cur = con.cursor()
+            # Initializes pragmas needed for performance and recursive triggers
+            cur.executescript(bignut_queries.init_pragmas)
             try:
                 cur.executescript(bignut_queries.user_init_query)
             except sqlite3.OperationalError:
@@ -412,27 +414,47 @@ class DBMan:
 #                                       .get_food_preferred_weight(res_food))
 #        return res_food
 #
-#    def set_food_pcf(self,
-#                     food: meal.Food,
-#                     pcf_nutrient: meal.Nutrient=None,
-#                     meal: meal.Meal=None):
-#        """
-#        Sets the passed food's portion control to the specified pcf_nutrient.
-#        If no meal is passed the current meal is assumed
-#        To reset the portion control is sufficient to pass a None nutrient
-#
-#        :param food: meal.Food that needs to change the pcf
-#        :param pcf_nutrient: The nutrient to be set as new pcf
-#        :param meal: The meal which contains the food
-#        """
-#        with self._conn as con:
-#            cur = con.cursor()
-#            query_params = {'NDB_No': food.ndb_no,
-#                            'meal_id': meal.meal_id if meal else None,
-#                            'Nutr_No': pcf_nutrient.nutr_no if pcf_nutrient
-#                                else None}
-#            cur.execute(bignut_queries.set_food_pcf,
-#                        query_params)
+    def get_food_pcf(self,
+                     food: food.Food):
+        """
+        Gets the food's pcf
+
+        :param food: meal.Food that you want the get the pcf value from,
+            the mealid is encapsulated in the Food object
+        """
+        with self._conn as con:
+            cur = con.cursor()
+            food_meal = food.__meal
+            query_params = {'NDB_No': food.ndb_no,
+                            'meal_id': food_meal.meal_id
+                            if food_meal else None}
+            cur.execute(bignut_queries.get_food_pcf,
+                        query_params)
+            nutr_no = cur.fetchone()[0]
+            return nutrient.Nutrient(nutr_no, self)
+
+    def set_food_pcf(self,
+                     food: food.Food,
+                     pcf_nutrient: nutrient.Nutrient = None):
+        """
+        Sets the passed food's portion control to the specified pcf_nutrient.
+        If no meal is passed the current meal is assumed
+        To reset the portion control is sufficient to pass a None nutrient
+
+        :param food: meal.Food that needs to change the pcf
+        :param pcf_nutrient: The nutrient to be set as new pcf
+        :param meal: The meal which contains the food
+        """
+        with self._conn as con:
+            cur = con.cursor()
+            food_meal = food.__meal
+            query_params = {'NDB_No': food.ndb_no,
+                            'meal_id': food_meal.meal_id
+                            if food_meal else None,
+                            'Nutr_No': pcf_nutrient.nutr_no if pcf_nutrient
+                            else None}
+            cur.execute(bignut_queries.set_food_pcf,
+                        query_params)
 #
 #    def set_food_amount(self,
 #                        food: meal.Food,
@@ -668,7 +690,7 @@ class DBMan:
                                                 self.time_format), x[1]),
                    cur)
 
-#----------------------------[DB MANAGEMENT]----------------------------------
+# ----------------------------[DB MANAGEMENT]----------------------------------
 
     def load_db(self, path):
         with self._conn as con:
