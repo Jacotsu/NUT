@@ -39,7 +39,7 @@ class DBMan:
             # Initializes pragmas needed for performance and recursive triggers
             cur.executescript(bignut_queries.init_pragmas)
             try:
-                cur.executescript(bignut_queries.user_init_query)
+                cur.executescript(bignut_queries.create_temp_views)
             except sqlite3.OperationalError:
                 logging.warning('Database empty or corrupted initializing'
                                 ' a new one')
@@ -49,10 +49,49 @@ class DBMan:
                 # Loads the USDA and initializes the logic
                 download_usda_and_unzip(user_data_dir(appname))
                 self.load_db(user_data_dir(appname))
+
                 cur.executescript(bignut_queries.init_logic)
                 cleanup_usda(user_data_dir(appname))
 
             cur.executescript(bignut_queries.user_init_query)
+
+    def initialize_logic(self):
+        """
+        Initializes the database logic
+        """
+        # If the version is greater than the current version it
+        # shouldn't be a problem because we keep the database
+        # forward compatible
+        if self.user_version < bignut_queries.db_user_version:
+            logging.warning("Database outdated, upgrading to "
+                            f"version {bignut_queries.db_user_version}"
+                            )
+            # May delete data, must ensure that database upgrades
+            # are seamless
+            self.delete_logic()
+            raise NotImplementedError
+
+    def delete_logic(self):
+        """
+        Deletes the database logic but not the data.
+        Use for database upgrade
+        """
+        with self._conn as con:
+            cur = con.cursor()
+            cur.executescript(bignut_queries.drop_triggers)
+            cur.executescript(bignut_queries.drop_views)
+            cur.executescript(bignut_queries.drop_logic_tables)
+
+    @property
+    def user_version(self) -> int:
+        """
+        :return: The database user version number
+        :rtype: int
+        """
+        with self._conn as con:
+            cur = con.cursor()
+            cur.execute(bignut_queries.get_db_user_version)
+            return cur.fetchone()[0]
 
     @property
     def calories(self) -> float:
