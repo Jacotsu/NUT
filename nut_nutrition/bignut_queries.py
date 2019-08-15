@@ -116,6 +116,17 @@ get_omega6_3_bal = 'SELECT n6balance FROM am_analysis_header;'
 
 get_food_groups = 'SELECT FdGrp_Cd, FdGrp_Desc FROM fd_group;'
 
+get_food_pcf = '''
+SELECT Nutr_No
+FROM mealfoods
+WHERE CASE
+        WHEN :meal_id IS NULL THEN
+            (SELECT currentmeal FROM options)
+        ELSE
+            :meal_id
+        END AND NDB_No = :NDB_No;
+'''
+
 set_food_pcf = '''
 UPDATE mealfoods
 SET Nutr_No = :Nutr_No
@@ -1269,7 +1280,7 @@ CREATE TEMP TABLE zweight
 
 """
 
-init_tables = """
+create_tables = """
 -- Nutrients definitions
 CREATE TABLE IF NOT EXISTS nutr_def
   (
@@ -1418,6 +1429,122 @@ CREATE TABLE IF NOT EXISTS z_wl
       )
   );
 """
+
+# This query will wipe everything USE WITH CARE
+create_logic_tables = """
+CREATE TABLE z_vars1 (
+  am_cals2gram_pro REAL,
+  am_cals2gram_fat REAL,
+  am_cals2gram_cho REAL,
+  am_alccals REAL,
+  am_fa2fat REAL,
+  balance_of_calories INT
+);
+
+CREATE TABLE z_vars2 (
+  am_fat_dv_not_boc REAL,
+  am_cho_nONfib_dv_not_boc REAL,
+  am_chocdf_dv_not_boc REAL
+);
+
+CREATE TABLE z_vars3 (
+  am_fat_dv_boc REAL,
+  am_chocdf_dv_boc REAL,
+  am_cho_nonfib_dv_boc REAL
+);
+
+CREATE TABLE z_vars4 (
+  Nutr_No INT,
+  dv REAL,
+  Nutr_Val REAL
+);
+
+-- Used for the calculation of the omega-6/omega-3 balance
+CREATE TABLE z_n6 (
+  n6hufa REAL,
+  FAPU1 REAL,
+  pufa_reduction REAL,
+  iter INT,
+  reduce INT,
+  p3 REAL,
+  p6 REAL,
+  h3 REAL,
+  h6 REAL,
+  o REAL
+);
+
+CREATE TABLE z_anal (
+  Nutr_No INT PRIMARY KEY,
+  NULL_value INT,
+  Nutr_Val REAL
+);
+
+
+CREATE TABLE am_analysis_header (
+  maxmeal int,
+  mealcount int,
+  meals_per_day int,
+  firstmeal integer,
+  lastmeal integer,
+  currentmeal integer,
+  calories REAL,
+  proteins REAL,
+  carbs REAL,
+  fats REAL,
+  omega6 REAL,
+  omega3 REAL
+);
+
+
+CREATE TABLE am_dv (
+  Nutr_No int primary key asc,
+  dv real,
+  dvpct_OFfSET real
+);
+
+CREATE TABLE rm_analysis_header (
+  maxmeal int,
+  mealcount int,
+  meals_per_day int,
+  firstmeal integer,
+  lastmeal integer,
+  currentmeal integer,
+  calories REAL,
+  proteins REAL,
+  carbs REAL,
+  fats REAL,
+  omega6 REAL,
+  omega3 REAL
+);
+
+CREATE TABLE rm_analysis (
+  Nutr_No int primary key asc,
+  NULL_value int,
+  Nutr_Val real
+);
+
+CREATE TABLE rm_dv (
+  Nutr_No int primary key asc,
+  dv real,
+  dvpct_OFfSET real
+);
+
+CREATE TABLE z_trig_ctl (
+  am_analysis_header INT DEFAULT 0,
+  rm_analysis_header INT DEFAULT 0,
+  am_analysis_minus_currentmeal INT DEFAULT 0,
+  am_analysis_null INT DEFAULT 0,
+  am_analysis INT DEFAULT 0,
+  rm_analysis INT DEFAULT 0,
+  rm_analysis_null int default 0,
+  am_dv INT DEFAULT 0,
+  PCF_processing INT DEFAULT 0,
+  block_setting_preferred_weight INT DEFAULT 0,
+  block_mealfoods_insert_trigger INT DEFAULT 0,
+  block_mealfoods_delete_trigger INT DEFAULT 0
+);
+"""
+
 
 usda_load_init_tables = """
 -- Temporary food groups table
@@ -2134,122 +2261,7 @@ COMMIT;
 VACUUM;
 """
 
-# This query will wipe everything USE WITH CARE
-init_logic_create_tables = """
-CREATE TABLE z_vars1 (
-  am_cals2gram_pro REAL,
-  am_cals2gram_fat REAL,
-  am_cals2gram_cho REAL,
-  am_alccals REAL,
-  am_fa2fat REAL,
-  balance_of_calories INT
-);
-
-CREATE TABLE z_vars2 (
-  am_fat_dv_not_boc REAL,
-  am_cho_nONfib_dv_not_boc REAL,
-  am_chocdf_dv_not_boc REAL
-);
-
-CREATE TABLE z_vars3 (
-  am_fat_dv_boc REAL,
-  am_chocdf_dv_boc REAL,
-  am_cho_nonfib_dv_boc REAL
-);
-
-CREATE TABLE z_vars4 (
-  Nutr_No INT,
-  dv REAL,
-  Nutr_Val REAL
-);
-
--- Used for the calculation of the omega-6/omega-3 balance
-CREATE TABLE z_n6 (
-  n6hufa REAL,
-  FAPU1 REAL,
-  pufa_reduction REAL,
-  iter INT,
-  reduce INT,
-  p3 REAL,
-  p6 REAL,
-  h3 REAL,
-  h6 REAL,
-  o REAL
-);
-
-CREATE TABLE z_anal (
-  Nutr_No INT PRIMARY KEY,
-  NULL_value INT,
-  Nutr_Val REAL
-);
-
-
-CREATE TABLE am_analysis_header (
-  maxmeal int,
-  mealcount int,
-  meals_per_day int,
-  firstmeal integer,
-  lastmeal integer,
-  currentmeal integer,
-  calories REAL,
-  proteins REAL,
-  carbs REAL,
-  fats REAL,
-  omega6 REAL,
-  omega3 REAL
-);
-
-
-CREATE TABLE am_dv (
-  Nutr_No int primary key asc,
-  dv real,
-  dvpct_OFfSET real
-);
-
-CREATE TABLE rm_analysis_header (
-  maxmeal int,
-  mealcount int,
-  meals_per_day int,
-  firstmeal integer,
-  lastmeal integer,
-  currentmeal integer,
-  calories REAL,
-  proteins REAL,
-  carbs REAL,
-  fats REAL,
-  omega6 REAL,
-  omega3 REAL
-);
-
-CREATE TABLE rm_analysis (
-  Nutr_No int primary key asc,
-  NULL_value int,
-  Nutr_Val real
-);
-
-CREATE TABLE rm_dv (
-  Nutr_No int primary key asc,
-  dv real,
-  dvpct_OFfSET real
-);
-
-CREATE TABLE z_trig_ctl (
-  am_analysis_header INT DEFAULT 0,
-  rm_analysis_header INT DEFAULT 0,
-  am_analysis_minus_currentmeal INT DEFAULT 0,
-  am_analysis_null INT DEFAULT 0,
-  am_analysis INT DEFAULT 0,
-  rm_analysis INT DEFAULT 0,
-  rm_analysis_null int default 0,
-  am_dv INT DEFAULT 0,
-  PCF_processing INT DEFAULT 0,
-  block_setting_preferred_weight INT DEFAULT 0,
-  block_mealfoods_insert_trigger INT DEFAULT 0,
-  block_mealfoods_delete_trigger INT DEFAULT 0
-);
-"""
-
-init_logic_create_views = """
+create_logic_views = """
 CREATE VIEW am_analysis AS
 SELECT am.Nutr_No AS Nutr_No,
   CASE
