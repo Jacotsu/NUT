@@ -5,6 +5,7 @@ import db
 import logging
 import gettext
 import meal
+from nutrient import Nutrient
 from utils import (set_cells_data_func, set_float_precision,
                    set_pcf_combobox_text, get_selected_food,
                    set_calendar_date, hide_text_if_no_data, chain_functions,
@@ -162,7 +163,7 @@ class MainHandler:
         self._manager._db\
             .insert_weight_log(settings_wdgs['weight_sp'].get_value(),
                                settings_wdgs['bodyfat_sp'].get_value())
-        self._manager._update_GUI_settings()
+        self._manager._update_gui_settings()
 
 
 class TheStoryHandler:
@@ -217,7 +218,6 @@ class TheStoryHandler:
 class GTKGui:
     def __init__(self):
         self._db = db.DBMan()
-        self._ntr = self._db.defined_nutrients
 
         builder = Gtk.Builder()
         builder.add_from_file("GTK_gui.glade")
@@ -262,7 +262,7 @@ class GTKGui:
 
         builder.connect_signals(MainHandler(self))
 
-        self._update_GUI_settings()
+        self._update_gui_settings()
 
         pcf_choices = [203,  # Protein
                        2000,  # Non-Fiber Carb
@@ -382,22 +382,29 @@ class GTKGui:
         self._am_anal.clear()
         meal.Analysis(self._am_anal, None, self._db.am_analysis_nutrients)
 
-    def _update_GUI_settings(self):
-        nutrients = self._ntr
+    def _update_gui_settings(self):
+        self._settings_widgets['calories_sp']\
+            .set_value(Nutrient(208, self._db).nut_opt)
+        self._settings_widgets['total_fat_sp']\
+            .set_value(Nutrient(204, self._db).nut_opt)
+        self._settings_widgets['protein_sp']\
+            .set_value(Nutrient(203, self._db).nut_opt)
+        self._settings_widgets['non_fiber_carb_sp']\
+            .set_value(Nutrient(2000, self._db).nut_opt)
+        self._settings_widgets['fiber_sp']\
+            .set_value(Nutrient(291, self._db).nut_opt)
+        self._settings_widgets['sat_fat_sp']\
+            .set_value(Nutrient(606, self._db).nut_opt)
+        self._settings_widgets['essential_fatty_acid_sp']\
+            .set_value(0)
+
         weight = self._db.last_weight
         logging.debug(f'Setting last weight to: {weight}')
         self._settings_widgets['weight_sp'].set_value(weight)
+
         bf = self._db.last_bodyfat
         logging.debug(f'Setting last bodyfat to: {bf}')
         self._settings_widgets['bodyfat_sp'].set_value(bf)
-        self._settings_widgets['calories_sp'].set_value(nutrients[208][4])
-        self._settings_widgets['total_fat_sp'].set_value(nutrients[204][4])
-        self._settings_widgets['protein_sp'].set_value(nutrients[203][4])
-        self._settings_widgets['non_fiber_carb_sp']\
-            .set_value(nutrients[2000][4])
-        self._settings_widgets['fiber_sp'].set_value(nutrients[291][4])
-        self._settings_widgets['sat_fat_sp'].set_value(nutrients[606][4])
-        self._settings_widgets['essential_fatty_acid_sp'].set_value(0)
 
         summary = self._db.weight_summary
         logging.debug(f'Setting weight log summary to: \n{summary}')

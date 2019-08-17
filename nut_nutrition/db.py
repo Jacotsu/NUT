@@ -22,7 +22,7 @@ class DBMan:
             os.makedirs(user_data_dir(appname), exist_ok=True)
             try:
                 self._conn = sqlite3.connect(db_name)
-                self._conn.text_factory = self.decode_non_UTF_strings
+                self._conn.text_factory = self.decode_non_utf_strings
             except sqlite3.Error as e:
                 logging.error(e)
 
@@ -125,7 +125,6 @@ class DBMan:
         cur = self._conn.cursor()
         cur.execute(bignut_queries.get_am_analysis_period)
         return cur.fetchone()
-
 
     def get_day_meals(self, day):
         raise NotImplementedError
@@ -236,7 +235,7 @@ class DBMan:
 #                        (meal.meal_id,))
 
     @staticmethod
-    def decode_non_UTF_strings(bytes_array):
+    def decode_non_utf_strings(bytes_array):
         try:
             return bytes_array.decode('UTF-8')
         except UnicodeDecodeError as decode_error:
@@ -356,8 +355,6 @@ class DBMan:
         cur = self._conn.cursor()
         cur.execute(bignut_queries.get_food_groups)
         return cur
-
-
 
     def get_ranked_foods(self, Nutr_val, rank_choice=0, FdGrp_Cd=0):
         """
