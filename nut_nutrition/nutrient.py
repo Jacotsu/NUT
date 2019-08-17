@@ -1,7 +1,7 @@
 import gettext
 from dataclasses import dataclass
 from typing import Any
-import portion
+import portions
 
 _ = gettext.gettext
 
@@ -96,12 +96,12 @@ class Nutrient:
                                      new_value)
 
     @property
-    def portion_value(self) -> portion.Portion:
-        return portion.Portion(None,
-                               self.__db.get_nutrient_field(self, 'Units'))
+    def portion_value(self) -> portions.Portion:
+        return portions.Portion(None,
+                                self.__db.get_nutrient_field(self, 'Units'))
 
     @portion_value.setter
-    def portion_value(self, new_value: portion.Portion):
+    def portion_value(self, new_value: portions.Portion):
         """
         Sets the nutrient's portion (just the portion units)
         :param new_value: The new portion

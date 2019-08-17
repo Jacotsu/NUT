@@ -515,7 +515,7 @@ JOIN nut_data c ON f.NDB_No = c.NDB_No
   AND c.Nutr_No = 208
 ORDER BY Nutr_Val ASC;
 
-EATE TEMP VIEW shopview AS
+CREATE TEMP VIEW shopview AS
 SELECT 'Shopping LISt ' || group_concat(n || ': ' || item || ' ('
   || store || ')', ' ')
 FROM (SELECT * FROM shopping ORDER BY store, item);
@@ -1849,17 +1849,42 @@ WHERE meal_name = OLD.meal_name; END;
 """
 
 create_temp_autocal_triggers = """
-CREATE TEMP TRIGGER autocal_cutting AFTER
-INSERT ON z_wl WHEN
-  (SELECT autocal = 2
-   AND weightn > 1
-   AND fatslope > 0.0
-   AND (weightslope - fatslope) > 0.0
-   FROM z_wslope,
-        z_fslope,
-        options) BEGIN
-DELETE
-FROM wlsave;
+CREATE TEMP TRIGGER autocal_cutting
+AFTER INSERT
+ON z_wl
+WHEN (SELECT autocal = 2 and weightn > 1 and fatslope > 0.0
+  and (weightslope - fatslope) > 0.0 from z_wslope, z_fslope, options)
+BEGIN
+  DELETE FROM wlsave;
+
+  INSERT INTO wlsave
+  SELECT
+    weightyintercept,
+    fatyintercept,
+    wldate,
+    span,
+    today from z_wslope,
+    z_fslope,
+    z_span,
+    (SELECT min(wldate) as wldate from z_wl where cleardate is null),
+    (SELECT strftime('%Y%m%d', 'now', 'localtime') as today);
+
+  UPDATE z_wl
+  SET cleardate = (SELECT today FROM wlsave)
+  WHERE cleardate IS NULL;
+
+  INSERT INTO z_wl
+  SELECT
+    weight,
+    ROUND(100.0 * fat / weight,1),
+    today,
+    NULL FROM wlsave;
+
+  UPDATE nutr_def
+  SET nutopt = nutopt - 20.0
+  WHERE Nutr_No = 208;
+END;
+
 
 CREATE TEMP TRIGGER autocal_bulking AFTER
 INSERT ON z_wl WHEN
@@ -1871,8 +1896,7 @@ INSERT ON z_wl WHEN
         z_fslope,
         options)
 BEGIN
-  DELETE
-  FROM wlsave;
+  DELETE FROM wlsave;
 
   INSERT INTO wlsave
   SELECT weightyintercept,
@@ -1887,6 +1911,7 @@ BEGIN
      FROM z_wl
      WHERE cleardate IS NULL),
     (SELECT STRFTIME('%Y%m%d', 'now', 'localtime') AS today);
+
   UPDATE z_wl
   SET cleardate =
     (SELECT today
@@ -1898,13 +1923,16 @@ BEGIN
          today,
          NULL
   FROM wlsave;
+
   UPDATE nutr_def
   SET nutopt = nutopt + 20.0
   WHERE Nutr_No = 208;
 END;
 
-CREATE TEMP TRIGGER autocal_cycle_end AFTER
-INSERT ON z_wl WHEN
+CREATE TEMP TRIGGER autocal_cycle_end
+AFTER INSERT
+ON z_wl
+WHEN
   (SELECT autocal = 2
    AND weightn > 1
    AND fatslope > 0.0
@@ -3090,7 +3118,6 @@ AS SELECT
 FROM z_wl;
 
 
--- TO FIX
 CREATE VIEW wlsummary
 AS SELECT
   CASE
@@ -3148,8 +3175,6 @@ FROM z_wslope, z_fslope, z_span;
 """
 
 init_logic = """
-BEGIN;
-
   INSERT INTO z_trig_ctl default values;
 
   DELETE FROM z_n6;
@@ -3194,7 +3219,7 @@ BEGIN;
 
 
   UPDATE am_analysis_header
-  SET omega6 = (
+  SET omega6 = IFNULL((
     SELECT
       CASE
         WHEN n6hufa_int = 0 OR n6hufa_int IS NULL THEN
@@ -3206,9 +3231,9 @@ BEGIN;
         ELSE
           n6hufa_int
       END
-    FROM (SELECT CAST(ROUND(n6hufa, 0) AS REAL) AS n6hufa_int FROM z_n6));
-      ),
-    omega3 = (100 - (SELECT
+    FROM (SELECT CAST(ROUND(n6hufa, 0) AS REAL) AS n6hufa_int FROM z_n6)),
+    0.0),
+    omega3 = IFNULL((100 - (SELECT
       CASE
         WHEN n6hufa_int = 0 OR n6hufa_int IS NULL THEN
           0
@@ -3219,22 +3244,8 @@ BEGIN;
         ELSE
           n6hufa_int
       END
-    FROM (SELECT CAST(ROUND(n6hufa, 0) AS REAL) AS n6hufa_int FROM z_n6)))
-      );
-
-  UPDATE am_analysis_header
-  SET omega6 = CASE
-      WHEN omega6 IS NULL THEN
-        0
-      ELSE
-        omega6
-      END,
-  SET omega3 = CASE
-      WHEN omega3 IS NULL THEN
-        0
-      ELSE
-        omega3
-      END;
+    FROM (SELECT CAST(ROUND(n6hufa, 0) AS REAL) AS n6hufa_int FROM z_n6))),
+    0.0);
 
   UPDATE rm_analysis_header
   SET omega6 = (
@@ -3248,7 +3259,8 @@ BEGIN;
           90
         ELSE
           n6hufa_int
-     END),
+      END
+    FROM (SELECT CAST(ROUND(n6hufa, 0) AS INT) AS n6hufa_int FROM z_n6)),
   omega3 = (
     SELECT
       (100 - CASE
@@ -3261,10 +3273,7 @@ BEGIN;
         ELSE
           n6hufa_int
       END)
-  )
-  FROM (SELECT CAST(ROUND(n6hufa, 0) AS INT) AS n6hufa_int
-  FROM z_n6));
-  END;
+    FROM (SELECT CAST(ROUND(n6hufa, 0) AS INT) AS n6hufa_int FROM z_n6));
 
   UPDATE nutr_def
   SET nutopt = 0.0
@@ -3285,9 +3294,8 @@ BEGIN;
         currentmeal
       END;
 
-END;
 --- remember to commit and optimize the database at the end
---COMMIT;
+-- COMMIT;
 ANALYZE main;
 """
 

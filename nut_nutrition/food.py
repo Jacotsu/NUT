@@ -1,7 +1,7 @@
 import gettext
 from dataclasses import dataclass, field
 from typing import List, Any
-import portion
+import portions
 import nutrient
 
 _ = gettext.gettext
@@ -24,7 +24,7 @@ class Food:
     cho_factor: float
     macro_pct: tuple
     __db: Any
-    portion: portion.Portion
+    portion: portions.Portion
     __meal: Any = None
     nutrients: List[nutrient.Nutrient] = field(default_factory=list)
     pcf_nutrient: nutrient.Nutrient = None
@@ -38,7 +38,7 @@ class Food:
         return self.portion
 
     @portion.setter
-    def portion(self, new_portion: portion.Portion):
+    def portion(self, new_portion: portions.Portion):
         self.portion = new_portion
         self.__db.set_food_amount(self, self.meal)
 
@@ -51,5 +51,5 @@ class Food:
                      new_pcf_nutrient: nutrient.Nutrient):
         self.__db.set_food_pcf(self, new_pcf_nutrient)
 
-    def get_preferred_weight(self) -> portion.Portion:
+    def get_preferred_weight(self) -> portions.Portion:
         return self.__db.get_food_preferred_weight(self)

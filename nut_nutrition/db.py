@@ -7,7 +7,6 @@ from typing import Iterator, Tuple
 from utils import download_usda_and_unzip, cleanup_usda
 import bignut_queries
 import nutrient
-import meal
 import food
 
 appname = 'nut_nutrition'
@@ -34,31 +33,6 @@ class DBMan:
                              'oz': 0,
                              'g': 1}
 
-        with self._conn as con:
-            cur = con.cursor()
-            # Initializes pragmas needed for performance and recursive triggers
-            cur.executescript(bignut_queries.init_pragmas)
-            try:
-                cur.executescript(bignut_queries.create_temp_views)
-            except sqlite3.OperationalError:
-                logging.warning('Database empty or corrupted initializing'
-                                ' a new one')
-
-                cur.executescript(bignut_queries.create_table_structure)
-
-                # Loads the USDA and initializes the logic
-                download_usda_and_unzip(user_data_dir(appname))
-                self.load_db(user_data_dir(appname))
-
-                cur.executescript(bignut_queries.init_logic)
-                cleanup_usda(user_data_dir(appname))
-
-            cur.executescript(bignut_queries.user_init_query)
-
-    def initialize_logic(self):
-        """
-        Initializes the database logic
-        """
         # If the version is greater than the current version it
         # shouldn't be a problem because we keep the database
         # forward compatible
@@ -68,19 +42,25 @@ class DBMan:
                             )
             # May delete data, must ensure that database upgrades
             # are seamless
-            self.delete_logic()
-            raise NotImplementedError
+            self.__delete_logic()
+            self.__initialize_logic()
 
-    def delete_logic(self):
-        """
-        Deletes the database logic but not the data.
-        Use for database upgrade
-        """
-        with self._conn as con:
-            cur = con.cursor()
-            cur.executescript(bignut_queries.drop_triggers)
-            cur.executescript(bignut_queries.drop_views)
-            cur.executescript(bignut_queries.drop_logic_tables)
+        try:
+            self.__initialize_user()
+        except sqlite3.OperationalError:
+            logging.warning('Database empty or corrupted initializing'
+                            ' a new one')
+
+            self.__delete_logic()
+            self.__initialize_logic()
+
+            # Loads the USDA and initializes the logic
+            download_usda_and_unzip(user_data_dir(appname))
+            self.__load_db(user_data_dir(appname))
+
+            cleanup_usda(user_data_dir(appname))
+
+            self.__initialize_user()
 
     @property
     def user_version(self) -> int:
@@ -731,11 +711,11 @@ class DBMan:
 
 # ----------------------------[DB MANAGEMENT]----------------------------------
 
-    def load_db(self, path):
+    def __load_db(self, path):
         with self._conn as con:
             cur = con.cursor()
             logging.info(f'Started database loading from {path}')
-            cur.executescript(bignut_queries.db_load_pt1)
+            cur.executescript(bignut_queries.usda_create_temp_tables)
 
             separator = '^'
             table_mapping = {'NUTR_DEF.txt': 'ttnutr_def',
@@ -762,4 +742,63 @@ class DBMan:
         with self._conn as con:
             # Using a new connection so we are sure that the changes are
             # committed
-            cur.executescript(bignut_queries.db_load_pt2)
+            cur.executescript(bignut_queries.usda_load_process)
+            cur.executescript(bignut_queries.usda_drop_temp_tables)
+
+    def __initialize_user(self):
+        """
+        Initializes the user's database logic
+        """
+        with self._conn as con:
+            cur = con.cursor()
+            user_init_scripts = [
+                bignut_queries.init_pragmas,
+                bignut_queries.create_temp_views,
+                bignut_queries.create_temp_data_tables,
+                bignut_queries.user_init_query,
+                bignut_queries.create_temp_pcf_triggers,
+                bignut_queries.create_temp_pref_weight_triggers,
+                bignut_queries.create_temp_currentmeal_triggers,
+                bignut_queries.create_temp_theusual_triggers,
+                bignut_queries.create_temp_autocal_triggers
+            ]
+            for script in user_init_scripts:
+                cur.executescript(script)
+
+    def __initialize_logic(self):
+        """
+        Initializes the database logic
+        """
+
+        with self._conn as con:
+            cur = con.cursor()
+            logic_init_scripts = [
+                bignut_queries.init_pragmas,
+                bignut_queries.create_data_tables,
+                bignut_queries.create_logic_tables,
+                # LOAD USDA DATA HERE
+                bignut_queries.create_logic_views,
+                bignut_queries.init_logic,
+                bignut_queries.create_food_archive_triggers,
+                bignut_queries.create_weight_log_triggers,
+                bignut_queries.create_food_weight_triggers,
+                bignut_queries.create_meal_foods_triggers
+            ]
+            for script in logic_init_scripts:
+                cur.executescript(script)
+
+    def __delete_logic(self):
+        """
+        Deletes the database logic but not the data.
+        Use for database upgrade
+        """
+        with self._conn as con:
+            cur = con.cursor()
+            logic_delete_scripts = [
+                bignut_queries.drop_triggers,
+                bignut_queries.drop_views,
+                bignut_queries.drop_logic_tables
+            ]
+
+            for script in logic_delete_scripts:
+                cur.executescript(script)
