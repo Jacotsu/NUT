@@ -1975,43 +1975,6 @@ init_temp_triggers = """
 
 """
 
-user_init_query = """
-BEGIN;
-
-  INSERT INTO wlsave
-  SELECT weightyintercept,
-         fatyintercept,
-         wldate,
-         span,
-         today
-  FROM z_wslope,
-       z_fslope,
-       z_span,
-    (SELECT MIN(wldate) AS wldate
-     FROM z_wl
-     WHERE cleardate IS NULL),
-    (SELECT STRFTIME('%Y%m%d', 'now', 'localtime') AS today);
-
-  UPDATE z_wl
-  SET cleardate =
-    (SELECT today
-     FROM wlsave)
-  WHERE cleardate IS NULL;
-    INSERT INTO z_wl
-  SELECT weight,
-         round(100.0 * fat / weight, 1),
-         today,
-         NULL
-  FROM wlsave;
-
-  UPDATE nutr_def
-  SET nutopt = nutopt - 20.0
-  WHERE Nutr_No = 208;
-END;
-
---COMMIT;
-"""
-
 create_temp_data_tables = """
 CREATE TEMP TABLE wlsave (
   weight REAL,

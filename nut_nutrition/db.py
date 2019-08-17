@@ -755,7 +755,6 @@ class DBMan:
                 bignut_queries.init_pragmas,
                 bignut_queries.create_temp_views,
                 bignut_queries.create_temp_data_tables,
-                bignut_queries.user_init_query,
                 bignut_queries.create_temp_pcf_triggers,
                 bignut_queries.create_temp_pref_weight_triggers,
                 bignut_queries.create_temp_currentmeal_triggers,
