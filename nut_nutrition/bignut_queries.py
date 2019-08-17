@@ -294,21 +294,37 @@ WHERE Nutr_No = ?;
 get_db_user_version = 'PRAGMA user_version;'
 
 # Database initialization order
-# 1. create_data_tables: Creates all the tables that will contain the user's
+# 1. init_pragmas: Performance enhancements and recursive triggers
+# 2. create_data_tables: Creates all the tables that will contain the user's
 #    food data
-# 2. create_logic_tables: Creates all the tables that will contain BigNut's
+# 3. create_logic_tables: Creates all the tables that will contain BigNut's
 #    logic statuses
-# 3. Load USDA data:
+# 4. Load USDA data:
 #   1. usda_create_temp_tables: Creates all the temporary tables necessary
 #      for loading the USDA data
 #   2. usda_load_process: Processes all the USDA data in the temporary tables
 #      and saves the in the final tables
 #   3. usda_drop_temp_tables: Deletes the temporary tables that are no longer
 #      needed
-# 4. create_logic_views: Creates the views necessary for data processing
-# 5. init_logic: Initializes the data processing logic
-# x. create_pcf_triggers: Creates the PCF processing triggers
+# 5. create_logic_views: Creates the views necessary for data processing
+# 6. init_logic: Initializes the data processing logic
+# 7. Create the data processing triggers:
+#   1. create_food_archive_triggers
+#   2. create_weight_log_triggers
+#   3. create_food_weight_triggers
+#   4. create_meal_foods_triggers
 
+# User Database initialization order
+# 1. init_pragmas
+# 2. create_temp_views
+# 3. create_temp_data_tables
+# 4. user_init_query
+# 5. Create the data processing triggers:
+#   1. create_temp_pcf_triggers
+#   2. create_temp_pref_weight_triggers
+#   3. create_temp_currentmeal_triggers
+#   4. create_temp_theusual_triggers
+#   5. create_temp_autocal_triggers
 
 # Database data loading order
 # --------------------------[BIG NUT QUERIES]----------------------------------
@@ -756,6 +772,10 @@ DROP TABLE IF EXISTS rm_analysis;
 DROP TABLE IF EXISTS rm_dv;
 DROP TABLE IF EXISTS z_trig_ctl;
 DROP TABLE IF EXISTS z_vars4;
+"""
+
+drop_user_tables = """
+DROP TABLE IF EXISTS wlsave;
 """
 
 # ---------------------------[TRIGGER CREATION]--------------------------------
@@ -1584,7 +1604,6 @@ create_omega_balance_triggers = """
 
 create_temp_pcf_triggers = """
 --------------------------------[PCF TRIGGERS]---------------------------------
-----------------------------------[CHECKED]------------------------------------
 
 CREATE TEMP TRIGGER before_mealfoods_insert_pcf
 BEFORE INSERT ON mealfoods
@@ -1702,152 +1721,156 @@ CREATE TRIGGER currentmeal_trigger
           0
         END;
   END;
-
-
 """
 
-init_temp_triggers = """
----------------------------[VIEWS TRIGGERS]----------------------------------
-  CREATE TEMP TRIGGER pref_weight_Gm_Wgt
-  INSTEAD OF UPDATE OF Gm_Wgt ON pref_Gm_Wgt
-  WHEN NEW.Gm_Wgt > 0.0
-  BEGIN
-    UPDATE weight
-    SET Gm_Wgt = NEW.Gm_Wgt
-    WHERE NDB_No = NEW.NDB_No
-      AND Seq = (SELECT MIN(Seq) FROM weight WHERE NDB_No = NEW.NDB_No);
-  END;
+create_temp_pref_weight_triggers = """
+CREATE TEMP TRIGGER pref_weight_Gm_Wgt
+INSTEAD OF UPDATE OF Gm_Wgt ON pref_Gm_Wgt
+WHEN NEW.Gm_Wgt > 0.0
+BEGIN
+  UPDATE weight
+  SET Gm_Wgt = NEW.Gm_Wgt
+  WHERE NDB_No = NEW.NDB_No
+    AND Seq = (SELECT MIN(Seq) FROM weight WHERE NDB_No = NEW.NDB_No);
+END;
 
-  CREATE TEMP TRIGGER pref_weight_Amount INSTEAD OF
-  UPDATE OF Amount ON pref_Gm_Wgt WHEN NEW.Amount > 0.0
-  BEGIN
-    UPDATE weight
-    SET Gm_Wgt = origGm_Wgt * NEW.Amount / Amount
-    WHERE NDB_No = NEW.NDB_No
-      AND Seq =
-        (SELECT MIN(Seq) FROM weight WHERE NDB_No = NEW.NDB_No);
+CREATE TEMP TRIGGER pref_weight_Amount INSTEAD OF
+UPDATE OF Amount ON pref_Gm_Wgt WHEN NEW.Amount > 0.0
+BEGIN
+  UPDATE weight
+  SET Gm_Wgt = origGm_Wgt * NEW.Amount / Amount
+  WHERE NDB_No = NEW.NDB_No
+    AND Seq =
+      (SELECT MIN(Seq) FROM weight WHERE NDB_No = NEW.NDB_No);
 
-    UPDATE currentmeal
-    SET Gm_Wgt = NULL
-    WHERE NDB_No = NEW.NDB_No;
-  END;
+  UPDATE currentmeal
+  SET Gm_Wgt = NULL
+  WHERE NDB_No = NEW.NDB_No;
+END;
+"""
 
-  CREATE TEMP TRIGGER currentmeal_INSERT INSTEAD OF
-  INSERT ON currentmeal
-  BEGIN
-    UPDATE mealfoods
-    SET Nutr_No = NULL
-    WHERE Nutr_No = (
-      SELECT Nutr_No
-      FROM nutr_def
-      WHERE NutrDesc = NEW.NutrDesc);
+create_temp_currentmeal_triggers = """
+CREATE TEMP TRIGGER currentmeal_INSERT INSTEAD OF
+INSERT ON currentmeal
+BEGIN
+  UPDATE mealfoods
+  SET Nutr_No = NULL
+  WHERE Nutr_No = (
+    SELECT Nutr_No
+    FROM nutr_def
+    WHERE NutrDesc = NEW.NutrDesc);
 
-    INSERT OR REPLACE INTO mealfoods
-    VALUES (
-      (SELECT currentmeal FROM options),
-      NEW.NDB_No,
-      CASE
-        WHEN NEW.Gm_Wgt IS NULL THEN
-          (SELECT Gm_Wgt FROM pref_Gm_Wgt WHERE NDB_No = NEW.NDB_No)
-        ELSE
-          NEW.Gm_Wgt
-      END,
-      CASE
-        WHEN NEW.NutrDesc IS NULL THEN
-          NULL
-      WHEN (SELECT count(*) FROM nutr_def WHERE NutrDesc = NEW.NutrDesc
-        AND dv_default > 0.0) = 1 THEN
-        (SELECT Nutr_No FROM nutr_def WHERE NutrDesc = NEW.NutrDesc)
-      WHEN
-        (SELECT count(*) FROM nutr_def WHERE Nutr_No = NEW.NutrDesc
-        AND dv_default > 0.0) = 1 THEN
-          NEW.NutrDesc
-      ELSE
-        NULL
-      END);
-  END;
-
-  CREATE TEMP TRIGGER currentmeal_delete INSTEAD OF
-  DELETE ON currentmeal
-  BEGIN
-    DELETE
-    FROM mealfoods
-    WHERE meal_id = (SELECT currentmeal FROM options) AND NDB_No = OLD.NDB_No;
-  END;
-
-  CREATE TEMP TRIGGER currentmeal_upd_Gm_Wgt INSTEAD OF
-  UPDATE OF Gm_Wgt ON currentmeal
-  BEGIN
-    UPDATE mealfoods
-    SET Gm_Wgt = CASE
+  INSERT OR REPLACE INTO mealfoods
+  VALUES (
+    (SELECT currentmeal FROM options),
+    NEW.NDB_No,
+    CASE
       WHEN NEW.Gm_Wgt IS NULL THEN
         (SELECT Gm_Wgt FROM pref_Gm_Wgt WHERE NDB_No = NEW.NDB_No)
       ELSE
         NEW.Gm_Wgt
-      END
-    WHERE NDB_No = NEW.NDB_No
-      AND meal_id = (SELECT currentmeal FROM options);
-  END;
+    END,
+    CASE
+      WHEN NEW.NutrDesc IS NULL THEN
+        NULL
+    WHEN (SELECT count(*) FROM nutr_def WHERE NutrDesc = NEW.NutrDesc
+      AND dv_default > 0.0) = 1 THEN
+      (SELECT Nutr_No FROM nutr_def WHERE NutrDesc = NEW.NutrDesc)
+    WHEN
+      (SELECT count(*) FROM nutr_def WHERE Nutr_No = NEW.NutrDesc
+      AND dv_default > 0.0) = 1 THEN
+        NEW.NutrDesc
+    ELSE
+      NULL
+    END);
+END;
 
-  CREATE TEMP TRIGGER currentmeal_upd_pcf INSTEAD OF
-  UPDATE OF NutrDesc ON currentmeal BEGIN
+CREATE TEMP TRIGGER currentmeal_delete INSTEAD OF
+DELETE ON currentmeal
+BEGIN
+  DELETE
+  FROM mealfoods
+  WHERE meal_id = (SELECT currentmeal FROM options) AND NDB_No = OLD.NDB_No;
+END;
+
+CREATE TEMP TRIGGER currentmeal_upd_Gm_Wgt INSTEAD OF
+UPDATE OF Gm_Wgt ON currentmeal
+BEGIN
   UPDATE mealfoods
-  SET Nutr_No = NULL
-  WHERE Nutr_No = (SELECT Nutr_No FROM nutr_def WHERE NutrDesc = NEW.NutrDesc);
-    UPDATE mealfoods
-    SET Nutr_No = (SELECT Nutr_No FROM nutr_def WHERE NutrDesc = NEW.NutrDesc)
-    WHERE NDB_No = NEW.NDB_No
-    AND meal_id =
-      (SELECT currentmeal
-       FROM options); END;
+  SET Gm_Wgt = CASE
+    WHEN NEW.Gm_Wgt IS NULL THEN
+      (SELECT Gm_Wgt FROM pref_Gm_Wgt WHERE NDB_No = NEW.NDB_No)
+    ELSE
+      NEW.Gm_Wgt
+    END
+  WHERE NDB_No = NEW.NDB_No
+    AND meal_id = (SELECT currentmeal FROM options);
+END;
 
-  CREATE TEMP TRIGGER theusual_insert INSTEAD OF
-  INSERT ON theusual WHEN NEW.meal_name IS NOT NULL
-  AND NEW.NDB_No IS NULL
-  AND NEW.Gm_Wgt IS NULL
-  AND NEW.NutrDesc IS NULL BEGIN
-  DELETE
-  FROM z_tu
-  WHERE meal_name = NEW.meal_name;
-    INSERT
-    OR
-    IGNORE INTO z_tu
-  SELECT NEW.meal_name,
-         mf.NDB_No,
-         mf.Nutr_No
-  FROM mealfoods mf
-  LEFT JOIN nutr_def
-  WHERE meal_id =
-      (SELECT currentmeal
-       FROM options); END;
+CREATE TEMP TRIGGER currentmeal_upd_pcf INSTEAD OF
+UPDATE OF NutrDesc ON currentmeal BEGIN
+UPDATE mealfoods
+SET Nutr_No = NULL
+WHERE Nutr_No = (SELECT Nutr_No FROM nutr_def WHERE NutrDesc = NEW.NutrDesc);
+  UPDATE mealfoods
+  SET Nutr_No = (SELECT Nutr_No FROM nutr_def WHERE NutrDesc = NEW.NutrDesc)
+  WHERE NDB_No = NEW.NDB_No
+  AND meal_id =
+    (SELECT currentmeal
+     FROM options); END;
+"""
 
+create_temp_theusual_triggers = """
+CREATE TEMP TRIGGER theusual_insert INSTEAD OF
+INSERT ON theusual WHEN NEW.meal_name IS NOT NULL
+AND NEW.NDB_No IS NULL
+AND NEW.Gm_Wgt IS NULL
+AND NEW.NutrDesc IS NULL BEGIN
+DELETE
+FROM z_tu
+WHERE meal_name = NEW.meal_name;
+  INSERT
+  OR
+  IGNORE INTO z_tu
+SELECT NEW.meal_name,
+       mf.NDB_No,
+       mf.Nutr_No
+FROM mealfoods mf
+LEFT JOIN nutr_def
+WHERE meal_id =
+    (SELECT currentmeal
+     FROM options); END;
 
-  CREATE TEMP TRIGGER theusual_delete INSTEAD OF
-  DELETE ON theusual WHEN OLD.meal_name IS NOT NULL BEGIN
-  DELETE
-  FROM z_tu
-  WHERE meal_name = OLD.meal_name; END;
+CREATE TEMP TRIGGER theusual_delete INSTEAD OF
+DELETE ON theusual WHEN OLD.meal_name IS NOT NULL BEGIN
+DELETE
+FROM z_tu
+WHERE meal_name = OLD.meal_name; END;
+"""
 
+create_temp_autocal_triggers = """
+CREATE TEMP TRIGGER autocal_cutting AFTER
+INSERT ON z_wl WHEN
+  (SELECT autocal = 2
+   AND weightn > 1
+   AND fatslope > 0.0
+   AND (weightslope - fatslope) > 0.0
+   FROM z_wslope,
+        z_fslope,
+        options) BEGIN
+DELETE
+FROM wlsave;
 
-  DROP TABLE IF EXISTS wlsave;
-  CREATE TEMP TABLE wlsave (
-    weight REAL,
-    fat REAL,
-    wldate INTEGER,
-    span INTEGER,
-    today INTEGER
-  );
-
-
-  CREATE TEMP TRIGGER autocal_cutting AFTER
-  INSERT ON z_wl WHEN
-    (SELECT autocal = 2
-     AND weightn > 1
-     AND fatslope > 0.0
-     AND (weightslope - fatslope) > 0.0
-     FROM z_wslope,
-          z_fslope,
-          options) BEGIN
+CREATE TEMP TRIGGER autocal_bulking AFTER
+INSERT ON z_wl WHEN
+  (SELECT autocal = 2
+   AND weightn > 1
+   AND fatslope < 0.0
+   AND (weightslope - fatslope) < 0.0
+   FROM z_wslope,
+        z_fslope,
+        options)
+BEGIN
   DELETE
   FROM wlsave;
 
@@ -1876,64 +1899,21 @@ init_temp_triggers = """
          NULL
   FROM wlsave;
   UPDATE nutr_def
-  SET nutopt = nutopt - 20.0
-  WHERE Nutr_No = 208; END;
+  SET nutopt = nutopt + 20.0
+  WHERE Nutr_No = 208;
+END;
 
-
-  CREATE TEMP TRIGGER autocal_bulking AFTER
-  INSERT ON z_wl WHEN
-    (SELECT autocal = 2
-     AND weightn > 1
-     AND fatslope < 0.0
-     AND (weightslope - fatslope) < 0.0
-     FROM z_wslope,
-          z_fslope,
-          options)
-  BEGIN
-    DELETE
-    FROM wlsave;
-
-    INSERT INTO wlsave
-    SELECT weightyintercept,
-           fatyintercept,
-           wldate,
-           span,
-           today
-    FROM z_wslope,
-         z_fslope,
-         z_span,
-      (SELECT MIN(wldate) AS wldate
-       FROM z_wl
-       WHERE cleardate IS NULL),
-      (SELECT STRFTIME('%Y%m%d', 'now', 'localtime') AS today);
-    UPDATE z_wl
-    SET cleardate =
-      (SELECT today
-       FROM wlsave)
-    WHERE cleardate IS NULL;
-      INSERT INTO z_wl
-    SELECT weight,
-           round(100.0 * fat / weight, 1),
-           today,
-           NULL
-    FROM wlsave;
-    UPDATE nutr_def
-    SET nutopt = nutopt + 20.0
-    WHERE Nutr_No = 208;
-  END;
-
-
-  CREATE TEMP TRIGGER autocal_cycle_end AFTER
-  INSERT ON z_wl WHEN
-    (SELECT autocal = 2
-     AND weightn > 1
-     AND fatslope > 0.0
-     AND (weightslope - fatslope) < 0.0
-     FROM z_wslope,
-          z_fslope,
-          options) BEGIN
-  DELETE
-  FROM wlsave;
+CREATE TEMP TRIGGER autocal_cycle_end AFTER
+INSERT ON z_wl WHEN
+  (SELECT autocal = 2
+   AND weightn > 1
+   AND fatslope > 0.0
+   AND (weightslope - fatslope) < 0.0
+   FROM z_wslope,
+        z_fslope,
+        options)
+BEGIN
+  DELETE FROM wlsave;
   INSERT INTO wlsave
   SELECT weightyintercept,
          fatyintercept,
@@ -1957,20 +1937,61 @@ init_temp_triggers = """
          round(100.0 * fat / weight, 1),
          today,
          NULL
-  FROM wlsave; END;
+  FROM wlsave;
+END;
+"""
+
+init_temp_triggers = """
+---------------------------[VIEWS TRIGGERS]----------------------------------
+
+
 """
 
 user_init_query = """
--- Enable recursive triggers AND multithreading
-
--- Begin transaction
 BEGIN;
 
+  INSERT INTO wlsave
+  SELECT weightyintercept,
+         fatyintercept,
+         wldate,
+         span,
+         today
+  FROM z_wslope,
+       z_fslope,
+       z_span,
+    (SELECT MIN(wldate) AS wldate
+     FROM z_wl
+     WHERE cleardate IS NULL),
+    (SELECT STRFTIME('%Y%m%d', 'now', 'localtime') AS today);
 
--- call create temp tables
+  UPDATE z_wl
+  SET cleardate =
+    (SELECT today
+     FROM wlsave)
+  WHERE cleardate IS NULL;
+    INSERT INTO z_wl
+  SELECT weight,
+         round(100.0 * fat / weight, 1),
+         today,
+         NULL
+  FROM wlsave;
 
+  UPDATE nutr_def
+  SET nutopt = nutopt - 20.0
+  WHERE Nutr_No = 208;
+END;
 
-COMMIT;
+--COMMIT;
+"""
+
+create_temp_data_tables = """
+CREATE TEMP TABLE wlsave (
+  weight REAL,
+  fat REAL,
+  wldate INTEGER,
+  span INTEGER,
+  today INTEGER
+);
 """
 
 create_data_tables = """
@@ -2333,13 +2354,13 @@ CREATE TEMP TABLE zweight
 """
 
 usda_drop_temp_tables = """
-  DROP TABLE tfd_group;
-  DROP TABLE tfood_des;
-  DROP TABLE tweight;
-  DROP TABLE zweight;
-  DROP TABLE tnut_data;
-  DROP TABLE ttnutr_def;
-  DROP TABLE tnutr_def;
+DROP TABLE tfd_group;
+DROP TABLE tfood_des;
+DROP TABLE tweight;
+DROP TABLE zweight;
+DROP TABLE tnut_data;
+DROP TABLE ttnutr_def;
+DROP TABLE tnutr_def;
 """
 
 usda_load_process = """
@@ -2957,17 +2978,18 @@ VACUUM;
 """
 
 create_logic_views = """
-CREATE VIEW am_analysis AS
-SELECT am.Nutr_No AS Nutr_No,
+CREATE VIEW am_analysis
+AS SELECT
+  am.Nutr_No AS Nutr_No,
   CASE
     WHEN currentmeal BETWEEN firstmeal AND lastmeal
       AND am.null_value AND rm.null_value THEN
-        1
+      1
     WHEN currentmeal NOT BETWEEN firstmeal AND lastmeal
       AND am.null_value THEN
-        1
-      ELSE
-       0
+      1
+    ELSE
+      0
   END AS null_value,
   CASE
     WHEN currentmeal BETWEEN firstmeal AND lastmeal THEN
@@ -2976,48 +2998,84 @@ SELECT am.Nutr_No AS Nutr_No,
       am.Nutr_Val
   END AS Nutr_Val
 FROM z_anal am
-LEFT JOIN rm_analysis rm ON am.Nutr_No = rm.Nutr_No JOIN am_analysis_header;
+LEFT JOIN rm_analysis rm
+  ON am.Nutr_No = rm.Nutr_No
+JOIN am_analysis_header;
 
 
-  CREATE VIEW z_wslope
-  AS SELECT IFNULL(weightslope,0.0) AS "weightslope",
+CREATE VIEW z_wslope
+AS SELECT
+  IFNULL(weightslope,0.0) AS "weightslope",
   IFNULL(round(sumy / n - weightslope * sumx / n,1),0.0) AS "weightyintercept",
   n AS "weightn"
-  FROM (SELECT (sumxy - (sumx * sumy / n)) / (sumxx - (sumx * sumx / n))
-    AS weightslope, sumy, n, sumx
-  FROM (SELECT sum(x) as sumx, sum(y) as sumy, sum(x*y) as sumxy, sum(x*x) as sumxx, n
-  FROM (SELECT cast (cast (julianday(SUBSTR(wldate,1,4) || '-' || SUBSTR(wldate,5,2) || '-' || SUBSTR(wldate,7,2)) - julianday('now', 'localtime') as int) as real) as x, weight as y, cast ((SELECT count(*)
-  FROM z_wl
-  WHERE cleardate IS NULL) as real) as n
-  FROM z_wl
-  WHERE cleardate IS NULL)));
+FROM (
+  SELECT
+    (sumxy - (sumx * sumy / n)) / (sumxx - (sumx * sumx / n)) AS weightslope,
+    sumy,
+    n,
+    sumx
+  FROM (
+    SELECT
+      sum(x) as sumx,
+      sum(y) as sumy,
+      sum(x*y) as sumxy,
+      sum(x*x) as sumxx,
+      n
+    FROM (
+      SELECT
+        CAST (CAST (JULIANDAY(SUBSTR(wldate,1,4) || '-' || SUBSTR(wldate,5,2)
+        || '-' || SUBSTR(wldate,7,2)) - JULIANDAY('now', 'localtime') AS INT)
+        AS REAL) AS x,
+        weight AS y,
+        CAST((SELECT COUNT(*) FROM z_wl WHERE cleardate IS NULL) AS REAL) AS n
+      FROM z_wl
+      WHERE cleardate IS NULL)));
 
   /*
     Basically the same thing for the slope, y-intercept, AND "n" OF fat mass.
   */
 
 
-  CREATE VIEW z_fslope as SELECT IFNULL(fatslope,0.0) as "fatslope", IFNULL(round(sumy / n - fatslope * sumx / n,1),0.0) as "fatyintercept", n as "fatn"
-  FROM (SELECT (sumxy - (sumx * sumy / n)) / (sumxx - (sumx * sumx / n)) as fatslope, sumy, n, sumx
-  FROM (SELECT sum(x) as sumx, sum(y) as sumy, sum(x*y) as sumxy, sum(x*x) as sumxx, n
-  FROM (SELECT cast (cast (julianday(SUBSTR(wldate,1,4) || '-' || SUBSTR(wldate,5,2) || '-' || SUBSTR(wldate,7,2)) - julianday('now', 'localtime') as int) as real) as x, bodyfat * weight / 100.0 as y, cast ((SELECT count(*)
-  FROM z_wl
-  WHERE IFNULL(bodyfat,0.0) > 0.0 AND cleardate IS NULL) as real) as n
-  FROM z_wl
-  WHERE IFNULL(bodyfat,0.0) > 0.0 AND cleardate IS NULL)));
+CREATE VIEW z_fslope
+AS SELECT
+  IFNULL(fatslope, 0.0) AS "fatslope",
+  IFNULL(round(sumy / n - fatslope * sumx / n,1),0.0) AS "fatyintercept",
+  n AS "fatn"
+  FROM (
+    SELECT
+      (sumxy - (sumx * sumy / n)) /(sumxx - (sumx * sumx / n)) as fatslope,
+      sumy,
+      n,
+      sumx
+    FROM (
+      SELECT
+        sum(x) as sumx,
+        sum(y) as sumy,
+        sum(x*y) as sumxy,
+        sum(x*x) as sumxx,
+        n
+      FROM (
+        SELECT
+          cast (cast (julianday(SUBSTR(wldate,1,4) || '-' ||
+            SUBSTR(wldate,5,2) || '-' || SUBSTR(wldate,7,2)) -
+            julianday('now', 'localtime') as int) as real) as x,
+          bodyfat * weight / 100.0 as y,
+          cast ((SELECT count(*) FROM z_wl WHERE IFNULL(bodyfat,0.0) > 0.0
+            AND cleardate IS NULL) as real) as n
+        FROM z_wl
+        WHERE IFNULL(bodyfat,0.0) > 0.0 AND cleardate IS NULL)));
 
+CREATE VIEW z_span
+AS SELECT
+  ABS(MIN(cast (julianday(SUBSTR(wldate,1,4) || '-' || SUBSTR(wldate,5,2)
+  || '-' || SUBSTR(wldate,7,2)) -
+  julianday('now', 'localtime') as int))) as span
+FROM z_wl
+WHERE cleardate IS NULL;
 
-  CREATE view z_span as SELECT ABS(MIN(cast (julianday(SUBSTR(wldate,1,4) || '-' || SUBSTR(wldate,5,2) || '-' || SUBSTR(wldate,7,2)) - julianday('now', 'localtime') as int))) as span
-  FROM z_wl
-  WHERE cleardate IS NULL;
-
-
-  CREATE view wlog as SELECT *
-  FROM z_wl;
-
-  CREATE TRIGGER wlog_insert instead OF INSERT ON wlog BEGIN
-  INSERT OR replace INTO z_wl values (NEW.weight, NEW.bodyfat, (SELECT strftime('%Y%m%d', 'now', 'localtime')), NULL);
-  END;
+CREATE VIEW wlog
+AS SELECT *
+FROM z_wl;
 
 
 CREATE VIEW wlview
@@ -3037,9 +3095,9 @@ CREATE VIEW wlsummary
 AS SELECT
   CASE
     WHEN weightn > 1 THEN
-      'Weight:  ' || ROUND(weightyintercept,1) || char(13) || char(10) ||
-      'Bodyfat:  ' 
-      || CASE
+      'Weight:  ' || ROUND(weightyintercept, 1) || char(13) || char(10) ||
+      'Bodyfat:  ' ||
+      CASE
         WHEN weightyintercept > 0.0 THEN
           ROUND(1000.0 * fatyintercept / weightyintercept) / 10.0
         ELSE
@@ -3065,7 +3123,8 @@ AS SELECT
       ROUND(10.0 * (weightyintercept - fatyintercept)) / 10.0
       || char(13) || char(10) || 'Predicted fat mass today  =  ' ||
       ROUND(fatyintercept, 1) || char(13) || char(10) || char(10) ||
-      'If the predictions are correct, you ' ||
+      'If the predictions are correct, you '
+  END ||
   CASE
     WHEN weightslope - fatslope >= 0.0 THEN
       'gained '
@@ -3116,14 +3175,22 @@ BEGIN;
       MAX(LONG3.Nutr_Val, 0.000000001) - MAX(LONG6.Nutr_Val, 0.000000001)) /
     MAX(ENERC_KCAL.Nutr_Val, 0.000000001)
   FROM am_analysis SHORT3
-  JOIN am_analysis SHORT6 ON SHORT3.Nutr_No = 3005 AND SHORT6.Nutr_No = 3003
-  JOIN am_analysis LONG3 ON LONG3.Nutr_No = 3006
-  JOIN am_analysis LONG6 ON LONG6.Nutr_No = 3004
-  JOIN am_analysis FAPUval ON FAPUval.Nutr_No = 646
-  JOIN am_analysis FASAT ON FASAT.Nutr_No = 606
-  JOIN am_analysis FAMS ON FAMS.Nutr_No = 645
-  JOIN am_analysis FAPU ON FAPU.Nutr_No = 646
-  JOIN am_analysis ENERC_KCAL ON ENERC_KCAL.Nutr_No = 208;
+  JOIN am_analysis SHORT6
+    ON SHORT3.Nutr_No = 3005 AND SHORT6.Nutr_No = 3003
+  JOIN am_analysis LONG3
+    ON LONG3.Nutr_No = 3006
+  JOIN am_analysis LONG6
+    ON LONG6.Nutr_No = 3004
+  JOIN am_analysis FAPUval
+    ON FAPUval.Nutr_No = 646
+  JOIN am_analysis FASAT
+    ON FASAT.Nutr_No = 606
+  JOIN am_analysis FAMS
+    ON FAMS.Nutr_No = 645
+  JOIN am_analysis FAPU
+    ON FAPU.Nutr_No = 646
+  JOIN am_analysis ENERC_KCAL
+    ON ENERC_KCAL.Nutr_No = 208;
 
 
   UPDATE am_analysis_header
@@ -3169,48 +3236,6 @@ BEGIN;
         omega3
       END;
 
-  -- Call create init triggers
-  -- Create triggers here
-
-  DELETE FROM z_n6;
-
-  INSERT INTO z_n6
-  SELECT
-    NULL,
-    NULL,
-    NULL,
-    1,
-    1,
-    900.0 * MAX(SHORT3.Nutr_Val, 0.000000001)
-     / MAX(ENERC_KCAL.Nutr_Val, 0.000000001),
-    900.0 * MAX(SHORT6.Nutr_Val, 0.000000001)
-     / MAX(ENERC_KCAL.Nutr_Val, 0.000000001),
-    900.0 * MAX(LONG3.Nutr_Val, 0.000000001)
-     / MAX(ENERC_KCAL.Nutr_Val, 0.000000001),
-    900.0 * MAX(LONG6.Nutr_Val, 0.000000001)
-     / MAX(ENERC_KCAL.Nutr_Val, 0.000000001),
-    900.0 * (FASAT.Nutr_Val + FAMS.Nutr_Val + FAPU.Nutr_Val -
-    MAX(SHORT3.Nutr_Val,0.000000001) - MAX(SHORT6.Nutr_Val,0.000000001) -
-    MAX(LONG3.Nutr_Val,0.000000001) - MAX(LONG6.Nutr_Val,0.000000001)) /
-    MAX(ENERC_KCAL.Nutr_Val, 0.000000001)
-  FROM rm_analysis SHORT3
-  JOIN rm_analysis SHORT6
-    ON SHORT3.Nutr_No = 3005 AND SHORT6.Nutr_No = 3003
-  JOIN rm_analysis LONG3
-    ON LONG3.Nutr_No = 3006
-  JOIN rm_analysis LONG6
-    ON LONG6.Nutr_No = 3004
-  JOIN rm_analysis FAPUval
-    ON FAPUval.Nutr_No = 646
-  JOIN rm_analysis FASAT
-    ON FASAT.Nutr_No = 606
-  JOIN rm_analysis FAMS
-    ON FAMS.Nutr_No = 645
-  JOIN rm_analysis FAPU
-    ON FAPU.Nutr_No = 646
-  JOIN rm_analysis ENERC_KCAL
-    ON ENERC_KCAL.Nutr_No = 208;
-
   UPDATE rm_analysis_header
   SET omega6 = (
     SELECT
@@ -3241,33 +3266,160 @@ BEGIN;
   FROM z_n6));
   END;
 
-UPDATE nutr_def
-SET nutopt = 0.0
-WHERE nutopt IS NULL;
+  UPDATE nutr_def
+  SET nutopt = 0.0
+  WHERE nutopt IS NULL;
 
-UPDATE options
-SET
-  defanal_am = CASE
-    WHEN defanal_am IS NULL THEN
-      0
-    ELSE
-      defanal_am
-    END,
-  currentmeal = CASE
-    WHEN currentmeal IS NULL THEN
-      0
-    ELSE
-      currentmeal
-    END;
+  UPDATE options
+  SET
+    defanal_am = CASE
+      WHEN defanal_am IS NULL THEN
+        0
+      ELSE
+        defanal_am
+      END,
+    currentmeal = CASE
+      WHEN currentmeal IS NULL THEN
+        0
+      ELSE
+        currentmeal
+      END;
 
+END;
 --- remember to commit and optimize the database at the end
-COMMIT;
+--COMMIT;
 ANALYZE main;
+"""
+
+
+create_food_archive_triggers = """
+-----------------------------[ARCHIVE TRIGGERS]--------------------------------
+
+-- Triggered when the meals per day are changed
+CREATE TRIGGER mpd_archive
+AFTER UPDATE OF meals_per_day
+ON options
+WHEN NEW.meals_per_day != OLD.meals_per_day
+BEGIN
+
+  INSERT OR IGNORE INTO archive_mealfoods
+  SELECT meal_id, NDB_No, Gm_Wgt, OLD.meals_per_day
+  FROM mealfoods;
+
+  DELETE FROM mealfoods;
+
+  INSERT OR IGNORE INTO mealfoods
+  SELECT meal_id, NDB_No, Gm_Wgt, NULL
+  FROM archive_mealfoods
+  WHERE meals_per_day = NEW.meals_per_day;
+
+  DELETE FROM archive_mealfoods
+  WHERE meals_per_day = NEW.meals_per_day;
+
+  UPDATE options
+  SET defanal_am = (SELECT COUNT(DISTINCT meal_id) FROM mealfoods);
+END;
+"""
+
+create_weight_log_triggers = """
+----------------------------[WEIGHT LOG TRIGGERS]------------------------------
+
+-- Triggered when a new weight log is inserted
+CREATE TRIGGER wlog_insert
+INSTEAD OF INSERT
+ON wlog
+BEGIN
+  REPLACE INTO z_wl
+  VALUES (
+    NEW.weight,
+    NEW.bodyfat,
+    (SELECT STRFTIME('%Y%m%d', 'now', 'localtime')),
+    NULL);
+END;
+
+-- Triggered when an insertion in the wlsummary is attempted
+CREATE TRIGGER clear_wlsummary
+INSTEAD OF INSERT
+ON wlsummary
+WHEN NOT (SELECT autocal FROM options)
+BEGIN
+    UPDATE z_wl
+    SET cleardate = (SELECT STRFTIME('%Y%m%d', 'now', 'localtime'))
+    WHERE cleardate IS NULL;
+
+    INSERT INTO z_wl
+    SELECT weight, bodyfat, wldate, NULL
+    FROM z_wl
+    WHERE wldate = (SELECT MAX(wldate) FROM z_wl);
+END;
+
+-- Autocal managemente trigger
+CREATE TRIGGER autocal_initialization
+AFTER UPDATE OF autocal
+ON options
+WHEN NEW.autocal IN (1, 2, 3) AND OLD.autocal NOT IN (1, 2, 3)
+BEGIN
+    UPDATE options
+    SET
+      wltweak = 0,
+      wlpolarity = 0;
+END;
+"""
+
+create_food_weight_triggers = """
+-- Triggered when a food weight Seq is inserted or updated
+CREATE TRIGGER update_weight_seq
+BEFORE UPDATE OF Seq
+ON weight
+WHEN NEW.Seq = 0
+BEGIN
+  UPDATE weight
+  SET
+    Seq = origSeq,
+    Gm_Wgt = origGm_Wgt
+  WHERE NDB_No = NEW.NDB_No;
+END;
+
+CREATE TRIGGER insert_weight_Seq
+BEFORE INSERT
+ON weight
+WHEN NEW.Seq = 0
+BEGIN
+  UPDATE weight
+  SET
+    Seq = origSeq,
+    Gm_Wgt = origGm_Wgt
+  WHERE NDB_No = NEW.NDB_No;
+END;
+
+------------------------[MEAL FOODS WEIGHT TRIGGER]----------------------------
+
+CREATE TRIGGER update_mealfoods2weight_trigger
+AFTER UPDATE ON mealfoods
+WHEN NEW.Gm_Wgt > 0.0
+  AND NOT (SELECT block_setting_preferred_weight FROM z_trig_ctl)
+BEGIN
+  UPDATE weight
+  SET
+    Gm_Wgt = NEW.Gm_Wgt
+  WHERE NDB_No = NEW.NDB_No
+    AND Seq = (SELECT MIN(Seq) FROM weight WHERE NDB_No = NEW.NDB_No);
+END;
+
+CREATE TRIGGER insert_mealfoods2weight_trigger
+AFTER INSERT ON mealfoods
+WHEN NEW.Gm_Wgt > 0.0
+  AND NOT (SELECT block_setting_preferred_weight FROM z_trig_ctl)
+BEGIN
+  UPDATE weight
+  SET Gm_Wgt = NEW.Gm_Wgt
+  WHERE NDB_No = NEW.NDB_No
+    AND Seq = (SELECT MIN(Seq) FROM weight WHERE NDB_No = NEW.NDB_No) ;
+END;
 """
 
 create_meal_foods_triggers = """
 -----------------[MEAL FOODS INSERT AND DELETE TRIGGERS]-----------------------
---------------------------------[CHECKED]--------------------------------------
 
 CREATE TRIGGER insert_mealfoods_trigger
 AFTER INSERT ON mealfoods
@@ -3362,119 +3514,4 @@ BEGIN
         0
       END;
 END;
-
-------------------------[MEAL FOODS WEIGHT TRIGGER]----------------------------
---------------------------------[CHECKED]--------------------------------------
-
-CREATE TRIGGER update_mealfoods2weight_trigger
-AFTER UPDATE ON mealfoods
-WHEN NEW.Gm_Wgt > 0.0
-  AND NOT (SELECT block_setting_preferred_weight FROM z_trig_ctl)
-BEGIN
-  UPDATE weight
-  SET
-    Gm_Wgt = NEW.Gm_Wgt
-  WHERE NDB_No = NEW.NDB_No
-    AND Seq = (SELECT MIN(Seq) FROM weight WHERE NDB_No = NEW.NDB_No);
-END;
-
-CREATE TRIGGER insert_mealfoods2weight_trigger
-AFTER INSERT ON mealfoods
-WHEN NEW.Gm_Wgt > 0.0
-  AND NOT (SELECT block_setting_preferred_weight FROM z_trig_ctl)
-BEGIN
-  UPDATE weight
-  SET Gm_Wgt = NEW.Gm_Wgt
-  WHERE NDB_No = NEW.NDB_No
-    AND Seq = (SELECT MIN(Seq) FROM weight WHERE NDB_No = NEW.NDB_No) ;
-END;
 """
-
-create_weight_log_triggers = """
-----------------------------[WEIGHT TRIGGERS]----------------------------------
---------------------------------[CHECKED]--------------------------------------
-
-CREATE TRIGGER update_weight_seq
-BEFORE UPDATE OF Seq
-ON weight
-WHEN NEW.Seq = 0
-BEGIN
-  UPDATE weight
-  SET
-    Seq = origSeq,
-    Gm_Wgt = origGm_Wgt
-  WHERE NDB_No = NEW.NDB_No;
-END;
-
-CREATE TRIGGER insert_weight_Seq
-BEFORE INSERT
-ON weight
-WHEN NEW.Seq = 0
-BEGIN
-  UPDATE weight
-  SET
-    Seq = origSeq,
-    Gm_Wgt = origGm_Wgt
-  WHERE NDB_No = NEW.NDB_No;
-END;
-
-CREATE TRIGGER clear_wlsummary
-INSTEAD OF INSERT
-ON wlsummary
-WHEN NOT (SELECT autocal FROM options)
-BEGIN
-    UPDATE z_wl
-    SET cleardate = (SELECT STRFTIME('%Y%m%d', 'now', 'localtime'))
-    WHERE cleardate IS NULL;
-
-    INSERT INTO z_wl
-    SELECT weight, bodyfat, wldate, NULL
-    FROM z_wl
-    WHERE wldate = (SELECT MAX(wldate) FROM z_wl);
-END;
-
-CREATE TRIGGER autocal_initialization
-AFTER UPDATE OF autocal
-ON options
-WHEN NEW.autocal IN (1, 2, 3) AND OLD.autocal NOT IN (1, 2, 3)
-BEGIN
-    UPDATE options
-    SET
-      wltweak = 0,
-      wlpolarity = 0;
-END;
-"""
-
-create_food_archive_triggers = """
------------------------------[ARCHIVE TRIGGERS]--------------------------------
---------------------------------[CHECKED]--------------------------------------
-
--- triggered when the meals per day are changed
-
-CREATE TRIGGER mpd_archive
-AFTER UPDATE OF meals_per_day
-ON options
-WHEN NEW.meals_per_day != OLD.meals_per_day
-BEGIN
-
-  INSERT OR IGNORE INTO archive_mealfoods
-  SELECT meal_id, NDB_No, Gm_Wgt, OLD.meals_per_day
-  FROM mealfoods;
-
-  DELETE FROM mealfoods;
-
-  INSERT OR IGNORE INTO mealfoods
-  SELECT meal_id, NDB_No, Gm_Wgt, NULL
-  FROM archive_mealfoods
-  WHERE meals_per_day = NEW.meals_per_day;
-
-  DELETE FROM archive_mealfoods
-  WHERE meals_per_day = NEW.meals_per_day;
-
-  UPDATE options
-  SET defanal_am = (SELECT COUNT(DISTINCT meal_id) FROM mealfoods);
-END;
-"""
-
-
-
