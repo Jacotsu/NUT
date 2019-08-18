@@ -21,11 +21,21 @@ class Meal:
     __db: Any
     __foods: List[food.Food] = field(default_factory=list)
 
+    def __init__(self, meal_id: int, db):
+        if meal_id >= 0:
+            self.meal_id = meal_id
+            self.__db = db
+        else:
+            raise ValueError("Meal id must be >= 0")
+
+    def __iter__(self):
+        return iter(self.__foods)
+
     @property
     def foods(self):
         return self.__foods
 
-    def add_food(self, food: food.Food):
+    def append_food(self, food: food.Food):
         self.__db.insert_food_into_meal(food, self)
 
     def remove_food(self, food: food.Food):

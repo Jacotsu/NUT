@@ -206,14 +206,14 @@ class TheStoryHandler:
         rank_iter = self._manager._food_rank_cb.get_active_iter()
         rank = self._manager._food_rank_choices.get_value(rank_iter, 1)
 
-        foods = self._manager._db.get_ranked_foods(self._manager._Nutr_No,
+        foods = self._manager._db.get_ranked_foods(self._manager._nutrient,
                                                    rank,
                                                    FdGrp_Cd)
 
         # Need to improve performance
         self._manager._story_food.clear()
-        for food in foods:
-            self._manager._story_food.append(food)
+        for s_food in foods:
+            self._manager._story_food.append(s_food)
 
 
 class GTKGui:
@@ -255,8 +255,8 @@ class GTKGui:
             omega6_3_bl_choices.append([f'{ch}/{100-ch}'])
 
         self._searchable_food_list = builder.get_object("search_food_list")
-        for food in self._db.food_list:
-            self._searchable_food_list.append(food)
+        for s_food in self._db.food_list:
+            self._searchable_food_list.append(s_food)
 
         am_meal_no_sp = builder.get_object('am_meals_no')
         am_meal_no_sp.set_value(self._db.am_analysis_meal_no)
@@ -265,40 +265,40 @@ class GTKGui:
 
         self._update_gui_settings()
 
-        pcf_choices = [203,  # Protein
+        pcf_choices = [203,   # Protein
                        2000,  # Non-Fiber Carb
-                       204,  # Total Fat
-                       320,  # Vitamin A
-                       404,  # Thiamin
-                       405,  # Riboflavin
-                       406,  # Niacin
-                       410,  # Panto. Acid
-                       415,  # Vitamin B6
-                       417,  # Folate
-                       418,  # Vitamin B12
-                       421,  # Choline
-                       401,  # Vitamin C
-                       328,  # Vitamin D
+                       204,   # Total Fat
+                       320,   # Vitamin A
+                       404,   # Thiamin
+                       405,   # Riboflavin
+                       406,   # Niacin
+                       410,   # Panto. Acid
+                       415,   # Vitamin B6
+                       417,   # Folate
+                       418,   # Vitamin B12
+                       421,   # Choline
+                       401,   # Vitamin C
+                       328,   # Vitamin D
                        2008,  # Vitamin E
-                       430,  # Vitamin K1
-                       301,  # Calcium
-                       312,  # Copper
-                       303,  # Iron
-                       304,  # Magnesium
-                       315,  # Manganese
-                       305,  # Phosphorus
-                       306,  # Potassium
-                       317,  # Selenium
-                       307,  # Sodium
-                       309,  # Zinc
-                       516,  # Glycine
-                       319,  # Retinol
-                       291  # Fiber
+                       430,   # Vitamin K1
+                       301,   # Calcium
+                       312,   # Copper
+                       303,   # Iron
+                       304,   # Magnesium
+                       315,   # Manganese
+                       305,   # Phosphorus
+                       306,   # Potassium
+                       317,   # Selenium
+                       307,   # Sodium
+                       309,   # Zinc
+                       516,   # Glycine
+                       319,   # Retinol
+                       291    # Fiber
                        ]
-        for Nutr_No in pcf_choices:
-            self._pcf_choices_cb.append((Nutr_No,
-                                        _(self._db.get_nutrient_name(Nutr_No)))
-                                        )
+        for nutr_no in pcf_choices:
+            nutrient = Nutrient(nutr_no, self._db)
+            self._pcf_choices_cb\
+                .append((nutrient.nutr_no, _(nutrient.nutr_desc)))
 
         nutrient_display_function = \
             chain_functions([set_float_precision,
@@ -381,20 +381,19 @@ class GTKGui:
         meal.Analysis(self._am_anal, None, self._db.am_analysis_nutrients)
 
     def _update_gui_settings(self):
-        self._settings_widgets['calories_sp']\
-            .set_value(Nutrient(208, self._db).nut_opt)
-        self._settings_widgets['total_fat_sp']\
-            .set_value(Nutrient(204, self._db).nut_opt)
-        self._settings_widgets['protein_sp']\
-            .set_value(Nutrient(203, self._db).nut_opt)
-        self._settings_widgets['non_fiber_carb_sp']\
-            .set_value(Nutrient(2000, self._db).nut_opt)
-        self._settings_widgets['fiber_sp']\
-            .set_value(Nutrient(291, self._db).nut_opt)
-        self._settings_widgets['sat_fat_sp']\
-            .set_value(Nutrient(606, self._db).nut_opt)
-        self._settings_widgets['essential_fatty_acid_sp']\
-            .set_value(Nutrient(646, self._db).nut_opt)
+        settings_widgets_nutrient_dict = {
+            'calories_sp': 208,
+            'total_fat_sp': 204,
+            'protein_sp': 203,
+            'non_fiber_carb_sp': 2000,
+            'fiber_sp': 291,
+            'sat_fat_sp': 606,
+            'essential_fatty_acid_sp': 646
+        }
+
+        for widget_name, nutr_no in settings_widgets_nutrient_dict.items():
+            self._settings_widgets[widget_name]\
+                .set_value(Nutrient(nutr_no, self._db).nut_opt)
 
         weight = self._db.last_weight
         logging.debug(f'Setting last weight to: {weight}')
@@ -415,10 +414,10 @@ class GTKGui:
 
 
 class TheStory:
-    def __init__(self, Nutr_No):
+    def __init__(self, nutr_no):
         self._db = db.DBMan()
-        self._Nutr_No = Nutr_No
-        self._nutrient_name = self._db.get_nutrient_name(Nutr_No)
+        self._nutrient = Nutrient(nutr_no, self._db)
+
         self._end_date = str(self._db.current_meal)[:-2]
         self._start_date = \
             str(self._db.get_meal_from_offset_rel_to_current(
@@ -445,11 +444,11 @@ class TheStory:
             fd_group_list.append(food_group)
 
         self._window.set_title(_("The {} story")
-                               .format(_(self._nutrient_name)))
-        self._ts_nutrient_header.set_title(_(self._nutrient_name))
+                               .format(_(self._nutrient.nutr_desc)))
+        self._ts_nutrient_header.set_title(_(self._nutrient.nutr_desc))
 
         logging.debug(_("{} story window created")
-                      .format(_(self._nutrient_name)))
+                      .format(_(self._nutrient.nutr_desc)))
         self._setup_plot()
         set_cells_data_func(builder,
                             ['story_food_view'],
@@ -470,8 +469,9 @@ class TheStory:
         ax.tick_params(axis='x', labelrotation=30)
         ax.set_autoscale_on(True)
 
-        ax.set_ylabel(_('{} intake ({})').format(_(self._nutrient_name),
-                                                 'unit'))
+        ax.set_ylabel(_('{} intake ({})').format(_(self._nutrient.nutr_desc),
+                                                 self._nutrient.portion_value
+                                                 .unit))
         ax.set_xlabel(_('Date'))
         self._plot_lines, = ax.plot_date([], [], 'o-')
 
@@ -485,7 +485,7 @@ class TheStory:
     def _update_data(self):
         logging.debug(_("Updating story plot from {} to {}"
                         .format(self._start_date, self._end_date)))
-        data = self._db.get_nutrient_story(self._Nutr_No,
+        data = self._db.get_nutrient_story(self._nutrient,
                                            self._start_date,
                                            self._end_date)
         # Need to improve this code
@@ -524,23 +524,23 @@ class TheStory:
 
 
 class ViewFood:
-    def __init__(self, NDB_No):
+    def __init__(self, ndb_no):
+        self._db = db.DBMan()
         builder = Gtk.Builder()
         builder.add_from_file("view_food_window.glade")
         self._window = builder.get_object("view_food")
         self._vf_analysis = builder.get_object("vf_analysis")
-        self._db = db.DBMan()
+        self._searchable_food_list = builder.get_object("search_food_list")
 
         # Must change with actual food selected
-        self._food = self._db.get_food_by_NDB_No(NDB_No)
-        self._window.set_title(_("Viewing {}").format(self._food[2]))
-        logging.debug(_("View {} window created").format(self._food[2]))
+        self._food = food.Food(ndb_no, self._db)
+        self._window.set_title(_("Viewing {}").format(self._food.long_desc))
+        logging.debug(_("View {} window created").format(self._food.long_desc))
 
-        self._searchable_food_list = builder.get_object("search_food_list")
-        for food in self._db.food_list:
-            self._searchable_food_list.append(food)
+        for s_food in self._db.food_list:
+            self._searchable_food_list.append(s_food)
         logging.debug(_("Food list loaded in view {} window")
-                      .format(self._food[2]))
+                      .format(self._food.long_desc))
 
         set_cells_data_func(builder,
                             ['vf_analysis_treeview'],
@@ -550,7 +550,7 @@ class ViewFood:
                             )
         meal.Analysis(self._vf_analysis,
                       None,
-                      self._db.get_food_nutrients(NDB_No))
+                      self._food.nutrients)
         self._window.show_all()
 
     def _load_food(self, NDB_No):

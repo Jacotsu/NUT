@@ -14,6 +14,7 @@ class Food:
     """
     ndb_no: int
     __db: Any
+    __meal: Any = None
 
     fdgrp_cd: int
     long_desc: str
@@ -26,14 +27,18 @@ class Food:
     cho_factor: float
     macro_pct: tuple
     portion: portions.Portion
-    __meal: Any = None
+
     nutrients: List[nutrient.Nutrient] = field(default_factory=list)
     pcf_nutrient: nutrient.Nutrient = None
 
-    def __init__(self, ndb_no: int, db):
+    def __init__(self, ndb_no: int, db, meal=None):
         if ndb_no >= 0:
             self.ndb_no = ndb_no
             self.__db = db
+            # meal is None it means that we're viewing the food
+            if meal:
+                self.__meal = meal
+                meal.append_food(self)
         else:
             raise ValueError("Food number must be >= 0")
 

@@ -7,6 +7,7 @@ from typing import Iterator, Tuple
 from utils import download_usda_and_unzip, cleanup_usda
 import bignut_queries
 import nutrient
+import portions
 import food
 
 appname = 'nut_nutrition'
@@ -102,8 +103,10 @@ class DBMan:
         """
         cur = self._conn.cursor()
         cur.execute(bignut_queries.get_rm_analysis)
-        return {nutrient[0]: nutrient[1:]
-                for nutrient in cur}
+        return [nutrient.Nutrient(data[0],
+                                  self,
+                                  portions.Portion(data[1], data[2]))
+                for data in cur]
 
     @property
     def am_analysis_nutrients(self):
@@ -113,8 +116,10 @@ class DBMan:
         """
         cur = self._conn.cursor()
         cur.execute(bignut_queries.get_am_analysis)
-        return {nutrient[0]: nutrient[1:]
-                for nutrient in cur}
+        return [nutrient.Nutrient(data[0],
+                                  self,
+                                  portions.Portion(data[1], data[2]))
+                for data in cur]
 
     @property
     def am_analysis_period(self):
@@ -128,6 +133,16 @@ class DBMan:
 
     def get_day_meals(self, day):
         raise NotImplementedError
+
+    @property
+    def max_number_of_meals(self):
+        """
+        :return: The maximum number of number meals currently available
+        :rtype: int
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_max_number_of_meals)
+        return cur.fetchone()
 
     @property
     def weight_unit(self):

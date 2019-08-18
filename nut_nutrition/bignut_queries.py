@@ -51,6 +51,8 @@ GROUP by day;
 set_number_of_meals_to_analyze = 'UPDATE options SET defanal_am = ?;'
 get_number_of_meals_to_analyze = 'SELECT defanal_am FROM options;'
 
+get_max_number_of_meals = 'SELECT maxmeal FROM rm_analysis_header;'
+
 get_rm_analysis_header = 'SELECT * FROM rm_analysis_header;'
 
 # need to add default values for non present nutrients

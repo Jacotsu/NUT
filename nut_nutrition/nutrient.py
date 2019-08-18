@@ -22,10 +22,11 @@ class Nutrient:
     # Should be a DBMan instance
     __db: Any
 
-    def __init__(self, nutr_no: int, db):
+    def __init__(self, nutr_no: int, db, portion: portions.Portion = None):
         if nutr_no >= 0:
             self.nutr_no = nutr_no
             self.__db = db
+            self.__portion = portion
         else:
             raise ValueError("Nutrient number must be >= 0")
 
@@ -97,8 +98,11 @@ class Nutrient:
 
     @property
     def portion_value(self) -> portions.Portion:
-        return portions.Portion(None,
-                                self.__db.get_nutrient_field(self, 'Units'))
+        if self.__portion:
+            return self.__portion
+        else:
+            return portions.Portion(None, self.__db
+                                    .get_nutrient_field(self, 'Units'))
 
     @portion_value.setter
     def portion_value(self, new_value: portions.Portion):
@@ -114,3 +118,4 @@ class Nutrient:
             self.__db.set_nutrient_field(self,
                                          'Units',
                                          new_value)
+            self.__portion = new_value
