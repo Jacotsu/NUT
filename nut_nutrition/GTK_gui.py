@@ -131,9 +131,9 @@ class MainHandler:
         """
         long_desc = self._manager._rm_search_entry.get_text()
         logging.debug(f'Selected {long_desc}')
-        for food in self._manager._db.search_food(long_desc):
+        for s_food in self._manager._db.search_food(long_desc):
             logging.debug(f'Inserted {food}')
-            ViewFood(food[0])
+            ViewFood(s_food[0])
 
     def add_food_to_meal(self, widget):
         """
@@ -143,9 +143,9 @@ class MainHandler:
         """
         long_desc = self._manager._rm_search_entry.get_text()
         logging.debug(f'Selected {long_desc}')
-        for food in self._manager._db.search_food(long_desc):
+        for s_food in self._manager._db.search_food(long_desc):
             logging.debug(f'Inserted {food}')
-            self._manager._db.insert_food_into_meal(food[0])
+            self._manager._db.insert_food_into_meal(s_food[0])
         self._manager._update_current_meal_menu()
 
     def view_food(self, button):
@@ -352,14 +352,14 @@ class GTKGui:
         database is left untouched
         """
         self._rm_menu.clear()
-        for food in self._db.current_meal_menu:
+        for s_food in self._db.current_meal.foods:
             logging.debug(f'Inserting food into menu: {food}')
-            meal.FoodAnal(self._rm_menu,
-                      food[0],
-                      self._db.get_food_nutrients(food[0]),
-                      food[1],
-                      food[2],
-                      food[3])
+            #meal.FoodAnal(self._rm_menu,
+            #          food[0],
+            #          self._db.get_food_nutrients(food[0]),
+            #          food[1],
+            #          food[2],
+            #          food[3])
         self._update_rm_analysis()
 
     def _update_rm_analysis(self):

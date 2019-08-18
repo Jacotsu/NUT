@@ -14,9 +14,10 @@ class Food:
     """
     ndb_no: int
     __db: Any
-    __meal: Any = None
+    meal: Any
 
     fdgrp_cd: int
+
     long_desc: str
     shrt_desc: str
     ref_desc: str
@@ -31,14 +32,23 @@ class Food:
     nutrients: List[nutrient.Nutrient] = field(default_factory=list)
     pcf_nutrient: nutrient.Nutrient = None
 
-    def __init__(self, ndb_no: int, db, meal=None):
+    def __init__(self,
+                 ndb_no: int,
+                 db,
+                 meal=None,
+                 pcf_nutrient: nutrient.Nutrient = None,
+                 portion: portions.Portion = None):
         if ndb_no >= 0:
             self.ndb_no = ndb_no
             self.__db = db
+            self.portion = portion
+
             # meal is None it means that we're viewing the food
             if meal:
-                self.__meal = meal
+                self.meal = meal
                 meal.append_food(self)
+
+            self.pcf_nutrient = pcf_nutrient
         else:
             raise ValueError("Food number must be >= 0")
 
@@ -57,7 +67,7 @@ class Food:
 
     @property
     def pcf_nutrient(self):
-        return self.__db.get_food_(self)
+        return self.__db.get_food_pcf(self)
 
     @pcf_nutrient.setter
     def pcf_nutrient(self,

@@ -15,11 +15,9 @@ class Meal:
     """
     Class that represents a single meal
     :param meal_id: Unique meal identifier which is normally %Y%M%D%meal_no
-    :param foods: List of foods in meal
     """
     meal_id: int
     __db: Any
-    __foods: List[food.Food] = field(default_factory=list)
 
     def __init__(self, meal_id: int, db):
         if meal_id >= 0:
@@ -29,11 +27,14 @@ class Meal:
             raise ValueError("Meal id must be >= 0")
 
     def __iter__(self):
-        return iter(self.__foods)
+        return self.foods
 
     @property
     def foods(self):
-        return self.__foods
+        """
+        Iterator of foods in meal
+        """
+        return self.__db.get_meal_foods(self)
 
     def append_food(self, food: food.Food):
         self.__db.insert_food_into_meal(food, self)
@@ -45,7 +46,7 @@ class Meal:
         raise NotImplementedError
 
     def __str__(self):
-        nl_separated_food = '\n'.join(self._foods)
+        nl_separated_food = '\n'.join(self.foods)
         return f"Meal id: {self.meal_id} {nl_separated_food}"
 
 

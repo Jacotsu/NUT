@@ -9,6 +9,7 @@ import bignut_queries
 import nutrient
 import portions
 import food
+import meal
 
 appname = 'nut_nutrition'
 
@@ -166,26 +167,6 @@ class DBMan:
                         (self.weight_units[unit],))
 
     @property
-    def current_meal_string(self):
-        """
-        :return: The current meal string
-        :rtype: str
-        """
-        cur = self._conn.cursor()
-        cur.execute(bignut_queries.get_current_meal_str)
-        return cur.fetchone()[0]
-
-    @property
-    def current_meal_menu(self) -> Iterator:
-        """
-        :return: The current meal menu
-        :rtype: Iterator
-        """
-        cur = self._conn.cursor()
-        cur.execute(bignut_queries.get_current_meal_food)
-        return cur
-
-    @property
     def macro_pct(self) -> Tuple:
         """
         :return: The macro percents in this format (carbs, protein, fat)
@@ -225,29 +206,39 @@ class DBMan:
         :param data: A tuple that contains the omega6 and omega3 ratio
         """
 
-    #    @property
-#    def current_meal(self) -> meal.Meal:
-#        """
-#        :return: The meal object
-#        :rtype: meal.Meal
-#        """
-#        cur = self._conn.cursor()
-#        cur.execute(bignut_queries.get_current_meal)
-#        data = cur.fetchone()[0]
-#        return meal.Meal(data, self)
+    @property
+    def current_meal_string(self):
+        """
+        :return: The current meal string
+        :rtype: str
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_current_meal_str)
+        return cur.fetchone()[0]
 
-#    @current_meal.setter
-#    def current_meal(self, meal: meal.Meal):
-#        """
-#        Sets the current meal to `meal`
-#
-#        :param meal: meal.Meal object that contains the current meals
-#        """
-#
-#        with self._conn as con:
-#            cur = con.cursor()
-#            cur.execute(bignut_queries.set_current_meal,
-#                        (meal.meal_id,))
+    @property
+    def current_meal(self) -> meal.Meal:
+        """
+        :return: The meal object
+        :rtype: meal.Meal
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_current_meal)
+        data = cur.fetchone()[0]
+        return meal.Meal(data, self)
+
+    @current_meal.setter
+    def current_meal(self, meal: meal.Meal):
+        """
+        Sets the current meal to `meal`
+
+        :param meal: meal.Meal object that contains the current meals
+        """
+
+        with self._conn as con:
+            cur = con.cursor()
+            cur.execute(bignut_queries.set_current_meal,
+                        (meal.meal_id,))
 
     @staticmethod
     def decode_non_utf_strings(bytes_array):
@@ -282,7 +273,25 @@ class DBMan:
                         (number_of_meals,))
 
 
-#------------------------------[MEAL MANAGEMENT]-------------------------------
+# -----------------------------[MEAL MANAGEMENT]-------------------------------
+
+    def get_meal_foods(self, meal: meal.Meal) -> Iterator:
+        """
+        Gets the meal's foods
+        :param meal: The meal from which you want to get the food list
+        :return: The meal foods
+        :rtype: Iterator
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_meal_foods,
+                    {'meal_id': meal.meal_id})
+        return map(lambda x: food.Food(x[0],
+                                       self,
+                                       meal,
+                                       nutrient.Nutrient(x[2], self) if x[2]
+                                       else None,
+                                       portions.Portion(x[1])
+                                       ), cur)
 
 #    def get_meal_by_id(self, meal_id: int) -> meal.Meal:
 #        """
@@ -455,7 +464,7 @@ class DBMan:
         """
         with self._conn as con:
             cur = con.cursor()
-            food_meal = food.__meal
+            food_meal = food.meal
             query_params = {'NDB_No': food.ndb_no,
                             'meal_id': food_meal.meal_id
                             if food_meal else None}
@@ -478,7 +487,7 @@ class DBMan:
         """
         with self._conn as con:
             cur = con.cursor()
-            food_meal = food.__meal
+            food_meal = food.meal
             query_params = {'NDB_No': food.ndb_no,
                             'meal_id': food_meal.meal_id
                             if food_meal else None,

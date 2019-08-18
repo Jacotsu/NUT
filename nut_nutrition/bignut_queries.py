@@ -90,10 +90,16 @@ LEFT JOIN nutr_def USING (Nutr_No)
 WHERE meal_id = (SELECT currentmeal FROM options)
 ORDER BY Shrt_Desc;
 '''
-
-
 get_current_meal_str = 'SELECT cm_string FROM cm_string;'
 set_current_meal = 'UPDATE options SET currentmeal = ?;'
+
+get_meal_foods = '''
+SELECT NDB_No, Gm_Wgt, Nutr_No as PCF_Nutr_No
+FROM mealfoods
+WHERE meal_id = :meal_id
+'''
+
+
 get_meal_from_offset_rel_to_current = """
 -- ThIS gets the nth meal id relative to the current meal
 SELECT meal_id
