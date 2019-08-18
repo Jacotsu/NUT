@@ -178,8 +178,8 @@ class DBMan:
         """
         cur = self._conn.cursor()
         cur.execute(bignut_queries.get_macro_pct)
-        pcts = cur.fetchone()[0]
-        return tuple(pcts.split('/'))
+        pcts = cur.fetchone()
+        return pcts
 
     @property
     def omega6_3_balance(self) -> Tuple:
@@ -189,8 +189,8 @@ class DBMan:
         """
         cur = self._conn.cursor()
         cur.execute(bignut_queries.get_omega6_3_bal)
-        bal = cur.fetchone()[0]
-        return tuple(bal.replace(" ", "").split('/'))
+        bal = cur.fetchone()
+        return bal
 
     @property
     def settings_omega6_3_balance(self) -> Tuple:

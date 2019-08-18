@@ -13,6 +13,8 @@ class Food:
     Class that represents a single food
     """
     ndb_no: int
+    __db: Any
+
     fdgrp_cd: int
     long_desc: str
     shrt_desc: str
@@ -23,11 +25,17 @@ class Food:
     fat_factor: float
     cho_factor: float
     macro_pct: tuple
-    __db: Any
     portion: portions.Portion
     __meal: Any = None
     nutrients: List[nutrient.Nutrient] = field(default_factory=list)
     pcf_nutrient: nutrient.Nutrient = None
+
+    def __init__(self, ndb_no: int, db):
+        if ndb_no >= 0:
+            self.ndb_no = ndb_no
+            self.__db = db
+        else:
+            raise ValueError("Food number must be >= 0")
 
     @property
     def nutrients(self):

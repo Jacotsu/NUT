@@ -5,6 +5,7 @@ import db
 import logging
 import gettext
 import meal
+import food
 from nutrient import Nutrient
 from utils import (set_cells_data_func, set_float_precision,
                    set_pcf_combobox_text, get_selected_food,
@@ -30,10 +31,11 @@ class MainHandler:
             selection = widget.get_selection()
             treestore, selected_treepaths = selection.get_selected_rows()
             for path in selected_treepaths:
-                food = treestore[path]
+                ndb_no = treestore[path][0]
                 db = self._manager._db
-                db.remove_food_from_meal(food[0])
-                logging.debug(f'Deleted {food[0,1]} from  current meal')
+                selected_food = food.Food(ndb_no, db)
+                db.remove_food_from_meal(selected_food)
+                logging.debug(f'Deleted {selected_food} from  current meal')
             self._manager._update_current_meal_menu()
 
         # Propagate event
@@ -121,7 +123,6 @@ class MainHandler:
         else:
             logging.debug(f'{element[0]} Nutrient clicked')
             TheStory(element[0])
-
 
     def view_searched_food(self, widget):
         """
@@ -294,7 +295,10 @@ class GTKGui:
                        319,  # Retinol
                        291  # Fiber
                        ]
-        self._load_pcf_choiches(pcf_choices)
+        for Nutr_No in pcf_choices:
+            self._pcf_choices_cb.append((Nutr_No,
+                                        _(self._db.get_nutrient_name(Nutr_No)))
+                                        )
 
         nutrient_display_function = \
             chain_functions([set_float_precision,
@@ -341,12 +345,6 @@ class GTKGui:
 
         self._window.show_all()
         Gtk.main()
-
-    def _load_pcf_choiches(self, choices):
-        for Nutr_No in choices:
-            self._pcf_choices_cb.append((Nutr_No,
-                                        _(self._db.get_nutrient_name(Nutr_No)))
-                                        )
 
     def _update_current_meal_menu(self):
         """
@@ -396,7 +394,7 @@ class GTKGui:
         self._settings_widgets['sat_fat_sp']\
             .set_value(Nutrient(606, self._db).nut_opt)
         self._settings_widgets['essential_fatty_acid_sp']\
-            .set_value(0)
+            .set_value(Nutrient(646, self._db).nut_opt)
 
         weight = self._db.last_weight
         logging.debug(f'Setting last weight to: {weight}')

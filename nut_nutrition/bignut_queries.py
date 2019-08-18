@@ -110,9 +110,9 @@ WHERE OFfSET = (
 GROUP BY meal_id;
 """
 
-get_macro_pct = 'SELECT macropct FROM am_analysis_header;'
+get_macro_pct = 'SELECT carbs, proteins, fats FROM am_analysis_header;'
 
-get_omega6_3_bal = 'SELECT n6balance FROM am_analysis_header;'
+get_omega6_3_bal = 'SELECT omega6, omega3 FROM am_analysis_header;'
 
 get_food_groups = 'SELECT FdGrp_Cd, FdGrp_Desc FROM fd_group;'
 
