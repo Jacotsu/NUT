@@ -3134,6 +3134,7 @@ AS SELECT
     ELSE
       'and lost '
   END || ABS(ROUND(fatslope * span * 1000.0) / 1000.0) || ' fat mass.'
+  AS verbiage
 FROM z_wslope, z_fslope, z_span;
 """
 
