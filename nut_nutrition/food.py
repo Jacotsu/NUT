@@ -41,13 +41,13 @@ class Food:
         if ndb_no >= 0:
             self.ndb_no = ndb_no
             self.__db = db
-            self.portion = portion
 
             # meal is None it means that we're viewing the food
             if meal:
                 self.meal = meal
                 meal.append_food(self)
 
+            self.portion = portion
             self.pcf_nutrient = pcf_nutrient
         else:
             raise ValueError("Food number must be >= 0")
@@ -58,12 +58,11 @@ class Food:
 
     @property
     def portion(self):
-        return self.portion
+        return self.__db.get_food_amount(self)
 
     @portion.setter
     def portion(self, new_portion: portions.Portion):
-        self.portion = new_portion
-        self.__db.set_food_amount(self, self.meal)
+        self.__db.set_food_amount(self)
 
     @property
     def pcf_nutrient(self):

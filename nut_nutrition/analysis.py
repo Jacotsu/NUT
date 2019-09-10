@@ -9,6 +9,22 @@ _ = gettext.gettext
 
 
 @dataclass
+class AnalysisHeader:
+    maxmeal: int
+    mealcount: int
+    meals_per_day: int
+    firstmeal: int
+    lastmeal: int
+    currentmeal: int
+    calories: float
+    proteins: float
+    carbs: float
+    fats: float
+    omega6: float
+    omega3: float
+
+
+@dataclass
 class Analysis:
     meals: List[meal.Meal]
     __db: Any

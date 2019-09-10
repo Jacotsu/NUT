@@ -7,6 +7,7 @@ from typing import Iterator, Tuple
 from utils import download_usda_and_unzip, cleanup_usda
 import bignut_queries
 import nutrient
+import analysis
 import portions
 import food
 import meal
@@ -83,8 +84,7 @@ class DBMan:
         """
         cur = self._conn.cursor()
         cur.execute(bignut_queries.get_defined_nutrients)
-        return {nutrient[0]: nutrient[1:]
-                for nutrient in cur}
+        return nutrient.Nutrient(cur.fetchone()[0], self).nut_opt
 
     @property
     def rm_analysis_header(self):
@@ -94,13 +94,13 @@ class DBMan:
         """
         cur = self._conn.cursor()
         cur.execute(bignut_queries.get_rm_analysis_header)
-        return cur.fetchone()
+        return analysis.AnalysisHeader(*cur.fetchone())
 
     @property
     def rm_analysis_nutrients(self):
         """
         :return: The record meals analysis nutrients
-        :rtype: dict
+        :rtype: list
         """
         cur = self._conn.cursor()
         cur.execute(bignut_queries.get_rm_analysis)
@@ -110,10 +110,20 @@ class DBMan:
                 for data in cur]
 
     @property
+    def am_analysis_header(self):
+        """
+        :return: The analyze meals analysis header
+        :rtype: AnalysisHeader
+        """
+        cur = self._conn.cursor()
+        cur.execute(bignut_queries.get_am_analysis_header)
+        return analysis.AnalysisHeader(*cur.fetchone())
+
+    @property
     def am_analysis_nutrients(self):
         """
         :return: The record meals analysis nutrients
-        :rtype: dict
+        :rtype: list
         """
         cur = self._conn.cursor()
         cur.execute(bignut_queries.get_am_analysis)
@@ -122,28 +132,8 @@ class DBMan:
                                   portions.Portion(data[1], data[2]))
                 for data in cur]
 
-    @property
-    def am_analysis_period(self):
-        """
-        :return: A tuple that contains the start date and the end date
-        :rtype: tuple
-        """
-        cur = self._conn.cursor()
-        cur.execute(bignut_queries.get_am_analysis_period)
-        return cur.fetchone()
-
     def get_day_meals(self, day):
         raise NotImplementedError
-
-    @property
-    def max_number_of_meals(self):
-        """
-        :return: The maximum number of number meals currently available
-        :rtype: int
-        """
-        cur = self._conn.cursor()
-        cur.execute(bignut_queries.get_max_number_of_meals)
-        return cur.fetchone()
 
     @property
     def weight_unit(self):
@@ -167,28 +157,6 @@ class DBMan:
                         (self.weight_units[unit],))
 
     @property
-    def macro_pct(self) -> Tuple:
-        """
-        :return: The macro percents in this format (carbs, protein, fat)
-        :rtype: Tuple
-        """
-        cur = self._conn.cursor()
-        cur.execute(bignut_queries.get_macro_pct)
-        pcts = cur.fetchone()
-        return pcts
-
-    @property
-    def omega6_3_balance(self) -> Tuple:
-        """
-        :return: The omega-6/3 balance in this format (Omega6, Omega3)
-        :rtype: Tuple
-        """
-        cur = self._conn.cursor()
-        cur.execute(bignut_queries.get_omega6_3_bal)
-        bal = cur.fetchone()
-        return bal
-
-    @property
     def settings_omega6_3_balance(self) -> Tuple:
         """
         :return: The omega-6/3 balance in this format (Omega6, Omega3) from
@@ -200,7 +168,7 @@ class DBMan:
         bal = cur.fetchone()[0]
         return tuple(bal.replace(" ", "").split('/'))
 
-    @omega6_3_balance.setter
+    @settings_omega6_3_balance.setter
     def set_settings_omega6_3_balance(self, data):
         """
         :param data: A tuple that contains the omega6 and omega3 ratio
@@ -364,11 +332,11 @@ class DBMan:
     def food_list(self):
         """
         :return: The food's list
-        :rtype: Iterator of tuples
+        :rtype: map of food.Food
         """
         cur = self._conn.cursor()
         cur.execute(bignut_queries.get_food_list)
-        return cur
+        return map(lambda x: food.Food(x[0], self), cur)
 
     @property
     def food_groups(self):
@@ -380,7 +348,7 @@ class DBMan:
         cur.execute(bignut_queries.get_food_groups)
         return cur
 
-    def get_ranked_foods(self, Nutr_val, rank_choice=0, FdGrp_Cd=0):
+    def get_ranked_foods(self, nutr_val, rank_choice=0, fdgrp_cd=0):
         """
         :return: The foods belonging to the FdGrp_Cd
         :rtype: Iterator of tuples
@@ -392,7 +360,7 @@ class DBMan:
             2: bignut_queries.foods_ranked_per_daily_recorded_meals,
             3: bignut_queries.foods_ranked_per_1_aproximate_serving
         }
-        query_params = {'Nutr_val': Nutr_val, 'FdGrp_Cd': FdGrp_Cd}
+        query_params = {'Nutr_val': nutr_val, 'FdGrp_Cd': fdgrp_cd}
         cur.execute(rank_choices[rank_choice], query_params)
         return cur
 
@@ -495,41 +463,56 @@ class DBMan:
                             else None}
             cur.execute(bignut_queries.set_food_pcf,
                         query_params)
-#
-#    def set_food_amount(self,
-#                        food: meal.Food,
-#                        meal: meal.Meal=None):
-#        """
-#        :param food: meal.Food to change the amount
-#        :param meal_id: The meal id, if None defaults to the current meal
-#        """
-#        with self._conn as con:
-#            cur = con.cursor()
-#            query_params = {'NDB_No': food.ndb_no,
-#                            'meal_id': meal.meal_id if meal else None,
-#                            'Gm_Wgt': food.portion.quantity}
-#            cur.execute(bignut_queries.set_food_amount,
-#                        query_params)
-#
-#
-#    def get_food_nutrients(self, food: meal.Food) -> Iterator[meal.Nutrient]:
-#        """
-#        Retrieves the nutrients of a food.
-#        If a portion of food is not specified it assumes the default portion
-#
-#        :param food: meal.Food from which retrieve the nutrients
-#        :return: Iterable of nutrients
-#        :rtype: map
-#        """
-#        cur = self._conn.cursor()
-#
-#        cur.execute(bignut_queries.get_food_nutrients,
-#                    {'NDB_No': food.ndb_no,
-#                     'Gm_Wgt': food.portion.quantity if food.portion
-#                        else None})
-#        return map(lambda x: meal.Nutrient(x[0], self))
-#
-#
+
+    def set_food_amount(self,
+                        food: food.Food):
+        """
+        :param food: meal.Food to change the amount
+        :param meal_id: The meal id, if None defaults to the current meal
+        """
+        with self._conn as con:
+            cur = con.cursor()
+            query_params = {'NDB_No': food.ndb_no,
+                            'meal_id': food.meal.meal_id
+                            if food.meal else None,
+                            'Gm_Wgt': food.portion.quantity}
+            cur.execute(bignut_queries.set_food_amount,
+                        query_params)
+
+    def get_food_amount(self,
+                        food: food.Food) -> portions.Portion:
+        """
+        :param food: meal.Food to change the amount
+        :param meal_id: The meal id, if None defaults to the current meal
+        """
+        cur = self._conn.cursor()
+        query_params = {'NDB_No': food.ndb_no,
+                        'meal_id': food.meal.meal_id
+                        if food.meal else None}
+        cur.execute(bignut_queries.get_food_amount,
+                    query_params)
+        data = cur.fetchone()
+        return portions.Portion(data[0])
+
+    def get_food_nutrients(self, food: food.Food) -> Iterator[nutrient.Nutrient]:
+        """
+        Retrieves the nutrients of a food.
+        If a portion of food is not specified it assumes the default portion
+
+        :param food: meal.Food from which retrieve the nutrients
+        :return: Iterable of nutrients
+        :rtype: map
+        """
+        cur = self._conn.cursor()
+
+        cur.execute(bignut_queries.get_food_nutrients,
+                    {'NDB_No': food.ndb_no,
+                     'Gm_Wgt': food.portion.quantity if food.portion
+                        else None})
+        return map(lambda x: nutrient.Nutrient(x[0],
+                                           self,
+                                           portions.Portion(x[1],
+                                                            x[2])))
 
 # -------------------------[WEIGHT LOG MANAGEMENT]-----------------------------
     @property
@@ -607,7 +590,7 @@ class DBMan:
         """
         Retrieves all the nutrients saved in the database
 
-        :return: A list of meal.Nutrient objects
+        :return: A list of nutrient.Nutrient objects
         :rtype: Iterator
         """
         cur = self._conn.cursor()
@@ -802,7 +785,8 @@ class DBMan:
                 bignut_queries.create_food_archive_triggers,
                 bignut_queries.create_weight_log_triggers,
                 bignut_queries.create_food_weight_triggers,
-                bignut_queries.create_meal_foods_triggers
+                bignut_queries.create_meal_foods_triggers,
+                bignut_queries.create_analysis_triggers
             ]
             for script in logic_init_scripts:
                 cur.executescript(script)

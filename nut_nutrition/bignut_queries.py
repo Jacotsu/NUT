@@ -51,25 +51,28 @@ GROUP by day;
 set_number_of_meals_to_analyze = 'UPDATE options SET defanal_am = ?;'
 get_number_of_meals_to_analyze = 'SELECT defanal_am FROM options;'
 
-get_max_number_of_meals = 'SELECT maxmeal FROM rm_analysis_header;'
-
 get_rm_analysis_header = 'SELECT * FROM rm_analysis_header;'
+get_am_analysis_header = 'SELECT * FROM am_analysis_header;'
 
 # need to add default values for non present nutrients
 get_rm_analysis = '''
-SELECT rm_analysis.Nutr_No, Nutr_val, Units, NutrDesc,
-    dvpct_offset + 100
+SELECT
+    rm_analysis.Nutr_No,
+    Nutr_val,
+    Units
 FROM rm_analysis
-LEFT JOIN rm_dv ON rm_analysis.Nutr_No = rm_dv.Nutr_No
-NATURAL JOIN nutr_def NATURAL JOIN rm_analysis;
+NATURAL JOIN rm_dv
+NATURAL JOIN nutr_def;
 '''
 
 get_am_analysis = '''
-SELECT am_analysis.Nutr_No, Nutr_val, Units, NutrDesc,
-    dvpct_offset + 100
+SELECT
+    am_analysis.Nutr_No,
+    Nutr_val,
+    Units
 FROM am_analysis
-LEFT JOIN am_dv ON am_analysis.Nutr_No = am_dv.Nutr_No
-NATURAL JOIN nutr_def NATURAL JOIN am_analysis;
+NATURAL JOIN am_dv
+NATURAL JOIN nutr_def;
 '''
 get_am_analysis_period = 'SELECT firstmeal, lastmeal FROM am_analysis_header;'
 
@@ -118,10 +121,6 @@ WHERE OFfSET = (
 GROUP BY meal_id;
 """
 
-get_macro_pct = 'SELECT carbs, proteins, fats FROM am_analysis_header;'
-
-get_omega6_3_bal = 'SELECT omega6, omega3 FROM am_analysis_header;'
-
 get_food_groups = 'SELECT FdGrp_Cd, FdGrp_Desc FROM fd_group;'
 
 get_food_pcf = '''
@@ -155,6 +154,18 @@ WHERE CASE
             :meal_id
         END AND NDB_No = :NDB_No;
 '''
+get_food_amount = '''
+SELECT Gm_Wgt
+FROM mealfoods
+WHERE
+  CASE
+    WHEN :meal_id IS NULL THEN
+      (SELECT currentmeal FROM options)
+    ELSE
+        :meal_id
+  END AND NDB_No = :NDB_No;
+'''
+
 
 
 INSERT_food_INTO_meal = '''
@@ -780,6 +791,12 @@ DROP TABLE IF EXISTS rm_analysis;
 DROP TABLE IF EXISTS rm_dv;
 DROP TABLE IF EXISTS z_trig_ctl;
 DROP TABLE IF EXISTS z_vars4;
+DROP TABLE IF EXISTS z_tcl_code;
+DROP TABLE IF EXISTS z_tcl_jobqueue;
+DROP TABLE IF EXISTS z_tcl_macropct;
+DROP TABLE IF EXISTS z_tcl_n6hufa;
+DROP TABLE IF EXISTS z_tcl_version;
+DROP TABLE IF EXISTS z_tcl_wlsumm;
 """
 
 drop_user_tables = """
@@ -1259,7 +1276,7 @@ CREATE TRIGGER rm_analysis_trigger
         JOIN rm_analysis CHO_KCAL
           ON CHO_KCAL.Nutr_No = 3002
         JOIN rm_analysis FAT_KCAL
-          ON FAT_KCAL.Nutr_No = 3001)
+          ON FAT_KCAL.Nutr_No = 3001
       ),
       carbs = (
         SELECT CAST(IFNULL(
@@ -1270,7 +1287,7 @@ CREATE TRIGGER rm_analysis_trigger
         JOIN rm_analysis CHO_KCAL
           ON CHO_KCAL.Nutr_No = 3002
         JOIN rm_analysis FAT_KCAL
-          ON FAT_KCAL.Nutr_No = 3001)
+          ON FAT_KCAL.Nutr_No = 3001
           ),
       fats = (
         SELECT CAST(IFNULL(
@@ -1282,6 +1299,7 @@ CREATE TRIGGER rm_analysis_trigger
           ON CHO_KCAL.Nutr_No = 3002
         JOIN rm_analysis FAT_KCAL
           ON FAT_KCAL.Nutr_No = 3001);
+  END;
 
 
 
@@ -1342,7 +1360,7 @@ BEGIN
     NULL AS carbs,
     NULL AS fats,
     NULL AS omega6,
-    NULL AS omega3,
+    NULL AS omega3
   FROM options
   LEFT JOIN (
       SELECT DISTINCT meal_id
@@ -1380,7 +1398,7 @@ BEGIN
     0 AS carbs,
     0 AS fats,
     0 AS omega6,
-    0 AS omega3,
+    0 AS omega3
   FROM am_analysis_header;
 END;
 
@@ -1428,7 +1446,6 @@ BEGIN
   DELETE FROM z_anal;
 
   INSERT INTO z_anal
-  VALUES
     SELECT
       nutr_no,
       1,
@@ -1436,9 +1453,13 @@ BEGIN
     FROM nutr_def
     JOIN am_analysis_header
     WHERE firstmeal = currentmeal
-      AND lastmeal = currentmeal,
+      AND lastmeal = currentmeal;
 
-    SELECT nutr_no, 0, 0.0
+  INSERT INTO z_anal
+    SELECT
+      nutr_no,
+      0,
+      0.0
     FROM nutr_def
     JOIN am_analysis_header
     WHERE firstmeal != currentmeal
@@ -1515,7 +1536,7 @@ BEGIN
         JOIN am_analysis CHO_KCAL
           ON CHO_KCAL.Nutr_No = 3002
         JOIN am_analysis FAT_KCAL ON FAT_KCAL.Nutr_No = 3001
-      )
+      ),
      fats = (
         SELECT
           CAST(
@@ -1529,7 +1550,8 @@ BEGIN
         JOIN am_analysis CHO_KCAL
           ON CHO_KCAL.Nutr_No = 3002
         JOIN am_analysis FAT_KCAL ON FAT_KCAL.Nutr_No = 3001
-      )
+      );
+END;
 """
 
 
@@ -2384,8 +2406,7 @@ REPLACE INTO nutr_def (
   Tagname,
   NutrDesc,
   dv_default,
-  nutopt
-)
+  nutopt)
 VALUES
   (203, 'g', 'PROCNT', 'Protein', 50.0, 0),
   (204, 'g', 'FAT', 'Total Fat', 78.0, 0),
@@ -2542,6 +2563,7 @@ VALUES
   (857, 'g', NULL, '21:5', NULL, 0),
   (858, 'g', NULL, '22:4', NULL, 0),
   (859, 'g', NULL, '18:1n-7t', NULL, 0),
+
 
 -- These are the new "daily value" labeling standards minus "ADDED SUGARS"
 -- which have not yet appeared in the USDA data.
